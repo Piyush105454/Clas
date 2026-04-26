@@ -1,0 +1,132 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="max-w-2xl mx-auto">
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 lg:p-8">
+    
+    <!-- Header -->
+    <div class="mb-8">
+      <h2 class="text-2xl font-bold text-gray-900">{{ title }}</h2>
+      <p class="text-sm text-gray-500 mt-2">{% if cluster %}Update cluster information{% else %}Create a new cluster/area{% endif %}</p>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="space-y-6">
+      {% csrf_token %}
+
+      <!-- Cluster Name -->
+      <div>
+        <label for="id_name" class="block text-sm font-medium text-gray-700 mb-2">Cluster Name</label>
+        {{ form.name }}
+        {% if form.name.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- District -->
+      <div>
+        <label for="id_district" class="block text-sm font-medium text-gray-700 mb-2">District</label>
+        {{ form.district }}
+        {% if form.district.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.district.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- State -->
+      <div>
+        <label for="id_state" class="block text-sm font-medium text-gray-700 mb-2">State</label>
+        {{ form.state }}
+        {% if form.state.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.state.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label for="id_description" class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+        {{ form.description }}
+        {% if form.description.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.description.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Location Section -->
+      <div class="border-t pt-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">📍 Cluster Center Location</h3>
+        
+        <!-- Latitude & Longitude -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="id_latitude" class="block text-sm font-medium text-gray-700 mb-2">Latitude</label>
+            {{ form.latitude }}
+            {% if form.latitude.errors %}
+              <p class="mt-1 text-sm text-red-600">{{ form.latitude.errors.0 }}</p>
+            {% endif %}
+          </div>
+
+          <div>
+            <label for="id_longitude" class="block text-sm font-medium text-gray-700 mb-2">Longitude</label>
+            {{ form.longitude }}
+            {% if form.longitude.errors %}
+              <p class="mt-1 text-sm text-red-600">{{ form.longitude.errors.0 }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Form Errors -->
+      {% if form.non_field_errors %}
+        <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p class="text-sm text-red-700">
+            {% for error in form.non_field_errors %}
+              {{ error }}
+            {% endfor %}
+          </p>
+        </div>
+      {% endif %}
+
+      <!-- Buttons -->
+      <div class="flex gap-3 pt-6">
+        <button type="submit" class="flex-1 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium">
+          {% if cluster %}Update Cluster{% else %}Create Cluster{% endif %}
+        </button>
+        <a href="{% url 'clusters_list' %}" class="flex-1 px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-center">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  select,
+  textarea {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="number"]:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: #3b82f6;
+    border-color: transparent;
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 100px;
+  }
+</style>
+
+{% endblock %}

@@ -1,0 +1,797 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- ✅ CACHE CONTROL - Force Fresh Content -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
+    <title>{% block title %}Facilitator Dashboard{% endblock %}</title>
+    <link rel="icon" type="image/jpeg" href="{% static 'images/wes-logo.jpg' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CLAS">
+
+    <!-- ✅ CACHE BUSTING VERSION - Change this on deployment -->
+    <!-- ✅ NUCLEAR CACHE BUSTING - Force Fresh Content on Version Change -->
+    <script>
+        const CURRENT_VERSION = "3.0";
+        const storedAppVersion = localStorage.getItem("app_version");
+        
+        if (storedAppVersion !== CURRENT_VERSION) {
+            console.log(`🚀 New version detected (${CURRENT_VERSION}). Performing nuclear cache clear...`);
+            
+            // 1. Unregister ALL service workers
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                        console.log('✅ Unregistered Service Worker:', registration.scope);
+                    }
+                });
+            }
+
+            // 2. Clear ALL browser caches
+            if ('caches' in window) {
+                caches.keys().then(names => {
+                    for (let name of names) {
+                        caches.delete(name);
+                        console.log('✅ Deleted Cache:', name);
+                    }
+                });
+            }
+
+            // 3. Clear storage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // 4. Set new version and reload
+            localStorage.setItem("app_version", CURRENT_VERSION);
+            console.log('🔄 Reloading for fresh content...');
+            
+            // Force reload from server bypassing any cache
+            setTimeout(() => {
+                window.location.reload(true);
+            }, 500);
+        }
+    </script>
+
+    <!-- Offline Sync Script -->
+    <script src="{% static 'offline-sync.js' %}?v=3.0"></script>
+    
+    <!-- Resource Prioritization Script -->
+    <script src="{% static 'resource-prioritization.js' %}?v=3.0"></script>
+    
+    <!-- PWA Main Script -->
+    <script src="{% static 'js/main.js' %}?v=3.0"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Lexend', sans-serif;
+            background-color: #f5f7f8;
+        }
+
+        .layout-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 280px;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex-shrink: 0;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
+        /* Smooth scrollbar styling */
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: #f3f4f6;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+
+        .sidebar-user {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .sidebar-user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            border: 2px solid #e5e7eb;
+            flex-shrink: 0;
+        }
+
+        .sidebar-user-info h6 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin: 0;
+            color: #1f2937;
+        }
+
+        .sidebar-user-info small {
+            font-size: 0.75rem;
+            color: #6b7280;
+            display: block;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0.5rem 0;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .nav-section-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #9ca3af;
+            padding: 0.5rem 1rem;
+            letter-spacing: 0.05em;
+            margin-top: 0.5rem;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 0.8rem;
+            margin: 0.1rem 0.4rem;
+            color: #1f2937;
+            text-decoration: none;
+            border-radius: 0.375rem;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: all 0.2s ease;
+        }
+
+        .nav-item i {
+            font-size: 1rem;
+            width: 18px;
+            text-align: center;
+            flex-shrink: 0;
+            color: #1f2937;
+        }
+
+        .nav-item:hover {
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+
+        .nav-item.active {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            font-weight: 600;
+            border-left: 3px solid #1f2937;
+            padding-left: calc(0.8rem - 3px);
+        }
+
+        .nav-item.logout {
+            color: #dc2626;
+        }
+
+        .nav-item.logout i {
+            color: #dc2626;
+        }
+
+        .nav-item.logout:hover {
+            background-color: #fee2e2;
+        }
+
+        .sidebar-divider {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 0.25rem 0;
+        }
+
+        .sidebar-bottom {
+            padding: 0.5rem 0;
+            border-top: 1px solid #e5e7eb;
+            flex-shrink: 0;
+            background: white;
+        }
+
+        /* MAIN CONTENT */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        .topbar {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            gap: 1rem;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .today-date-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+            color: #374151;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .today-date-badge i {
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+
+        .menu-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.4rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: #1f2937;
+            font-size: 1.3rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s ease;
+        }
+
+        .menu-toggle:hover {
+            background-color: #f3f4f6;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            position: relative;
+            flex: 1;
+            max-width: 300px;
+        }
+
+        .search-box input {
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            padding: 0.4rem 0.6rem 0.4rem 2rem;
+            font-size: 0.85rem;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #1f2937;
+            box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.1);
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 0.5rem;
+            color: #9ca3af;
+            font-size: 1rem;
+        }
+
+        .profile-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            border: 2px solid #e5e7eb;
+            cursor: pointer;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            background-color: #f5f7f8;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .overlay.show {
+            display: block;
+            opacity: 1;
+        }
+
+        /* BOTTOM NAVIGATION - MOBILE */
+        .bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+            z-index: 100;
+            padding: 0;
+            margin: 0;
+        }
+
+        .bottom-nav-items {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            height: 60px;
+            padding: 0 0.5rem;
+            margin: 0;
+            list-style: none;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            gap: 0.5rem;
+        }
+
+        .bottom-nav-items::-webkit-scrollbar {
+            height: 3px;
+        }
+
+        .bottom-nav-items::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .bottom-nav-items::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 2px;
+        }
+
+        .bottom-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 70px;
+            height: 100%;
+            text-decoration: none;
+            color: #6b7280;
+            font-size: 0.65rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            gap: 0.25rem;
+            padding: 0;
+            margin: 0;
+            border: none;
+            background: none;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .bottom-nav-item i {
+            font-size: 1.3rem;
+            color: #6b7280;
+            transition: all 0.2s ease;
+        }
+
+        .bottom-nav-item span {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .bottom-nav-item:hover {
+            color: #1f2937;
+            background-color: #f9fafb;
+        }
+
+        .bottom-nav-item:hover i {
+            color: #1f2937;
+        }
+
+        .bottom-nav-item.active {
+            color: #3b82f6;
+        }
+
+        .bottom-nav-item.active i {
+            color: #3b82f6;
+            font-weight: 600;
+        }
+
+        .bottom-nav-item.active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background-color: #3b82f6;
+        }
+
+        .bottom-nav-item.logout {
+            color: #dc2626;
+        }
+
+        .bottom-nav-item.logout i {
+            color: #dc2626;
+        }
+
+        .bottom-nav-item.logout:hover {
+            color: #991b1b;
+        }
+
+        .bottom-nav-item.logout:hover i {
+            color: #991b1b;
+        }
+
+        /* MOBILE */
+        @media (max-width: 991px) {
+            .bottom-nav {
+                display: block;
+            }
+
+            .content {
+                padding: 1rem;
+                padding-bottom: 80px;
+            }
+
+            .menu-toggle {
+                display: flex;
+            }
+
+            .today-date-badge {
+                font-size: 0.75rem;
+                padding: 0.3rem 0.6rem;
+                gap: 0.3rem;
+            }
+
+            .today-date-badge i {
+                font-size: 0.85rem;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                width: 280px;
+                transform: translateX(-100%);
+                z-index: 1000;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+                transition: transform 0.3s ease;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+
+            .sidebar-nav {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                -webkit-overflow-scrolling: touch;
+                padding: 0.5rem 0;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .search-box {
+                display: none;
+            }
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+
+    <div class="overlay" id="overlay"></div>
+
+    <div class="layout-wrapper">
+        <!-- SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-user">
+                <div class="sidebar-user-avatar" data-avatar="{% static 'images/wes-logo.jpg' %}"></div>
+
+                <div class="sidebar-user-info">
+                    <h6>Facilitator</h6>
+                    <small>{{ request.user.email }}</small>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">MAIN</div>
+                <a class="nav-item {% if request.resolver_match.url_name == 'facilitator_dashboard' %}active{% endif %}"
+                    href="{% url 'facilitator_dashboard' %}">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a class="nav-item {% if 'facilitator_schools' in request.resolver_match.url_name and 'facilitator_schools_list' not in request.resolver_match.url_name %}active{% endif %}"
+                    href="{% url 'facilitator_schools_list' %}">
+                    <i class="bi bi-building"></i>
+                    <span>My Schools</span>
+                </a>
+                <a class="nav-item {% if request.resolver_match.url_name == 'facilitator_my_attendance' %}active{% endif %}"
+                    href="{% url 'facilitator_my_attendance' %}">
+                    <i class="bi bi-person-check"></i>
+                    <span>My Attendance</span>
+                </a>
+                <div class="nav-section-label">SESSIONS</div>
+                <a class="nav-item {% if request.resolver_match.url_name == 'facilitator_today_session' %}active{% endif %}"
+                    href="{% url 'facilitator_today_session' %}">
+                    <i class="bi bi-calendar-check"></i>
+                    <span>Today's Session</span>
+                </a>
+                <a class="nav-item {% if request.resolver_match.url_name == 'facilitator_attendance' %}active{% endif %}"
+                    href="{% url 'facilitator_attendance' %}">
+                    <i class="bi bi-clipboard-check"></i>
+                    <span>Student Attendance</span>
+                </a>
+                <div class="nav-section-label">MANAGEMENT</div>
+                <a class="nav-item {% if 'facilitator_students' in request.resolver_match.url_name %}active{% endif %}"
+                    href="{% url 'facilitator_students_list' %}">
+                    <i class="bi bi-people"></i>
+                    <span>Students</span>
+                </a>
+                <a class="nav-item {% if 'student_performance' in request.resolver_match.url_name or 'facilitator_performance' in request.resolver_match.url_name %}active{% endif %}"
+                    href="{% url 'facilitator_performance_class_select' %}">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Performance</span>
+                </a>
+
+
+            </nav>
+
+            <div class="sidebar-bottom">
+                <div class="nav-section-label">ACCOUNT</div>
+                <a class="nav-item {% if request.resolver_match.url_name == 'facilitator_settings' %}active{% endif %}"
+                    href="{% url 'facilitator_settings' %}">
+                    <i class="bi bi-gear"></i>
+                    <span>Settings</span>
+                </a>
+                <a class="nav-item logout" href="{% url 'logout' %}">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <div class="search-box">
+                        <i class="bi bi-search"></i>
+                        <input type="text" placeholder="Search schools, students, sessions...">
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <div class="today-date-badge">
+                        <i class="bi bi-calendar3"></i>
+                        <span id="todayDate"></span>
+                    </div>
+                    <div class="profile-avatar" data-avatar="{% static 'images/wes-logo.jpg' %}"></div>
+                </div>
+            </header>
+
+            <div class="content">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <!-- BOTTOM NAVIGATION - MOBILE -->
+    <nav class="bottom-nav" role="navigation" aria-label="Mobile navigation">
+        <ul class="bottom-nav-items">
+            <li>
+                <a class="bottom-nav-item {% if request.resolver_match.url_name == 'facilitator_dashboard' %}active{% endif %}"
+                    href="{% url 'facilitator_dashboard' %}" aria-label="Home - Dashboard" title="Home">
+                    <i class="bi bi-house-fill"></i>
+                    <span>Home</span>
+                </a>
+            </li>
+            <li>
+                <a class="bottom-nav-item {% if request.resolver_match.url_name == 'facilitator_attendance' %}active{% endif %}"
+                    href="{% url 'facilitator_attendance' %}" aria-label="Mark Attendance" title="Mark">
+                    <i class="bi bi-clipboard-check-fill"></i>
+                    <span>Student Attendance</span>
+                </a>
+            </li>
+
+            <li>
+                <a class="bottom-nav-item {% if request.resolver_match.url_name == 'facilitator_today_session' %}active{% endif %}"
+                    href="{% url 'facilitator_today_session' %}" aria-label="Session - Today's Session" title="Session">
+                    <i class="bi bi-calendar-check-fill"></i>
+                    <span>Today Sessions</span>
+                </a>
+            </li>
+            <li>
+                <a class="bottom-nav-item {% if request.resolver_match.url_name == 'facilitator_my_attendance' %}active{% endif %}"
+                    href="{% url 'facilitator_my_attendance' %}" aria-label="My Attendance" title="Attendance">
+                    <i class="bi bi-person-check-fill"></i>
+                    <span>Your Attendance</span>
+                </a>
+            </li>
+            <li>
+                <a class="bottom-nav-item {% if 'facilitator_schools' in request.resolver_match.url_name and 'facilitator_schools_list' not in request.resolver_match.url_name %}active{% endif %}"
+                    href="{% url 'facilitator_schools_list' %}" aria-label="Classes - My Schools" title="Classes">
+                    <i class="bi bi-book-fill"></i>
+                    <span>Schools</span>
+                </a>
+            </li>
+
+            <li>
+                <a class="bottom-nav-item {% if 'facilitator_students' in request.resolver_match.url_name %}active{% endif %}"
+                    href="{% url 'facilitator_students_list' %}" aria-label="Students - Student List" title="Students">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Students</span>
+                </a>
+            </li>
+            <li>
+                <a class="bottom-nav-item {% if 'student_performance' in request.resolver_match.url_name or 'facilitator_performance' in request.resolver_match.url_name %}active{% endif %}"
+                    href="{% url 'facilitator_performance_class_select' %}" aria-label="Performance"
+                    title="Performance">
+                    <i class="bi bi-graph-up-fill"></i>
+                    <span>Performance</span>
+                </a>
+            </li>
+            <li>
+                <a class="bottom-nav-item {% if request.resolver_match.url_name == 'facilitator_settings' %}active{% endif %}"
+                    href="{% url 'facilitator_settings' %}" aria-label="Settings" title="Settings">
+                    <i class="bi bi-gear-fill"></i>
+                    <span>Settings</span>
+                </a>
+            </li>
+            <li>
+                <a class="bottom-nav-item logout" href="{% url 'logout' %}" aria-label="Logout" title="Logout">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span>Logout</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize background images from data attributes
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('[data-avatar]').forEach(el => {
+                el.style.backgroundImage = `url('${el.getAttribute('data-avatar')}')`;
+            });
+
+            // Set today's date in the topbar
+            const todayDateEl = document.getElementById('todayDate');
+            if (todayDateEl) {
+                const today = new Date();
+                const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+                const dateStr = today.toLocaleDateString('en-US', options);
+                todayDateEl.textContent = dateStr;
+            }
+        });
+
+        // Service Worker registration is now handled in static/js/main.js
+        // which is included in the head with a version string for cache busting.
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const menuToggle = document.getElementById('menuToggle');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+
+            menuToggle.addEventListener('click', function () {
+                sidebar.classList.toggle('show');
+                overlay.classList.toggle('show');
+            });
+
+            overlay.addEventListener('click', function () {
+                sidebar.classList.remove('show');
+                overlay.classList.remove('show');
+            });
+
+            document.querySelectorAll('.nav-item').forEach(link => {
+                link.addEventListener('click', function () {
+                    if (window.innerWidth < 992) {
+                        sidebar.classList.remove('show');
+                        overlay.classList.remove('show');
+                    }
+                });
+            });
+
+            // Close sidebar when clicking bottom nav items
+            document.querySelectorAll('.bottom-nav-item').forEach(link => {
+                link.addEventListener('click', function () {
+                    if (window.innerWidth < 992) {
+                        sidebar.classList.remove('show');
+                        overlay.classList.remove('show');
+                    }
+                });
+            });
+
+            window.addEventListener('resize', function () {
+                if (window.innerWidth >= 992) {
+                    sidebar.classList.remove('show');
+                    overlay.classList.remove('show');
+                }
+            });
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

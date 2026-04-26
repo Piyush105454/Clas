@@ -1,0 +1,229 @@
+{% extends 'admin/shared/base.html' %}
+{% load static %}
+
+{% block content %}
+
+<!-- Sticky Horizontal Filter Bar -->
+<div class="bg-white border border-gray-200 rounded-xl shadow-sm mb-6 p-4 sticky top-0 z-10">
+  <form id="sessionFilterForm" class="flex flex-wrap items-center gap-4">
+    <div class="flex-1 min-w-[200px]">
+      <label class="block text-xs font-semibold text-gray-500 uppercase mb-1 ml-1">School</label>
+      <select id="schoolSelect" onchange="updateClasses(this.value)"
+              class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5">
+        {% for s in schools %}
+          <option value="{{ s.id }}" {% if s.id == class_section.school.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="flex-1 min-w-[200px]">
+      <label class="block text-xs font-semibold text-gray-500 uppercase mb-1 ml-1">Class Section</label>
+      <select id="classSelect" onchange="navigateToClass(this.value)"
+              class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5">
+        {% for c in classes %}
+          <option value="{{ c.id }}" {% if c.id == class_section.id %}selected{% endif %}>{{ c.class_level }} - {{ c.section }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="flex items-end self-stretch pb-0.5">
+      <a href="{% url 'admin_sessions_filter' %}" 
+         class="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2">
+        <span class="material-symbols-outlined text-[18px]">dashboard</span>
+        <span>Overview</span>
+      </a>
+    </div>
+  </form>
+</div>
+
+<!-- Header Info (Compact) -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+  <div>
+    <h5 class="text-xl font-bold text-gray-900">
+      Session Management
+    </h5>
+    <p class="text-gray-500 text-sm">
+      Track and manage execution for {{ class_section.school.name }} | Class {{ class_section.class_level }}-{{ class_section.section }}
+    </p>
+  </div>
+</div>
+
+<!-- Quick Stats -->
+{% if stats %}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 border-l-4 border-l-blue-500">
+    <p class="text-xs font-bold text-gray-500 uppercase">Total Sessions</p>
+    <p class="text-2xl font-bold text-gray-900 mt-1">{{ stats.total_sessions }}</p>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 border-l-4 border-l-green-500">
+    <p class="text-xs font-bold text-gray-500 uppercase">Completed</p>
+    <p class="text-2xl font-bold text-green-600 mt-1">{{ stats.conducted_count }}</p>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 border-l-4 border-l-yellow-500">
+    <p class="text-xs font-bold text-gray-500 uppercase">Pending</p>
+    <p class="text-2xl font-bold text-yellow-600 mt-1">{{ stats.pending_count }}</p>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 border-l-4 border-l-red-500">
+    <p class="text-xs font-bold text-gray-500 uppercase">Cancelled</p>
+    <p class="text-2xl font-bold text-red-600 mt-1">{{ stats.cancelled_count }}</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- Sessions Table -->
+<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mb-6">
+  <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+    <h6 class="text-sm font-bold text-gray-900 uppercase tracking-tight">
+      {% if pagination %}
+        Showing Sessions {{ pagination.start_index }}–{{ pagination.end_index }}
+      {% else %}
+        Session List
+      {% endif %}
+    </h6>
+    
+    {% if pagination and pagination.total_pages > 1 %}
+    <div class="flex items-center gap-2">
+        <select onchange="changePerPage(this.value)" class="text-xs border-gray-300 rounded p-1">
+          <option value="25" {% if pagination.per_page == 25 %}selected{% endif %}>25 / page</option>
+          <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50 / page</option>
+          <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100 / page</option>
+        </select>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Day</th>
+          <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Topic / Content</th>
+          <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Session Date</th>
+          <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Facilitator</th>
+          <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase text-center">Status</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for ps in planned_sessions %}
+        <tr class="hover:bg-blue-50/20 transition-colors">
+          <td class="px-4 py-4 whitespace-nowrap">
+            <div class="w-9 h-9 bg-blue-50 text-blue-700 rounded-lg flex items-center justify-center font-bold text-sm border border-blue-100">
+              {{ ps.day_number }}
+            </div>
+          </td>
+
+          <td class="px-4 py-4">
+            <div class="text-sm font-bold text-gray-900">
+              {{ ps.title|default:"Session "|add:ps.day_number }}
+            </div>
+            <div class="text-xs text-gray-500 mt-0.5">
+              {% if ps.steps.all %}{{ ps.steps.all|length }} activities{% else %}Standard Curriculum{% endif %}
+            </div>
+          </td>
+
+          <td class="px-4 py-4 whitespace-nowrap">
+            <div class="text-sm text-gray-900 font-medium">
+              {% if ps.conducted_date %}
+                {{ ps.conducted_date|date:"d M, Y" }}
+              {% else %}
+                <span class="text-gray-400">—</span>
+              {% endif %}
+            </div>
+            {% if ps.conducted_date %}
+            <div class="text-[10px] text-gray-400 mt-0.5 uppercase font-bold">{{ ps.conducted_date|date:"l" }}</div>
+            {% endif %}
+          </td>
+
+          <td class="px-4 py-4 whitespace-nowrap">
+            <div class="flex items-center">
+              <div class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500 mr-2 border border-gray-200">
+                {{ ps.facilitator_name|slice:":1" }}
+              </div>
+              <div class="text-sm text-gray-800">{{ ps.facilitator_name }}</div>
+            </div>
+          </td>
+
+          <td class="px-4 py-4 whitespace-nowrap text-center">
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider
+              {% if ps.status_class == 'success' %}bg-green-100 text-green-800
+              {% elif ps.status_class == 'warning' %}bg-yellow-100 text-yellow-800
+              {% elif ps.status_class == 'danger' %}bg-red-100 text-red-800
+              {% else %}bg-gray-100 text-gray-600{% endif %}">
+              {{ ps.status_info }}
+            </span>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="px-4 py-12 text-center">
+            <div class="text-gray-400 mb-2">
+                <span class="material-symbols-outlined text-4xl">event_busy</span>
+            </div>
+            <h3 class="text-sm font-bold text-gray-900">No Sessions Found</h3>
+            <p class="text-xs text-gray-500">This class does not have any sessions recorded yet.</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Bottom Pagination -->
+{% if pagination and pagination.total_pages > 1 %}
+<div class="mt-4 flex items-center justify-center">
+  <div class="flex items-center gap-2">
+    {% if pagination.has_previous %}
+      <a href="?page=1&per_page={{ pagination.per_page }}" 
+         class="px-2 py-1 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm">
+        First
+      </a>
+      <a href="?page={{ pagination.previous_page }}&per_page={{ pagination.per_page }}" 
+         class="px-3 py-1 border border-gray-300 text-gray-700 rounded hover:bg-gray-50">
+        ← Prev
+      </a>
+    {% endif %}
+    
+    <span class="px-3 py-1 bg-blue-600 text-white rounded">
+      {{ pagination.current_page }}
+    </span>
+    
+    {% if pagination.has_next %}
+      <a href="?page={{ pagination.next_page }}&per_page={{ pagination.per_page }}" 
+         class="px-3 py-1 border border-gray-300 text-gray-700 rounded hover:bg-gray-50">
+        Next →
+      </a>
+      <a href="?page={{ pagination.total_pages }}&per_page={{ pagination.per_page }}" 
+         class="px-2 py-1 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm">
+        Last
+      </a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<script>
+function updateClasses(schoolId) {
+  // If school changes, go back to the overview filter for that school 
+  // so the user can choose the new class
+  window.location.href = `{% url 'admin_sessions_filter' %}?school=${schoolId}`;
+}
+
+function navigateToClass(classId) {
+  if (classId) {
+    window.location.href = `/admin/classes/${classId}/sessions/`;
+  }
+}
+
+function changePerPage(perPage) {
+  const url = new URL(window.location);
+  url.searchParams.set('per_page', perPage);
+  url.searchParams.set('page', '1'); // Reset to first page
+  window.location.href = url.toString();
+}
+</script>
+
+{% endblock %}

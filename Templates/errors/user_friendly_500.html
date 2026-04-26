@@ -1,0 +1,74 @@
+{% extends "admin/shared/base.html" %}
+{% load static %}
+
+{% block title %}Something Went Wrong{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <div class="text-center">
+            <!-- Error Icon -->
+            <div class="mx-auto h-24 w-24 text-yellow-400 mb-6">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            
+            <!-- Error Title -->
+            <h2 class="mt-6 text-3xl font-extrabold text-gray-900">
+                {{ error_title|default:"Something Went Wrong" }}
+            </h2>
+            
+            <!-- Error Message -->
+            <p class="mt-2 text-sm text-gray-600">
+                {{ error_message|default:"We encountered an unexpected error. Our team has been notified." }}
+            </p>
+        </div>
+
+        <!-- Suggestions -->
+        {% if suggestions %}
+        <div class="mt-8">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">What you can try:</h3>
+            <ul class="text-sm text-gray-600 space-y-2">
+                {% for suggestion in suggestions %}
+                <li class="flex items-start">
+                    <svg class="flex-shrink-0 h-5 w-5 text-yellow-500 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    {{ suggestion }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Action Buttons -->
+        <div class="mt-8 space-y-3">
+            <button onclick="location.reload()" 
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
+                Refresh Page
+            </button>
+            
+            {% if show_dashboard_link and user.is_authenticated %}
+            <a href="{% if user.role.name == 'ADMIN' %}/admin/dashboard/{% elif user.role.name == 'FACILITATOR' %}/facilitator/dashboard/{% else %}/supervisor/dashboard/{% endif %}" 
+               class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Go to Dashboard
+            </a>
+            {% endif %}
+            
+            <button onclick="history.back()" 
+                    class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Go Back
+            </button>
+        </div>
+
+        <!-- Help Text -->
+        <div class="mt-6 text-center">
+            <p class="text-xs text-gray-500">
+                Error ID: {{ request.session.session_key|slice:":8" }} - 
+                Please include this ID when contacting support.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

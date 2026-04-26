@@ -1,0 +1,199 @@
+{% extends "admin/shared/base.html" %}
+{% load static %}
+
+{% block title %}Sessions Overview{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Sessions Management Overview</h2>
+                <div class="btn-group" role="group">
+                    <a href="{% url 'admin_sessions_filter' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-calendar-alt"></i> Class Sessions
+                    </a>
+                    <a href="{% url 'admin_curriculum_sessions_list' %}" class="btn btn-outline-success">
+                        <i class="fas fa-book"></i> Curriculum Sessions
+                    </a>
+                </div>
+            </div>
+
+            <!-- Explanation Card -->
+            <div class="card mb-4 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Two Types of Session Management</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary"><i class="fas fa-calendar-alt"></i> Class Sessions (Existing)</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> Tied to specific classes and schools</li>
+                                <li><i class="fas fa-check text-success"></i> Facilitator execution tracking</li>
+                                <li><i class="fas fa-check text-success"></i> Attendance management</li>
+                                <li><i class="fas fa-check text-success"></i> Real-time session status</li>
+                            </ul>
+                            <p class="text-muted small">Used for tracking actual session delivery by facilitators in specific classes.</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-success"><i class="fas fa-book"></i> Curriculum Sessions (New)</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> Global curriculum by language (Hindi/English)</li>
+                                <li><i class="fas fa-check text-success"></i> Day-wise content organization (1-150 days)</li>
+                                <li><i class="fas fa-check text-success"></i> Template management</li>
+                                <li><i class="fas fa-check text-success"></i> Content versioning and preview</li>
+                            </ul>
+                            <p class="text-muted small">Used for managing the master curriculum content that facilitators reference.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-center border-primary">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary">Class-Based Sessions</h5>
+                            <h2 class="text-primary">{{ total_planned_sessions }}</h2>
+                            <small class="text-muted">Across {{ total_classes }} classes in {{ total_schools }} schools</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center border-success">
+                        <div class="card-body">
+                            <h5 class="card-title text-success">Curriculum Sessions</h5>
+                            <h2 class="text-success">{{ total_curriculum_sessions }}</h2>
+                            <small class="text-muted">{{ published_sessions }} published</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center border-info">
+                        <div class="card-body">
+                            <h5 class="card-title text-info">Hindi Content</h5>
+                            <h2 class="text-info">{{ hindi_sessions }}</h2>
+                            <small class="text-muted">Days covered</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center border-warning">
+                        <div class="card-body">
+                            <h5 class="card-title text-warning">English Content</h5>
+                            <h2 class="text-warning">{{ english_sessions }}</h2>
+                            <small class="text-muted">Days covered</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-calendar-alt text-primary"></i> Recent Class Sessions</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if recent_class_sessions %}
+                                <div class="list-group list-group-flush">
+                                    {% for session in recent_class_sessions %}
+                                        <div class="list-group-item d-flex justify-content-between align-items-start">
+                                            <div class="ms-2 me-auto">
+                                                <div class="fw-bold">{{ session.planned_session.title }}</div>
+                                                <small class="text-muted">
+                                                    {{ session.planned_session.class_section }} - {{ session.facilitator.full_name }}
+                                                </small>
+                                            </div>
+                                            <span class="badge bg-{{ session.status == 'conducted' and 'success' or session.status == 'cancelled' and 'danger' or 'warning' }} rounded-pill">
+                                                {{ session.status }}
+                                            </span>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="text-center mt-3">
+                                    <a href="{% url 'admin_sessions_filter' %}" class="btn btn-outline-primary btn-sm">
+                                        View All Class Sessions
+                                    </a>
+                                </div>
+                            {% else %}
+                                <p class="text-muted text-center">No recent class sessions</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-book text-success"></i> Recent Curriculum Updates</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if recent_curriculum_updates %}
+                                <div class="list-group list-group-flush">
+                                    {% for session in recent_curriculum_updates %}
+                                        <div class="list-group-item d-flex justify-content-between align-items-start">
+                                            <div class="ms-2 me-auto">
+                                                <div class="fw-bold">{{ session.title }}</div>
+                                                <small class="text-muted">
+                                                    Day {{ session.day_number }} - {{ session.get_language_display }}
+                                                    {% if session.created_by %} by {{ session.created_by.full_name }}{% endif %}
+                                                </small>
+                                            </div>
+                                            <span class="badge bg-{{ session.status == 'published' and 'success' or session.status == 'draft' and 'warning' or 'secondary' }} rounded-pill">
+                                                {{ session.get_status_display }}
+                                            </span>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="text-center mt-3">
+                                    <a href="{% url 'admin_curriculum_sessions_list' %}" class="btn btn-outline-success btn-sm">
+                                        View All Curriculum Sessions
+                                    </a>
+                                </div>
+                            {% else %}
+                                <p class="text-muted text-center">No recent curriculum updates</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-bolt"></i> Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Class Sessions Management</h6>
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'admin_sessions_filter' %}" class="btn btn-outline-primary">
+                                    <i class="fas fa-search"></i> Browse Class Sessions
+                                </a>
+                                <a href="{% url 'admin_attendance_filter' %}" class="btn btn-outline-info">
+                                    <i class="fas fa-check-circle"></i> View Attendance Reports
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Curriculum Management</h6>
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'admin_curriculum_session_create' %}" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Create New Curriculum Session
+                                </a>
+                                <a href="{% url 'admin_curriculum_sessions_list' %}" class="btn btn-outline-success">
+                                    <i class="fas fa-list"></i> Manage Curriculum Sessions
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

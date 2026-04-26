@@ -1,0 +1,44 @@
+{% extends 'supervisor/shared/base.html' %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-900">Delete Class</h2>
+        <p class="text-sm text-gray-500 mt-1">Confirm deletion of this class</p>
+    </div>
+
+    <!-- Confirmation Card -->
+    <div class="bg-white border border-red-200 rounded-xl shadow-sm p-6">
+        <div class="flex gap-4">
+            <div class="flex-shrink-0">
+                <span class="material-symbols-outlined text-4xl text-red-600">warning</span>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Are you sure?</h3>
+                <p class="text-gray-600 mb-4">
+                    You are about to delete the class <strong>{{ class_section.class_level }} {{ class_section.section }}</strong> from <strong>{{ class_section.school.name }}</strong>.
+                </p>
+                <p class="text-sm text-red-600 font-medium mb-6">
+                    This action cannot be undone. All associated data will be deleted.
+                </p>
+
+                <!-- Buttons -->
+                <div class="flex gap-3">
+                    <form method="post" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors font-medium text-sm">
+                            <span class="material-symbols-outlined text-[20px]">delete</span>
+                            <span>Delete Class</span>
+                        </button>
+                    </form>
+                    <a href="{% url 'supervisor_classes_list' %}" class="flex items-center gap-2 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-sm">
+                        <span class="material-symbols-outlined text-[20px]">close</span>
+                        <span>Cancel</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

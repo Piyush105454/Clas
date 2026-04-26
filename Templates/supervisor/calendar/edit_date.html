@@ -1,0 +1,151 @@
+{% extends "supervisor/shared/base.html" %}
+
+{% block title %}Edit Calendar Date{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 p-6">
+    <div class="max-w-2xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Edit Calendar Date</h1>
+            <p class="text-gray-600 mt-2">Update date: {{ calendar_date.date }}</p>
+        </div>
+
+        <!-- Form -->
+        <div class="bg-white rounded-lg shadow-sm p-8">
+            <form method="POST" class="space-y-6">
+                {% csrf_token %}
+
+                <!-- Date Field (Read-only) -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                    <input type="text" value="{{ calendar_date.date }}" disabled class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600">
+                </div>
+
+                <!-- Date Type Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-4">Date Type *</label>
+                    <div class="space-y-3">
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="date_type" value="session" {% if calendar_date.date_type == 'session' %}checked{% endif %} class="w-4 h-4 text-blue-600" onchange="updateFormFields()">
+                            <span class="ml-3 text-gray-700 font-medium">Planned Session</span>
+                        </label>
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="date_type" value="holiday" {% if calendar_date.date_type == 'holiday' %}checked{% endif %} class="w-4 h-4 text-blue-600" onchange="updateFormFields()">
+                            <span class="ml-3 text-gray-700 font-medium">Holiday / No Session</span>
+                        </label>
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="date_type" value="office_work" {% if calendar_date.date_type == 'office_work' %}checked{% endif %} class="w-4 h-4 text-blue-600" onchange="updateFormFields()">
+                            <span class="ml-3 text-gray-700 font-medium">Office Work / Task</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Session Fields -->
+                <div id="session-fields" class="hidden space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Classes *</label>
+                        <div class="border border-gray-300 rounded-lg p-4 max-h-64 overflow-y-auto">
+                            {% for class in classes %}
+                            <label class="flex items-center mb-2">
+                                <input type="checkbox" name="class_section" value="{{ class.id }}" {% if class.id in selected_class_ids %}checked{% endif %} class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-2 text-gray-700">{{ class.school.name }} - {{ class.display_name }}</span>
+                            </label>
+                            {% empty %}
+                            <p class="text-gray-500 text-sm">No classes available</p>
+                            {% endfor %}
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Select multiple classes to create a grouped session</p>
+                    </div>
+                </div>
+
+                <!-- Holiday Fields -->
+                <div id="holiday-fields" class="hidden space-y-4">
+                    <div>
+                        <label for="holiday_name" class="block text-sm font-medium text-gray-700 mb-2">Holiday Name *</label>
+                        <input type="text" id="holiday_name" name="holiday_name" value="{{ calendar_date.holiday_name }}" placeholder="e.g., Diwali, Summer Break" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label for="holiday_notes" class="block text-sm font-medium text-gray-700 mb-2">Holiday Details / Reason (Optional)</label>
+                        <textarea id="holiday_notes" name="holiday_notes" rows="3" placeholder="Explain why there are no sessions (visible to facilitators)..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">{{ calendar_date.notes }}</textarea>
+                    </div>
+                </div>
+
+                <!-- Office Work Fields -->
+                <div id="office-work-fields" class="hidden space-y-4">
+                    <div>
+                        <label for="office_task_description" class="block text-sm font-medium text-gray-700 mb-2">Task Description *</label>
+                        <textarea id="office_task_description" name="office_task_description" rows="4" placeholder="Describe the office work or task..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">{{ calendar_date.office_task_description }}</textarea>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex gap-4 pt-6">
+                    <button type="submit" class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg">
+                        Update Date
+                    </button>
+                    <a href="{% url 'supervisor_calendar' %}" class="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg text-center">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateFormFields() {
+    const dateType = document.querySelector('input[name="date_type"]:checked').value;
+    
+    // Hide all fields
+    document.getElementById('session-fields').classList.add('hidden');
+    document.getElementById('holiday-fields').classList.add('hidden');
+    document.getElementById('office-work-fields').classList.add('hidden');
+    
+    // Show relevant fields
+    if (dateType === 'session') {
+        document.getElementById('session-fields').classList.remove('hidden');
+    } else if (dateType === 'holiday') {
+        document.getElementById('holiday-fields').classList.remove('hidden');
+    } else if (dateType === 'office_work') {
+        document.getElementById('office-work-fields').classList.remove('hidden');
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateFormFields();
+    
+    // Add form submission handler to validate
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const dateType = document.querySelector('input[name="date_type"]:checked').value;
+            
+            if (dateType === 'session') {
+                const selectedClasses = document.querySelectorAll('input[name="class_section"]:checked');
+                if (selectedClasses.length === 0) {
+                    e.preventDefault();
+                    alert('Please select at least one class');
+                    return false;
+                }
+            } else if (dateType === 'holiday') {
+                const holidayName = document.getElementById('holiday_name').value.trim();
+                if (!holidayName) {
+                    e.preventDefault();
+                    alert('Please enter a holiday name');
+                    return false;
+                }
+            } else if (dateType === 'office_work') {
+                const taskDesc = document.getElementById('office_task_description').value.trim();
+                if (!taskDesc) {
+                    e.preventDefault();
+                    alert('Please enter a task description');
+                    return false;
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

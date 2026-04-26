@@ -1,0 +1,107 @@
+<!-- Responsive sidebar with proper layout -->
+<aside class="sidebar flex flex-col overflow-y-auto">
+    
+    <!-- User Profile -->
+    <div class="flex items-center gap-3 p-6 border-b border-gray-200">
+        <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
+            {{ request.user.full_name|first|upper }}
+        </div>
+        <div class="flex-1 min-w-0">
+            <h1 class="text-base font-semibold text-gray-900 truncate">Admin Platform</h1>
+            <p class="text-sm text-gray-500 truncate">{{ request.user.email }}</p>
+        </div>
+        <!-- Close button for mobile -->
+        <button class="lg:hidden p-1 rounded-lg hover:bg-gray-100" onclick="document.querySelector('.sidebar').classList.remove('show'); document.getElementById('sidebarOverlay').classList.remove('show'); document.body.style.overflow = '';">
+            <span class="material-symbols-outlined text-gray-500">close</span>
+        </button>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 p-4 space-y-1">
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'admin_dashboard' %}bg-blue-50 text-blue-600{% endif %}" 
+           href="{% url 'admin_dashboard' %}">
+            <span class="material-symbols-outlined text-[20px]">dashboard</span>
+            <span>Dashboard</span>
+        </a>
+
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'users_view' %}bg-blue-50 text-blue-600{% endif %}" 
+           href="{% url 'users_view' %}">
+            <span class="material-symbols-outlined text-[20px]">group</span>
+            <span>Users</span>
+        </a>
+
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'school_list' %}bg-blue-50 text-blue-600{% endif %}" 
+           href="{% url 'schools' %}">
+            <span class="material-symbols-outlined text-[20px]">school</span>
+            <span>Schools</span>
+        </a>
+
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'admin_attendance_filter' %}bg-blue-50 text-blue-600{% endif %}" 
+           href="{% url 'admin_attendance_filter' %}">
+            <span class="material-symbols-outlined text-[20px]">check_circle</span>
+            <span>Attendance</span>
+        </a>
+
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if 'sessions' in request.resolver_match.url_name %}bg-blue-50 text-blue-600{% endif %}" 
+           href="{% url 'admin_sessions_list' %}">
+            <span class="material-symbols-outlined text-[20px]">calendar_month</span>
+            <span>Sessions</span>
+        </a>
+
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'admin_curriculum_sessions_list' or 'curriculum' in request.resolver_match.url_name %}bg-blue-50 text-blue-600{% endif %}" 
+           href="{% url 'admin_curriculum_sessions_list' %}">
+            <span class="material-symbols-outlined text-[20px]">menu_book</span>
+            <span>Curriculum </span>
+        </a>
+
+        <!-- Facilitators -->
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if 'facilitator' in request.resolver_match.url_name %}bg-blue-50 text-blue-600{% endif %}"
+           href="{% url 'admin_view_facilitators' %}">
+            <span class="material-symbols-outlined text-[20px]">person</span>
+            <span>Facilitators</span>
+        </a>
+
+        <!-- Calendar -->
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if 'calendar' in request.resolver_match.url_name %}bg-blue-50 text-blue-600{% endif %}"
+           href="{% url 'admin_view_calendar' %}">
+            <span class="material-symbols-outlined text-[20px]">calendar_month</span>
+            <span>Calendar</span>
+        </a>
+
+        <!-- Notifications -->
+        <a href="#" id="notificationsLink" class="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-[20px]">notifications</span>
+                <span>Notifications</span>
+            </div>
+            <span id="sidebarNotificationBadge" class="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+        </a>
+
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if 'reports' in request.resolver_match.url_name %}bg-blue-50 text-blue-600{% endif %}" 
+           href="{% url 'reports_dashboard' %}">
+            <span class="material-symbols-outlined text-[20px]">assessment</span>
+            <span>Reports</span>
+        </a>
+
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if 'feedback' in request.resolver_match.url_name %}bg-blue-50 text-blue-600{% endif %}" 
+           href="{% url 'admin_feedback_dashboard' %}">
+            <span class="material-symbols-outlined text-[20px]">feedback</span>
+            <span>Feedback</span>
+        </a>
+    </nav>
+
+    <!-- Bottom Navigation / Settings -->
+    <div class="p-4 border-t border-gray-200 space-y-1">
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors" 
+           href="{% url 'admin_settings' %}">
+            <span class="material-symbols-outlined text-[20px]">settings</span>
+            <span>Settings</span>
+        </a>
+
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-red-600 transition-colors" 
+           href="{% url 'logout' %}">
+            <span class="material-symbols-outlined text-[20px]">logout</span>
+            <span>Logout</span>
+        </a>
+    </div>
+</aside>

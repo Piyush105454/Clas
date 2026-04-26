@@ -1,0 +1,342 @@
+{% extends 'admin/shared/base.html' %}
+
+{% block content %}
+{% csrf_token %}
+
+<div class="space-y-6">
+
+    <!-- Back Button -->
+    <div>
+        <button onclick="window.history.back();" 
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span>Back</span>
+        </button>
+    </div>
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h4 class="text-2xl font-bold text-gray-900">{{ school.name }}</h4>
+            <p class="text-sm text-gray-500 mt-1">School Detail Overview</p>
+        </div>
+
+        <div class="flex gap-3 flex-wrap">
+            <a href="{% url 'edit_school' school.id %}" 
+               class="inline-flex items-center gap-2 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm font-medium">
+                <span class="material-symbols-outlined text-[18px]">edit</span>
+                <span>Edit School</span>
+            </a>
+            <button class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors text-sm font-medium">
+                <span class="material-symbols-outlined text-[18px]">download</span>
+                <span>Export CSV</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="border-b border-gray-200">
+        <nav class="flex gap-1 overflow-x-auto">
+            <a href="#" 
+               class="px-4 py-3 text-sm font-medium text-blue-600 border-b-2 border-blue-600 whitespace-nowrap">
+                Overview
+            </a>
+            <a href="{% url 'class_sections_list_by_school' school.id %}" 
+               class="px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:border-b-2 hover:border-gray-300 whitespace-nowrap transition-colors">
+                All Classes
+            </a>
+          
+            <a href="{% url 'students_list' school.id %}" 
+               class="px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:border-b-2 hover:border-gray-300 whitespace-nowrap transition-colors">
+                Students
+            </a>
+            <a href="{% url 'admin_attendance_filter' %}?school={{ school.id }}" 
+               class="px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:border-b-2 hover:border-gray-300 whitespace-nowrap transition-colors">
+                Attendance
+            </a>
+        </nav>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+       
+
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 flex items-center justify-center bg-cyan-100 text-cyan-600 rounded-lg">
+                    <span class="material-symbols-outlined text-2xl">school</span>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Students</div>
+                    <div class="text-2xl font-bold text-gray-900">{{ total_students }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 flex items-center justify-center bg-yellow-100 text-yellow-600 rounded-lg">
+                    <span class="material-symbols-outlined text-2xl">event</span>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Sessions</div>
+                    <div class="text-2xl font-bold text-gray-900">{{ sessions_count }}</div>
+                </div>
+            </div>
+        </div>
+
+        <a href="{% url 'admin_attendance_filter' %}?school={{ school.id }}" 
+           class="bg-white border border-gray-200 rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow group">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 flex items-center justify-center bg-green-100 text-green-600 rounded-lg group-hover:bg-green-600 group-hover:text-white transition-colors">
+                    <span class="material-symbols-outlined text-2xl">check_circle</span>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Attendance</div>
+                    <div class="text-2xl font-bold text-gray-900">{{ attendance_percentage }}%</div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Facilitators Section -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h6 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <span class="material-symbols-outlined text-xl">badge</span>
+                <span>Assigned Facilitators</span>
+            </h6>
+            <span class="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                {{ facilitator_assignments|length }} facilitator(s)
+            </span>
+        </div>
+
+        <div class="p-6">
+            {% if facilitator_assignments %}
+
+            <!-- DESKTOP TABLE -->
+            <div class="hidden md:block overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Primary</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for a in facilitator_assignments %}
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">{{ a.facilitator.full_name }}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-700">{{ a.facilitator.email }}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if a.is_active %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        <span class="w-1.5 h-1.5 bg-green-600 rounded-full mr-1.5"></span>
+                                        Active
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                        <span class="w-1.5 h-1.5 bg-gray-600 rounded-full mr-1.5"></span>
+                                        Inactive
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if a.is_primary %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        Primary
+                                    </span>
+                                {% else %}
+                                    <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                {{ a.assigned_date|date:"M d, Y" }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div class="flex gap-2">
+                                    {% if a.is_active %}
+                                    <button onclick="toggleFacilitatorStatus('{{ a.id }}', false)"
+                                            class="inline-flex items-center px-3 py-1.5 border border-yellow-600 text-yellow-600 rounded-lg hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-colors text-xs font-medium">
+                                        Deactivate
+                                    </button>
+                                    {% else %}
+                                    <button onclick="toggleFacilitatorStatus('{{ a.id }}', true)"
+                                            class="inline-flex items-center px-3 py-1.5 border border-green-600 text-green-600 rounded-lg hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors text-xs font-medium">
+                                        Activate
+                                    </button>
+                                    {% endif %}
+                                    <button onclick="removeFacilitator('{{ a.id }}')"
+                                            class="inline-flex items-center px-3 py-1.5 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors text-xs font-medium">
+                                        Remove
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- MOBILE CARDS -->
+            <div class="md:hidden space-y-4">
+                {% for a in facilitator_assignments %}
+                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-900 mb-1">{{ a.facilitator.full_name }}</div>
+                            <div class="text-sm text-gray-600">{{ a.facilitator.email }}</div>
+                        </div>
+                        {% if a.is_active %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Active
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                Inactive
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="text-sm text-gray-600 mb-3">
+                        Assigned: {{ a.assigned_date|date:"M d, Y" }}
+                    </div>
+
+                    <div class="flex gap-2">
+                        {% if a.is_active %}
+                        <button onclick="toggleFacilitatorStatus('{{ a.id }}', false)"
+                                class="flex-1 px-3 py-2 border border-yellow-600 text-yellow-600 rounded-lg hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-colors text-sm font-medium">
+                            Deactivate
+                        </button>
+                        {% else %}
+                        <button onclick="toggleFacilitatorStatus('{{ a.id }}', true)"
+                                class="flex-1 px-3 py-2 border border-green-600 text-green-600 rounded-lg hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors text-sm font-medium">
+                            Activate
+                        </button>
+                        {% endif %}
+                        <button onclick="removeFacilitator('{{ a.id }}')"
+                                class="flex-1 px-3 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors text-sm font-medium">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% else %}
+            <div class="text-center py-12">
+                <span class="material-symbols-outlined text-gray-300 text-6xl mb-3">person_off</span>
+                <p class="text-gray-500">No facilitators assigned</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Address Card -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+            <h6 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-xl">location_on</span>
+                <span>Location Details</span>
+            </h6>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span class="text-sm text-gray-600">District</span>
+                    <span class="text-sm font-medium text-gray-900">{{ school.district }}</span>
+                </div>
+                <div class="flex justify-between items-center py-2">
+                    <span class="text-sm text-gray-600">Block</span>
+                    <span class="text-sm font-medium text-gray-900">{{ school.block }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function toggleFacilitatorStatus(assignmentId, activate) {
+    if (confirm(`Are you sure you want to ${activate ? 'activate' : 'deactivate'} this facilitator?`)) {
+        // Show loading state
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = activate ? 'Activating...' : 'Deactivating...';
+        button.disabled = true;
+        
+        // Create a form and submit it
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/facilitator-assignment/${assignmentId}/toggle/`;
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        // Add is_active parameter
+        const statusInput = document.createElement('input');
+        statusInput.type = 'hidden';
+        statusInput.name = 'is_active';
+        statusInput.value = activate ? 'true' : 'false';
+        form.appendChild(statusInput);
+        
+        // Submit form
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function removeFacilitator(assignmentId) {
+    if (confirm('Are you sure you want to remove this facilitator? This action cannot be undone.')) {
+        // Show loading state
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = 'Removing...';
+        button.disabled = true;
+        
+        // Create a form and submit it
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/facilitator-assignment/${assignmentId}/delete/`;
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        // Submit form
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Add visual feedback for better UX
+document.addEventListener('DOMContentLoaded', function() {
+    // Add hover effects to action buttons
+    const actionButtons = document.querySelectorAll('button[onclick*="toggleFacilitatorStatus"], button[onclick*="removeFacilitator"]');
+    actionButtons.forEach(button => {
+        button.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-1px)';
+        });
+        button.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+});
+</script>
+
+{% endblock %}

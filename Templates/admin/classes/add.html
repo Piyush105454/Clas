@@ -1,0 +1,141 @@
+{% extends 'admin/shared/base.html' %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}
+  {% if school %}
+    Add Class Section to {{ school.name }}
+  {% else %}
+    Add Class Section
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="py-6">
+
+  <!-- Page Title -->
+  <h4 class="text-xl font-bold text-gray-900 mb-2">
+    Add Class Section
+  </h4>
+
+  <p class="text-gray-500 mb-6">
+    {% if school %}
+      Create a new class section for <strong>{{ school.name }}</strong>.
+    {% else %}
+      Create a new class section.
+    {% endif %}
+  </p>
+
+  <!-- Card -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 max-w-xl">
+
+    <!-- Non-field errors -->
+    {% if form.non_field_errors %}
+      <div class="mb-4 rounded-lg border border-red-300 bg-red-50 text-red-700 px-4 py-2 text-sm">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Field specific error display -->
+    {% for field in form %}
+      {% if field.errors %}
+        <div class="mb-3 rounded-lg border border-red-300 bg-red-50 text-red-700 px-4 py-2 text-sm">
+          {% for error in field.errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endfor %}
+
+    <form action="{% url 'class_section_add' school.id %}" method="post">
+      {% csrf_token %}
+
+      <!-- Class Level -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Class Level <span class="text-red-500">*</span>
+        </label>
+        <p class="text-xs text-gray-500 mb-2">Select the class level from LKG to Class 10</p>
+
+        {{ form.class_level|add_class:"w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" }}
+      </div>
+
+      <!-- Section -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Section <span class="text-red-500">*</span>
+        </label>
+        <p class="text-xs text-gray-500 mb-2">Section A is default. Add Section B if needed.</p>
+
+        {{ form.section|add_class:"w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" }}
+      </div>
+
+      <!-- Preview -->
+      <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <div class="flex items-center">
+          <span class="material-symbols-outlined text-blue-600 mr-2">preview</span>
+          <div>
+            <p class="text-sm font-medium text-blue-900">Class Preview</p>
+            <p class="text-xs text-blue-700" id="classPreview">
+              Select class level and section to see preview
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex gap-3 mt-6">
+        <button type="submit"
+                class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500">
+          Add Class Section
+        </button>
+
+        <a href="{% url 'class_sections_list_by_school' school.id %}"
+           class="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+          Cancel
+        </a>
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+<script>
+// Update preview when form changes
+function updatePreview() {
+    const classLevel = document.getElementById('id_class_level').value;
+    const section = document.getElementById('id_section').value;
+    const preview = document.getElementById('classPreview');
+    
+    if (classLevel && section) {
+        const classLevelText = document.getElementById('id_class_level').selectedOptions[0].text;
+        const sectionText = document.getElementById('id_section').selectedOptions[0].text;
+        preview.textContent = `${classLevelText} - ${sectionText}`;
+    } else {
+        preview.textContent = 'Select class level and section to see preview';
+    }
+}
+
+// Add event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const classLevelSelect = document.getElementById('id_class_level');
+    const sectionSelect = document.getElementById('id_section');
+    
+    if (classLevelSelect) {
+        classLevelSelect.addEventListener('change', updatePreview);
+    }
+    
+    if (sectionSelect) {
+        sectionSelect.addEventListener('change', updatePreview);
+    }
+    
+    // Initial preview update
+    updatePreview();
+});
+</script>
+
+{% endblock %}

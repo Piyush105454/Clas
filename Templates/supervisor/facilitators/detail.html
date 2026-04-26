@@ -1,0 +1,266 @@
+{% extends base_template|default:'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-6">
+    
+    <!-- Page Header with Back Button -->
+    <div class="flex items-center gap-3">
+        {% if request.resolver_match.url_name == 'admin_facilitator_detail' %}
+            <a href="{% url 'admin_view_facilitators' %}" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+        {% else %}
+            <a href="{% url 'supervisor_facilitators_list' %}" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+        {% endif %}
+            <span class="material-symbols-outlined text-gray-600">arrow_back</span>
+        </a>
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Facilitator Profile</h2>
+            <p class="text-sm text-gray-500 mt-1">View facilitator details and their work</p>
+        </div>
+    </div>
+
+    <!-- Profile Header -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div class="flex items-center gap-3 sm:gap-4">
+                <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl sm:text-3xl flex-shrink-0">
+                    {{ facilitator.full_name|first|upper }}
+                </div>
+                <div class="min-w-0">
+                    <h3 class="text-lg sm:text-2xl font-bold text-gray-900 truncate">{{ facilitator.full_name }}</h3>
+                    <p class="text-xs sm:text-sm text-gray-600 truncate">{{ facilitator.email }}</p>
+                    <div class="mt-2 flex flex-col sm:flex-row sm:items-center gap-2">
+                        <span class="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium w-fit {% if facilitator.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {% if facilitator.is_active %}Active{% else %}Inactive{% endif %}
+                        </span>
+                        <span class="text-xs sm:text-sm text-gray-600 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm sm:text-base">calendar_today</span>
+                            <span class="truncate">Joined {{ facilitator.created_at|date:"M d, Y" }}</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Daily Profile Button -->
+            {% if request.resolver_match.url_name == 'admin_facilitator_detail' %}
+                <a href="{% url 'admin_facilitator_daily_profile' facilitator.id %}" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors whitespace-nowrap">
+            {% else %}
+                <a href="{% url 'supervisor_facilitator_daily_profile' facilitator.id %}" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors whitespace-nowrap">
+            {% endif %}
+                <span class="material-symbols-outlined text-base">calendar_today</span>
+                <span>Daily Profile</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-6">
+            <p class="text-xs sm:text-sm font-medium text-gray-600 mb-2">Schools Assigned</p>
+            <p class="text-2xl sm:text-3xl font-bold text-blue-600">{{ school_count }}</p>
+            <div class="mt-2 sm:mt-3 flex items-center text-xs text-blue-600">
+                <span class="material-symbols-outlined text-base mr-1">school</span>
+                <span class="hidden sm:inline">Active schools</span>
+            </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-6">
+            <p class="text-xs sm:text-sm font-medium text-gray-600 mb-2">Classes Teaching</p>
+            <p class="text-2xl sm:text-3xl font-bold text-purple-600">{{ class_count }}</p>
+            <div class="mt-2 sm:mt-3 flex items-center text-xs text-purple-600">
+                <span class="material-symbols-outlined text-base mr-1">class</span>
+                <span class="hidden sm:inline">Total classes</span>
+            </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-6">
+            <p class="text-xs sm:text-sm font-medium text-gray-600 mb-2">Students</p>
+            <p class="text-2xl sm:text-3xl font-bold text-green-600">{{ student_count }}</p>
+            <div class="mt-2 sm:mt-3 flex items-center text-xs text-green-600">
+                <span class="material-symbols-outlined text-base mr-1">group</span>
+                <span class="hidden sm:inline">Active students</span>
+            </div>
+        </div>
+
+
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-6">
+            <p class="text-xs sm:text-sm font-medium text-gray-600 mb-2">Attendance Rate</p>
+            <p class="text-2xl sm:text-3xl font-bold text-orange-600">{{ facilitator_attendance_rate }}%</p>
+            <div class="mt-2 sm:mt-3 flex items-center text-xs text-orange-600">
+                <span class="material-symbols-outlined text-base mr-1">check_circle</span>
+                <span class="hidden sm:inline">{{ present_sessions }}/{{ total_sessions }} present</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assigned Schools Section -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Assigned Schools</h3>
+            <a href="{% url 'supervisor_assign_facilitator_school' facilitator.id %}" class="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors">
+                <span class="material-symbols-outlined text-base">edit</span>
+                <span>Edit</span>
+            </a>
+        </div>
+        {% if schools %}
+        <div class="space-y-3">
+            {% for school_assignment in schools %}
+            <div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-blue-600">school</span>
+                    <div>
+                        <p class="font-medium text-gray-900">{{ school_assignment.school.name }}</p>
+                        <p class="text-sm text-gray-600">{{ school_assignment.school.location }}</p>
+                    </div>
+                </div>
+                <span class="text-xs font-medium text-gray-600">Active</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-center py-4">No schools assigned</p>
+        {% endif %}
+    </div>
+
+    <!-- Facilitator Attendance Stats Section -->
+    <!-- Facilitator Attendance Check Section -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 id="facilitator-attendance-check" class="text-lg font-semibold text-gray-900">Facilitator Attendance Check</h2>
+            <form method="get" class="flex gap-2">
+                <select name="date_filter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="7" {% if date_filter == '7' %}selected{% endif %}>Last 7 days</option>
+                    <option value="30" {% if date_filter == '30' %}selected{% endif %}>Last 30 days</option>
+                    <option value="90" {% if date_filter == '90' %}selected{% endif %}>Last 90 days</option>
+                    <option value="365" {% if date_filter == '365' %}selected{% endif %}>Last year</option>
+                </select>
+                <button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors">
+                    Filter
+                </button>
+            </form>
+        </div>
+        <p class="text-xs text-gray-600 mb-4">Period: {{ start_date|date:"M d, Y" }} to {{ end_date|date:"M d, Y" }}</p>
+        
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p class="text-xs font-medium text-green-700 mb-2">Present</p>
+                <p class="text-2xl font-bold text-green-600">{{ present_sessions }}</p>
+                <p class="text-xs text-green-600 mt-1">sessions</p>
+            </div>
+            
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p class="text-xs font-medium text-red-700 mb-2">Absent</p>
+                <p class="text-2xl font-bold text-red-600">{{ absent_sessions }}</p>
+                <p class="text-xs text-red-600 mt-1">sessions</p>
+            </div>
+            
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p class="text-xs font-medium text-yellow-700 mb-2">Leave</p>
+                <p class="text-2xl font-bold text-yellow-600">{{ leave_sessions }}</p>
+                <p class="text-xs text-yellow-600 mt-1">sessions</p>
+            </div>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p class="text-xs font-medium text-blue-700 mb-2">Total</p>
+                <p class="text-2xl font-bold text-blue-600">{{ total_sessions }}</p>
+                <p class="text-xs text-blue-600 mt-1">sessions</p>
+            </div>
+        </div>
+        
+        {% if total_sessions > 0 %}
+        <div class="mt-4">
+            <div class="flex items-center justify-between mb-2">
+                <p class="text-sm font-medium text-gray-700">Attendance Rate</p>
+                <p class="text-sm font-bold text-gray-900">{{ facilitator_attendance_rate }}%</p>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-green-600 h-2 rounded-full transition-all" data-width="{{ facilitator_attendance_rate }}"></div>
+            </div>
+        </div>
+        <script>
+            document.querySelectorAll('[data-width]').forEach(el => {
+                el.style.width = el.getAttribute('data-width') + '%';
+            });
+        </script>
+        {% else %}
+        <div class="mt-4 p-4 bg-gray-50 rounded-lg text-center">
+            <p class="text-sm text-gray-600">No attendance records in this period</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Teaching Classes Section -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Classes in Assigned Schools</h3>
+            <a href="{% url 'supervisor_assign_facilitator_class' facilitator.id %}" class="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors">
+                <span class="material-symbols-outlined text-base">visibility</span>
+                <span>View</span>
+            </a>
+        </div>
+        {% if classes %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-gray-200">
+                        <th class="text-left py-3 px-4 font-semibold text-gray-900">School</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-900">Class</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-900">Section</th>
+                        <th class="text-right py-3 px-4 font-semibold text-gray-900">Students</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for class in classes %}
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="py-3 px-4 text-gray-900">{{ class.school.name }}</td>
+                        <td class="py-3 px-4 text-gray-900">{{ class.class_level }}</td>
+                        <td class="py-3 px-4 text-gray-900">{{ class.section }}</td>
+                        <td class="py-3 px-4 text-right text-gray-900">{{ class.enrollments.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-center py-4">No classes assigned</p>
+        {% endif %}
+    </div>
+
+    <!-- Students Section with Class Filter -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Students ({{ students|length }})</h3>
+            <form method="get" class="w-full sm:w-auto">
+                <select name="class_filter" onchange="this.form.submit()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto">
+                    <option value="">All Classes</option>
+                    {% for class in classes %}
+                    <option value="{{ class.id }}" {% if selected_class_id == class.id|stringformat:"s" %}selected{% endif %}>
+                        {{ class.class_level }} - {{ class.section }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        {% if students %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for student in students %}
+            <div class="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-semibold text-sm flex-shrink-0">
+                    {{ student.full_name|first|upper }}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="font-medium text-gray-900 truncate">{{ student.full_name }}</p>
+                    <p class="text-xs text-gray-600 truncate">{{ student.enrollment_number }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-center py-4">No students assigned</p>
+        {% endif %}
+    </div>
+
+
+</div>
+
+
+{% endblock content %}

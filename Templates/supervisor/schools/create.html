@@ -1,0 +1,146 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="max-w-2xl mx-auto">
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 lg:p-8">
+    
+    <!-- Header -->
+    <div class="mb-8">
+      <h2 class="text-2xl font-bold text-gray-900">Add New School</h2>
+      <p class="text-sm text-gray-500 mt-2">Create a new school in the system</p>
+    </div>
+
+    <!-- Form -->
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+      {% csrf_token %}
+
+      <!-- School Name -->
+      <div>
+        <label for="id_name" class="block text-sm font-medium text-gray-700 mb-2">School Name</label>
+        {{ form.name }}
+        {% if form.name.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Area -->
+      <div>
+        <label for="id_area" class="block text-sm font-medium text-gray-700 mb-2">Area</label>
+        {{ form.area }}
+        {% if form.area.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.area.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Address -->
+      <div>
+        <label for="id_address" class="block text-sm font-medium text-gray-700 mb-2">Address</label>
+        {{ form.address }}
+        {% if form.address.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.address.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Contact Person -->
+      <div>
+        <label for="id_contact_person" class="block text-sm font-medium text-gray-700 mb-2">Contact Person</label>
+        {{ form.contact_person }}
+        {% if form.contact_person.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.contact_person.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Contact Number -->
+      <div>
+        <label for="id_contact_number" class="block text-sm font-medium text-gray-700 mb-2">Contact Number</label>
+        {{ form.contact_number }}
+        {% if form.contact_number.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.contact_number.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Email -->
+      <div>
+        <label for="id_email" class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+        {{ form.email }}
+        {% if form.email.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.email.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Logo -->
+      <div>
+        <label for="id_logo" class="block text-sm font-medium text-gray-700 mb-2">Logo</label>
+        {{ form.logo }}
+        {% if form.logo.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.logo.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Status -->
+      <div>
+        <label for="id_status" class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+        {{ form.status }}
+        {% if form.status.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.status.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Form Errors -->
+      {% if form.non_field_errors %}
+        <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p class="text-sm text-red-700">
+            {% for error in form.non_field_errors %}
+              {{ error }}
+            {% endfor %}
+          </p>
+        </div>
+      {% endif %}
+
+      <!-- Buttons -->
+      <div class="flex gap-3 pt-6">
+        <button type="submit" class="flex-1 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium">
+          Create School
+        </button>
+        <a href="{% url 'supervisor_schools_list' %}" class="flex-1 px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-center">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="file"],
+  select,
+  textarea {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="tel"]:focus,
+  input[type="file"]:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: #3b82f6;
+    border-color: transparent;
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 100px;
+  }
+</style>
+
+{% endblock %}

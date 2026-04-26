@@ -1,0 +1,1221 @@
+{% extends "admin/shared/base.html" %}
+{% load static %}
+
+{% csrf_token %}
+
+{% block extra_css %}
+<style>
+/* MOBILE-FIRST RESPONSIVE DESIGN FOR ADMIN CURRICULUM */
+
+/* Base mobile styles */
+.max-w-full {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+/* Mobile container adjustments */
+@media (max-width: 768px) {
+    .mx-auto {
+        margin-left: 8px;
+        margin-right: 8px;
+    }
+    
+    .px-4 {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+    
+    /* Mobile header adjustments */
+    .flex.flex-col.md\\:flex-row {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .text-2xl {
+        font-size: 1.25rem !important;
+    }
+    
+    .text-lg {
+        font-size: 1rem !important;
+    }
+    
+    /* Mobile language selector */
+    .flex.rounded-lg {
+        flex-direction: column;
+        border-radius: 0.5rem;
+    }
+    
+    .flex.rounded-lg label {
+        border-radius: 0.375rem !important;
+        margin-bottom: 0.25rem;
+        text-align: center;
+    }
+    
+    /* Mobile day navigation */
+    .flex.flex-col.sm\\:flex-row {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .flex.items-center.gap-2 {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    /* Mobile admin actions */
+    .flex.flex-wrap.gap-2 {
+        flex-direction: column;
+    }
+    
+    .flex.flex-wrap.gap-2 > * {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* CURRICULUM CONTENT MOBILE OPTIMIZATION */
+#curriculumContent {
+    overflow-x: auto;
+    max-width: 100%;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* FORCE GOOGLE SHEETS CONTENT TO BE HORIZONTALLY SCROLLABLE */
+#curriculumContent .ritz,
+#curriculumContent .waffle,
+#curriculumContent table {
+    width: auto !important;
+    min-width: 600px !important;
+    max-width: none !important;
+    overflow-x: visible !important;
+    display: table !important;
+    border-collapse: collapse !important;
+}
+
+#curriculumContent .waffle tbody,
+#curriculumContent .waffle thead {
+    display: table-row-group !important;
+    width: auto !important;
+}
+
+#curriculumContent .waffle tr {
+    display: table-row !important;
+    width: auto !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    margin-bottom: 0 !important;
+}
+
+#curriculumContent .waffle td,
+#curriculumContent .waffle th {
+    display: table-cell !important;
+    min-width: 100px !important;
+    max-width: 200px !important;
+    padding: 8px 6px !important;
+    font-size: 0.8rem !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+    border-right: 1px solid #f1f5f9 !important;
+    vertical-align: top !important;
+}
+
+/* Mobile responsive curriculum table - HORIZONTAL SCROLLING */
+@media (max-width: 768px) {
+    /* Make the content container horizontally scrollable */
+    #curriculumContent {
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding: 0.5rem !important;
+    }
+    
+    /* Ensure the Google Sheets container allows horizontal scrolling */
+    #curriculumContent .ritz.grid-container {
+        display: block !important;
+        width: auto !important;
+        min-width: 600px !important;
+        overflow-x: visible !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 0.5rem !important;
+        background: white !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    }
+    
+    /* Keep table structure intact for horizontal scrolling */
+    #curriculumContent .waffle {
+        display: table !important;
+        width: auto !important;
+        min-width: 600px !important;
+        font-size: 0.75rem !important;
+        border-collapse: collapse !important;
+    }
+    
+    #curriculumContent .waffle tr {
+        display: table-row !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+    
+    #curriculumContent .waffle td,
+    #curriculumContent .waffle th {
+        display: table-cell !important;
+        padding: 6px 4px !important;
+        font-size: 0.7rem !important;
+        line-height: 1.2 !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        vertical-align: top !important;
+        border-right: 1px solid #f1f5f9 !important;
+        white-space: nowrap !important;
+    }
+    
+    /* Set specific column widths for mobile horizontal scroll */
+    #curriculumContent .waffle td:nth-child(1),
+    #curriculumContent .waffle th:nth-child(1) {
+        width: 80px !important;
+        min-width: 80px !important;
+        background: #f8fafc !important;
+        font-weight: 600 !important;
+    }
+    
+    #curriculumContent .waffle td:nth-child(2),
+    #curriculumContent .waffle th:nth-child(2) {
+        width: 120px !important;
+        min-width: 120px !important;
+        font-weight: 500 !important;
+    }
+    
+    #curriculumContent .waffle td:nth-child(3),
+    #curriculumContent .waffle th:nth-child(3) {
+        width: 60px !important;
+        min-width: 60px !important;
+        text-align: center !important;
+        background: #fefce8 !important;
+    }
+    
+    #curriculumContent .waffle td:nth-child(4),
+    #curriculumContent .waffle th:nth-child(4) {
+        width: 250px !important;
+        min-width: 250px !important;
+        white-space: normal !important;
+    }
+    
+    /* Hide completely empty cells */
+    #curriculumContent .waffle td:empty,
+    #curriculumContent .waffle th:empty {
+        display: none !important;
+    }
+    
+    /* Mobile scroll hint */
+    #curriculumContent::before {
+        content: "← Swipe left/right to scroll table →";
+        display: block;
+        text-align: center;
+        padding: 0.5rem;
+        background: #dbeafe;
+        color: #1e40af;
+        font-size: 0.75rem;
+        font-weight: 500;
+        border-radius: 0.375rem;
+        margin-bottom: 0.5rem;
+        position: sticky;
+        left: 0;
+        z-index: 5;
+    }
+}
+
+/* Mobile curriculum table wrapper */
+.mobile-curriculum-wrapper {
+    display: none;
+    padding: 1rem;
+    background: white;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+}
+
+@media (max-width: 768px) {
+    .mobile-curriculum-wrapper {
+        display: block;
+    }
+    
+    .mobile-day-section {
+        margin-bottom: 2rem;
+        padding: 1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        background: #f9fafb;
+    }
+    
+    .mobile-day-header {
+        font-size: 1.25rem;
+        font-weight: bold;
+        color: #1f2937;
+        margin-bottom: 1rem;
+        text-align: center;
+        padding: 0.75rem;
+        background: #d9ead3;
+        border-radius: 0.375rem;
+    }
+    
+    .mobile-activity {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 0.375rem;
+        border-left: 4px solid #3b82f6;
+    }
+    
+    .mobile-activity-header {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .mobile-activity-time {
+        background: #dbeafe;
+        color: #1e40af;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .mobile-activity-content {
+        color: #4b5563;
+        line-height: 1.5;
+        margin-bottom: 0.75rem;
+    }
+    
+    .mobile-activity-link {
+        display: inline-block;
+        background: #3b82f6;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        text-decoration: none;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+        transition: background-color 0.2s;
+    }
+    
+    .mobile-activity-link:hover {
+        background: #2563eb;
+        color: white;
+    }
+    
+    .mobile-activity-link::before {
+        content: "[LINK] ";
+    }
+}
+
+/* Original curriculum table styles for desktop */
+@media (min-width: 769px) {
+    .curriculum-table td {
+        border: 1px solid #dee2e6;
+    }
+    
+    .curriculum-table .s0 { background-color: #d9ead3 !important; }
+    .curriculum-table .s1 { background-color: #d9ead3 !important; }
+    .curriculum-table .s4 { background-color: #ffffff !important; }
+    .curriculum-table .s7 { background-color: #fde49a !important; }
+    .curriculum-table .s11 { background-color: #d9f1f3 !important; }
+    .curriculum-table .s21 { background-color: #fef1cc !important; }
+}
+
+/* Loading animation */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* CRITICAL: Override Google Sheets link hiding */
+.ritz .waffle a {
+    color: #0066cc !important;
+    text-decoration: underline !important;
+}
+
+/* FORCE CONTAINER CONSTRAINTS FOR GOOGLE SHEETS */
+#curriculumContent,
+#curriculumContent > * {
+    box-sizing: border-box !important;
+}
+
+/* Allow horizontal scrolling for the main content area */
+.content-wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Ensure curriculum content container can scroll horizontally */
+.bg-white.rounded-lg.shadow-sm.border.border-gray-200:has(#curriculumContent) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Force table responsiveness */
+@media (max-width: 768px) {
+    /* Allow the entire page to scroll horizontally if needed */
+    body {
+        overflow-x: auto !important;
+    }
+    
+    /* Make sure the main container allows horizontal overflow */
+    .max-w-full.mx-auto.px-4 {
+        overflow-x: visible !important;
+        max-width: none !important;
+    }
+    
+    /* Curriculum content section */
+    .mb-6:has(#curriculumContent) {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    .mb-6:has(#curriculumContent) .bg-white {
+        overflow-x: auto !important;
+    }
+    
+    .mb-6:has(#curriculumContent) .p-0 {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+}
+
+/* Link styles for curriculum content */
+#curriculumContent a,
+.curriculum-table a,
+.waffle a,
+.day-section a,
+.mobile-activity-link {
+    color: #0066cc !important;
+    text-decoration: underline !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+#curriculumContent a:hover,
+.curriculum-table a:hover,
+.waffle a:hover,
+.day-section a:hover {
+    color: #ffffff !important;
+    background-color: #0066cc !important;
+    text-decoration: none !important;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+#curriculumContent a:visited,
+.curriculum-table a:visited,
+.waffle a:visited,
+.day-section a:visited {
+    color: #551a8b !important;
+}
+
+/* External link indicator */
+#curriculumContent a[href^="http"]::before,
+.curriculum-table a[href^="http"]::before,
+.waffle a[href^="http"]::before {
+    content: "[LINK] ";
+    font-size: 0.85em;
+}
+
+/* Make links visible in colored cells */
+.s7 a, .s11 a, .s12 a, .s17 a, .s19 a, .s21 a, .s30 a, .s48 a {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    padding: 2px 6px !important;
+    border-radius: 3px;
+    border: 1px solid #0066cc !important;
+    display: inline-block;
+    margin: 1px 0;
+}
+
+/* Special styles for underlined link cells */
+.s30 a, .s48 a {
+    color: #1155cc !important;
+    font-weight: bold !important;
+}
+
+/* Mobile navigation improvements */
+@media (max-width: 768px) {
+    .flex.rounded-md.shadow-sm {
+        flex-direction: column;
+        box-shadow: none;
+    }
+    
+    .flex.rounded-md.shadow-sm button {
+        border-radius: 0.375rem !important;
+        margin-bottom: 0.5rem;
+        width: 100%;
+    }
+    
+    /* Mobile jump to day */
+    .flex.items-center.gap-2 input[type="number"] {
+        width: 80px;
+        text-align: center;
+    }
+    
+    /* Mobile curriculum title */
+    .flex.flex-col.sm\\:flex-row.justify-between {
+        flex-direction: column;
+        text-align: center;
+        gap: 1rem;
+    }
+}
+
+/* Smooth scrolling for mobile */
+@media (max-width: 768px) {
+    #curriculumContent {
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        padding: 0.5rem;
+    }
+    
+    .mobile-curriculum-wrapper {
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Ensure table container is properly scrollable */
+    #curriculumContent .ritz {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* Table header styling for mobile */
+    #curriculumContent .waffle tr:first-child td,
+    #curriculumContent .waffle tr:first-child th {
+        background: #1f2937 !important;
+        color: white !important;
+        font-weight: 600 !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 10 !important;
+    }
+    
+    /* Alternating row colors for better readability */
+    #curriculumContent .waffle tr:nth-child(even) {
+        background: #f8fafc !important;
+    }
+    
+    #curriculumContent .waffle tr:nth-child(odd) {
+        background: white !important;
+    }
+    
+    /* Mobile link fixes */
+    #curriculumContent a {
+        display: inline-block !important;
+        margin: 2px 2px 2px 0 !important;
+        padding: 3px 6px !important;
+        background: #3b82f6 !important;
+        color: white !important;
+        text-decoration: none !important;
+        border-radius: 3px !important;
+        font-size: 0.7rem !important;
+        word-break: break-word !important;
+        max-width: 100% !important;
+    }
+    
+    #curriculumContent a:hover {
+        background: #2563eb !important;
+    }
+    
+    /* Force text wrapping in cells */
+    #curriculumContent .waffle td,
+    #curriculumContent .waffle th {
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        hyphens: auto !important;
+        white-space: normal !important;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'admin_sessions_filter' %}" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium inline-flex items-center">
+        <span class="material-symbols-outlined text-lg mr-1">arrow_back</span>
+        Back to List
+    </a>
+</div>
+
+<div class="max-w-full mx-auto px-4">
+    <!-- Header -->
+    <div class="mb-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h4 class="text-2xl font-bold mb-1 text-gray-900">Admin Curriculum Management</h4>
+                <h5 class="text-lg text-gray-600">Master Curriculum Sessions (Days 1-150)</h5>
+            </div>
+            <div class="flex gap-2">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-600 text-white">
+                    Day <span id="currentDayBadge" class="ml-1">1</span>
+                </span>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-cyan-500 text-white">Admin View</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Language Selector -->
+    <div class="mb-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="p-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h6 class="text-base font-semibold text-gray-900 flex items-center">
+                        <i class="fas fa-language mr-2 text-gray-600"></i>
+                        Select Curriculum Language
+                    </h6>
+                    <div class="flex rounded-lg border border-gray-300 overflow-hidden" id="languageSelector">
+                        <input type="radio" class="hidden peer/english" name="language" id="englishBtn" value="english" checked>
+                        <label for="englishBtn" class="flex items-center px-4 py-2 cursor-pointer bg-white text-gray-700 border-r border-gray-300 hover:bg-gray-50 peer-checked/english:bg-blue-600 peer-checked/english:text-white peer-checked/english:border-blue-600 transition-colors">
+                            <i class="fas fa-globe mr-2"></i>English
+                        </label>
+                        
+                        <input type="radio" class="hidden peer/hindi" name="language" id="hindiBtn" value="hindi">
+                        <label for="hindiBtn" class="flex items-center px-4 py-2 cursor-pointer bg-white text-gray-700 hover:bg-gray-50 peer-checked/hindi:bg-blue-600 peer-checked/hindi:text-white transition-colors">
+                            <i class="fas fa-language mr-2"></i>हिंदी (Hindi)
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Day Navigator -->
+    <div class="mb-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="p-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <h6 class="text-base font-semibold text-gray-900">Day Navigation</h6>
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-gray-600">Jump to day:</label>
+                        <input type="number" id="jumpToDay" min="1" max="150" 
+                               class="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               placeholder="1">
+                        <button onclick="jumpToSpecificDay()" 
+                                class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+                            Go
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Actions -->
+    <div class="mb-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="p-4">
+                <h6 class="text-base font-semibold text-gray-900 mb-3">Admin Actions</h6>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="refreshCurriculumData()" class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-blue-700 bg-white border border-blue-700 hover:bg-blue-50 transition-colors">
+                        <i class="fas fa-sync-alt mr-2"></i> Refresh Data
+                    </button>
+                    <a href="{% url 'admin_sessions_filter' %}" class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors">
+                        <i class="fas fa-arrow-left mr-2"></i> Back to Sessions
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Curriculum Content -->
+    <div class="mb-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-4 py-3 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h6 class="text-base font-semibold text-gray-900" id="curriculumTitle">Day 1 - English Curriculum Content</h6>
+                <div class="flex rounded-md shadow-sm">
+                    <button onclick="navigateToPreviousDay()" id="prevDayBtn" class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        <i class="fas fa-chevron-left mr-1"></i> Previous
+                    </button>
+                    <button onclick="navigateToNextDay()" id="nextDayBtn" class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border-l-0 border border-gray-300 rounded-r-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        Next <i class="fas fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-0">
+                <!-- Curriculum content will be loaded here -->
+                <div id="curriculumContent" class="min-h-[400px] bg-gray-50">
+                    <div class="text-center p-8">
+                        <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600"></div>
+                        <p class="mt-4 text-gray-600">Loading Day 1 content...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Curriculum Data for JavaScript -->
+<script id="adminCurriculumData" type="application/json">
+{
+    "currentDay": 1,
+    "totalDays": 150,
+    "curriculumUrl": "{% url 'curriculum_content_api' %}",
+    "currentLanguage": "english",
+    "sessionsData": {{ sessions_by_language|safe }},
+    "hindiCount": {{ hindi_count }},
+    "englishCount": {{ english_count }}
+}
+</script>
+
+<script>
+// Simple Admin Curriculum Navigator
+class AdminCurriculumNavigator {
+    constructor() {
+        this.data = JSON.parse(document.getElementById('adminCurriculumData').textContent);
+        this.currentDay = this.data.currentDay;
+        this.totalDays = this.data.totalDays;
+        this.currentLanguage = this.data.currentLanguage;
+        this.sessionsData = this.data.sessionsData;
+        this.cache = new Map();
+        this.init();
+    }
+
+    init() {
+        this.setupLanguageSelector();
+        this.loadCurriculumContent(this.currentDay, this.currentLanguage);
+        this.updateNavigationButtons();
+    }
+
+    setupLanguageSelector() {
+        const languageInputs = document.querySelectorAll('input[name="language"]');
+        languageInputs.forEach(input => {
+            input.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    this.switchLanguage(e.target.value);
+                }
+            });
+        });
+    }
+
+    switchLanguage(language) {
+        this.currentLanguage = language;
+        
+        const url = new URL(window.location);
+        url.searchParams.set('language', language);
+        window.history.pushState({}, '', url);
+        
+        this.loadCurriculumContent(this.currentDay, language);
+        this.updateTitle();
+        
+        this.showLanguageNotification(language);
+    }
+
+    showLanguageNotification(language) {
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-5 right-5 z-50 min-w-[300px] bg-green-50 border border-green-400 text-green-800 px-4 py-3 rounded-lg shadow-lg flex items-start justify-between';
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-check-circle mr-2 text-green-600"></i>
+                <span>Switched to ${language === 'hindi' ? 'हिंदी (Hindi)' : 'English'} curriculum</span>
+            </div>
+            <button onclick="this.parentElement.remove()" class="ml-4 text-green-800 hover:text-green-900">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.classList.add('opacity-0', 'transition-opacity', 'duration-300');
+                setTimeout(() => notification.remove(), 300);
+            }
+        }, 3000);
+    }
+
+    hasSessionForDay(day, language) {
+        const sessions = this.sessionsData[language] || [];
+        return sessions.some(session => session.day_number === day);
+    }
+
+    async loadCurriculumContent(day, language = null) {
+        if (!language) language = this.currentLanguage;
+        
+        const contentDiv = document.getElementById('curriculumContent');
+        
+        contentDiv.innerHTML = `
+            <div class="text-center p-8">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600"></div>
+                <p class="mt-4 text-gray-600">Loading Day ${day} ${language === 'hindi' ? 'Hindi' : 'English'} content...</p>
+            </div>
+        `;
+
+        try {
+            const cacheKey = `${language}_${day}`;
+            
+            if (this.cache.has(cacheKey)) {
+                contentDiv.innerHTML = this.cache.get(cacheKey);
+                this.highlightLinks();
+                this.forceMobileLayout();
+                return;
+            }
+
+            const response = await fetch(`${this.data.curriculumUrl}?day=${day}&language=${language}`);
+            if (!response.ok) throw new Error('Failed to load content');
+            
+            const content = await response.text();
+            this.cache.set(cacheKey, content);
+            
+            const adminContent = this.wrapContentWithAdminActions(content, day, language);
+            contentDiv.innerHTML = adminContent;
+            
+            // Highlight links after content is loaded
+            this.highlightLinks();
+            
+            // Force mobile layout transformation
+            this.forceMobileLayout();
+            
+        } catch (error) {
+            contentDiv.innerHTML = `
+                <div class="m-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <h6 class="text-lg font-semibold text-red-800 mb-2">Error Loading Content</h6>
+                    <p class="text-red-700 mb-4">Failed to load Day ${day} ${language === 'hindi' ? 'Hindi' : 'English'} curriculum content.</p>
+                    <div class="flex gap-2">
+                        <button onclick="window.adminCurriculumNav.loadCurriculumContent(${day}, '${language}')" class="px-4 py-2 text-sm font-medium text-red-700 bg-white border border-red-700 rounded-md hover:bg-red-50">
+                            Retry
+                        </button>
+                        <a href="/admin/curriculum-sessions/create/?day=${day}&language=${language}" class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+                            Create Session for Day ${day}
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    forceMobileLayout() {
+        // Optimize mobile layout on small screens
+        if (window.innerWidth <= 768) {
+            // Show mobile optimization notification
+            this.showMobileOptimizationNotice();
+            
+            setTimeout(() => {
+                const contentDiv = document.getElementById('curriculumContent');
+                
+                // Ensure content div allows horizontal scrolling
+                contentDiv.style.overflowX = 'auto';
+                contentDiv.style.webkitOverflowScrolling = 'touch';
+                contentDiv.style.padding = '0.5rem';
+                
+                const containers = contentDiv.querySelectorAll('.ritz');
+                containers.forEach(container => {
+                    // Make sure container allows content to extend horizontally
+                    container.style.width = 'auto';
+                    container.style.minWidth = '600px';
+                    container.style.overflowX = 'visible';
+                    container.style.border = '1px solid #e5e7eb';
+                    container.style.borderRadius = '0.5rem';
+                    container.style.background = 'white';
+                    container.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                });
+                
+                const tables = contentDiv.querySelectorAll('.waffle');
+                tables.forEach(table => {
+                    // Keep table structure for horizontal scrolling
+                    table.style.display = 'table';
+                    table.style.width = 'auto';
+                    table.style.minWidth = '600px';
+                    table.style.fontSize = '0.75rem';
+                    table.style.borderCollapse = 'collapse';
+                    
+                    // Optimize table cells for mobile horizontal scroll
+                    const cells = table.querySelectorAll('td, th');
+                    cells.forEach((cell, index) => {
+                        cell.style.display = 'table-cell';
+                        cell.style.padding = '6px 4px';
+                        cell.style.fontSize = '0.7rem';
+                        cell.style.lineHeight = '1.2';
+                        cell.style.wordWrap = 'break-word';
+                        cell.style.overflowWrap = 'break-word';
+                        cell.style.verticalAlign = 'top';
+                        cell.style.borderRight = '1px solid #f1f5f9';
+                        cell.style.whiteSpace = 'nowrap';
+                        
+                        // Set column widths based on position
+                        const cellIndex = Array.from(cell.parentNode.children).indexOf(cell);
+                        switch(cellIndex) {
+                            case 0: // When column
+                                cell.style.width = '80px';
+                                cell.style.minWidth = '80px';
+                                cell.style.background = '#f8fafc';
+                                cell.style.fontWeight = '600';
+                                break;
+                            case 1: // What column
+                                cell.style.width = '120px';
+                                cell.style.minWidth = '120px';
+                                cell.style.fontWeight = '500';
+                                break;
+                            case 2: // Duration column
+                                cell.style.width = '60px';
+                                cell.style.minWidth = '60px';
+                                cell.style.textAlign = 'center';
+                                cell.style.background = '#fefce8';
+                                break;
+                            case 3: // How/What column
+                                cell.style.width = '250px';
+                                cell.style.minWidth = '250px';
+                                cell.style.whiteSpace = 'normal';
+                                break;
+                        }
+                        
+                        // Hide empty cells
+                        if (!cell.textContent.trim()) {
+                            cell.style.display = 'none';
+                        }
+                    });
+                });
+                
+                // Optimize links for mobile
+                const links = contentDiv.querySelectorAll('a');
+                links.forEach(link => {
+                    if (link.textContent.trim()) {
+                        link.style.display = 'inline-block';
+                        link.style.margin = '0.25rem 0.25rem 0.25rem 0';
+                        link.style.padding = '0.25rem 0.5rem';
+                        link.style.background = '#3b82f6';
+                        link.style.color = 'white';
+                        link.style.textDecoration = 'none';
+                        link.style.borderRadius = '0.25rem';
+                        link.style.fontSize = '0.65rem';
+                        link.style.fontWeight = '500';
+                        link.style.wordBreak = 'break-word';
+                        link.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
+                        
+                        // Add link indicator
+                        if (!link.textContent.includes('[LINK]')) {
+                            link.textContent = '[LINK] ' + link.textContent;
+                        }
+                    }
+                });
+                
+            }, 100);
+        }
+    }
+
+    showMobileOptimizationNotice() {
+        // Only show once per session
+        if (sessionStorage.getItem('mobileNoticeShown')) return;
+        
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-5 right-5 z-50 max-w-sm bg-blue-50 border border-blue-400 text-blue-800 px-4 py-3 rounded-lg shadow-lg';
+        notification.innerHTML = `
+            <div class="flex items-start justify-between">
+                <div class="flex items-center">
+                    <i class="fas fa-mobile-alt mr-2 text-blue-600"></i>
+                    <div>
+                        <div class="font-semibold text-sm">Mobile View</div>
+                        <div class="text-xs">Swipe left/right to scroll the curriculum table</div>
+                    </div>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-blue-800 hover:text-blue-900">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        sessionStorage.setItem('mobileNoticeShown', 'true');
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.classList.add('opacity-0', 'transition-opacity', 'duration-300');
+                setTimeout(() => notification.remove(), 300);
+            }
+        }, 5000);
+    }
+
+    highlightLinks() {
+        // Force link styling with JavaScript
+        setTimeout(() => {
+            const allLinks = document.querySelectorAll('#curriculumContent a, .curriculum-table a, .ritz a, .waffle a');
+            
+            allLinks.forEach(link => {
+                // Force link visibility
+                link.style.color = '#0066cc';
+                link.style.textDecoration = 'underline';
+                link.style.fontWeight = '500';
+                link.style.cursor = 'pointer';
+                
+                // Add external link attributes
+                if (link.href && link.hostname !== window.location.hostname) {
+                    link.setAttribute('target', '_blank');
+                    link.setAttribute('rel', 'noopener noreferrer');
+                }
+                
+                // Enhanced hover effects
+                link.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#0066cc';
+                    this.style.color = '#ffffff';
+                    this.style.padding = '2px 6px';
+                    this.style.borderRadius = '4px';
+                });
+                
+                link.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = 'transparent';
+                    this.style.color = '#0066cc';
+                    this.style.padding = '0';
+                });
+            });
+        }, 100);
+    }
+
+    wrapContentWithAdminActions(content, day, language) {
+        const hasSession = this.hasSessionForDay(day, language);
+        const session = hasSession ? this.getSessionForDay(day, language) : null;
+        
+        let adminActions = '';
+        if (hasSession && session) {
+            adminActions = `
+                <div class="m-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <strong class="text-blue-900 text-sm font-semibold">Session Available:</strong> 
+                            <span class="text-blue-800">${session.title || 'Day ' + day + ' Session'}</span>
+                            <br><small class="text-blue-600 text-xs">Status: ${session.status || 'Draft'}</small>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <a href="/admin/curriculum-sessions/${session.id}/edit/" class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-700 rounded-md hover:bg-blue-50">
+                                <i class="fas fa-edit mr-1"></i> Edit
+                            </a>
+                            <a href="/admin/curriculum-sessions/${session.id}/preview/" class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-cyan-700 bg-white border border-cyan-700 rounded-md hover:bg-cyan-50">
+                                <i class="fas fa-eye mr-1"></i> Preview
+                            </a>
+                            <a href="/admin/curriculum-sessions/${session.id}/delete/" class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-700 bg-white border border-red-700 rounded-md hover:bg-red-50">
+                                <i class="fas fa-trash mr-1"></i> Delete
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Create mobile-friendly version for small screens
+        const mobileContent = this.createMobileContent(content, day, language);
+        
+        return adminActions + content + mobileContent;
+    }
+
+    createMobileContent(content, day, language) {
+        // Only create mobile content if we're on mobile
+        if (window.innerWidth > 768) return '';
+        
+        // Parse the table content and create mobile-friendly version
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+        const table = doc.querySelector('.waffle');
+        
+        if (!table) return '';
+        
+        let mobileHtml = '<div class="mobile-curriculum-wrapper">';
+        mobileHtml += `<div class="mobile-day-header">Day ${day} - ${language === 'hindi' ? 'Hindi' : 'English'} Curriculum</div>`;
+        
+        const rows = table.querySelectorAll('tr');
+        let currentSection = '';
+        let currentActivity = '';
+        let activityCount = 0;
+        
+        rows.forEach((row, index) => {
+            if (index < 2) return; // Skip header rows
+            
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 4) return;
+            
+            const when = cells[0]?.textContent?.trim() || '';
+            const what = cells[1]?.textContent?.trim() || '';
+            const duration = cells[2]?.textContent?.trim() || '';
+            const howWhat = cells[3];
+            
+            // Check if this is a new section
+            if (when && when !== currentSection) {
+                if (currentSection) mobileHtml += '</div>'; // Close previous section
+                currentSection = when;
+                mobileHtml += `<div class="mobile-day-section">`;
+                mobileHtml += `<h3 style="color: #374151; font-weight: 600; margin-bottom: 1rem; background: #d9ead3; padding: 0.5rem; border-radius: 0.25rem; text-align: center;">${when}</h3>`;
+                activityCount = 0;
+            }
+            
+            // Check if this is a new activity
+            if (what && what !== currentActivity) {
+                if (currentActivity) mobileHtml += '</div>'; // Close previous activity
+                currentActivity = what;
+                activityCount++;
+                
+                mobileHtml += '<div class="mobile-activity">';
+                mobileHtml += `<div class="mobile-activity-header">`;
+                mobileHtml += `<span style="font-weight: 600; color: #1f2937;">${activityCount}. ${what}</span>`;
+                if (duration) {
+                    mobileHtml += `<span class="mobile-activity-time">${duration}</span>`;
+                }
+                mobileHtml += `</div>`;
+            }
+            
+            // Add activity content
+            if (howWhat && howWhat.textContent.trim()) {
+                const textContent = howWhat.textContent.trim();
+                const links = howWhat.querySelectorAll('a');
+                
+                if (textContent) {
+                    mobileHtml += `<div class="mobile-activity-content">${textContent}</div>`;
+                }
+                
+                // Add links separately for better mobile UX
+                links.forEach(link => {
+                    if (link.href && link.textContent.trim()) {
+                        mobileHtml += `<a href="${link.href}" target="_blank" class="mobile-activity-link">${link.textContent.trim()}</a>`;
+                    }
+                });
+            }
+        });
+        
+        if (currentActivity) mobileHtml += '</div>'; // Close last activity
+        if (currentSection) mobileHtml += '</div>'; // Close last section
+        mobileHtml += '</div>'; // Close wrapper
+        
+        return mobileHtml;
+    }
+
+    getSessionForDay(day, language) {
+        const sessions = this.sessionsData[language] || [];
+        return sessions.find(session => session.day_number === day);
+    }
+
+    navigateToDay(day) {
+        if (day < 1 || day > this.totalDays) return;
+        
+        const url = new URL(window.location);
+        url.searchParams.set('day', day);
+        window.history.pushState({}, '', url);
+        
+        this.currentDay = day;
+        
+        document.getElementById('currentDayBadge').textContent = day;
+        document.getElementById('jumpToDay').value = day;
+        
+        this.updateTitle();
+        this.updateNavigationButtons();
+        this.loadCurriculumContent(day, this.currentLanguage);
+    }
+
+    updateTitle() {
+        const title = `Day ${this.currentDay} - ${this.currentLanguage === 'hindi' ? 'Hindi' : 'English'} Curriculum Content`;
+        document.getElementById('curriculumTitle').textContent = title;
+        document.title = `Admin - ${title}`;
+    }
+
+    updateNavigationButtons() {
+        const prevBtn = document.getElementById('prevDayBtn');
+        const nextBtn = document.getElementById('nextDayBtn');
+        
+        prevBtn.disabled = this.currentDay <= 1;
+        nextBtn.disabled = this.currentDay >= this.totalDays;
+    }
+}
+
+// Global functions
+function jumpToSpecificDay() {
+    const dayInput = document.getElementById('jumpToDay');
+    const day = parseInt(dayInput.value);
+    
+    if (day >= 1 && day <= 150) {
+        window.adminCurriculumNav.navigateToDay(day);
+    } else {
+        alert('Please enter a day between 1 and 150');
+        dayInput.focus();
+    }
+}
+
+function navigateToPreviousDay() {
+    if (window.adminCurriculumNav.currentDay > 1) {
+        window.adminCurriculumNav.navigateToDay(window.adminCurriculumNav.currentDay - 1);
+    }
+}
+
+function navigateToNextDay() {
+    if (window.adminCurriculumNav.currentDay < 150) {
+        window.adminCurriculumNav.navigateToDay(window.adminCurriculumNav.currentDay + 1);
+    }
+}
+
+function refreshCurriculumData() {
+    location.reload();
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    window.adminCurriculumNav = new AdminCurriculumNavigator();
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlDay = parseInt(urlParams.get('day')) || 1;
+    const urlLanguage = urlParams.get('language') || 'english';
+    
+    if (urlLanguage && ['english', 'hindi'].includes(urlLanguage)) {
+        document.getElementById(urlLanguage + 'Btn').checked = true;
+        window.adminCurriculumNav.currentLanguage = urlLanguage;
+    }
+    
+    if (urlDay !== 1) {
+        window.adminCurriculumNav.navigateToDay(urlDay);
+    }
+    
+    // Add keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        // Only handle keyboard shortcuts when not typing in input fields
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        
+        switch(e.key) {
+            case 'ArrowLeft':
+                e.preventDefault();
+                navigateToPreviousDay();
+                break;
+            case 'ArrowRight':
+                e.preventDefault();
+                navigateToNextDay();
+                break;
+        }
+    });
+    
+    // Add Enter key support for jump to day input
+    document.getElementById('jumpToDay').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            jumpToSpecificDay();
+        }
+    });
+    
+    // Handle window resize for mobile/desktop view switching
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function() {
+            // Apply mobile layout transformation if needed
+            if (window.adminCurriculumNav) {
+                window.adminCurriculumNav.forceMobileLayout();
+                
+                // Reload content to apply correct mobile/desktop view
+                window.adminCurriculumNav.loadCurriculumContent(
+                    window.adminCurriculumNav.currentDay, 
+                    window.adminCurriculumNav.currentLanguage
+                );
+            }
+        }, 300);
+    });
+});
+
+// Handle browser navigation
+window.addEventListener('popstate', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const day = parseInt(urlParams.get('day')) || 1;
+    const language = urlParams.get('language') || 'english';
+    
+    document.getElementById(language + 'Btn').checked = true;
+    window.adminCurriculumNav.currentLanguage = language;
+    window.adminCurriculumNav.navigateToDay(day);
+});
+</script>
+
+{% endblock %}

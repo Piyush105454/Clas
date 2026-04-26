@@ -1,0 +1,186 @@
+{% extends 'admin/shared/base.html' %}
+{% load static %}
+
+{% block title %}
+  {% if school %}
+    Classes · {{ school.name }}
+  {% else %}
+    Classes · All Schools
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="py-6">
+
+  <!-- Back button -->
+  <button onclick="window.history.back()"
+          class="inline-flex items-center gap-2 px-3 py-2 mb-4 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm">
+    ◀ Back
+  </button>
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+    <h4 class="text-xl font-bold text-gray-900">
+      {% if school %}
+        {{ school.name }} <span class="text-gray-500 font-normal">/ Classes</span>
+      {% else %}
+        All Schools <span class="text-gray-500 font-normal">/ Classes</span>
+      {% endif %}
+    </h4>
+
+    {% if school %}
+    <div class="flex gap-2 flex-wrap">
+      <div class="relative group">
+        <button class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+          ➕ Add Class
+          <span>▼</span>
+        </button>
+        
+        <!-- Dropdown Menu -->
+        <div class="absolute right-0 mt-0 w-48 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+          <a href="{% url 'class_section_add' school.id %}" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 border-b border-gray-100 first:rounded-t-lg">
+            <span style="font-size: 20px;">➕</span>
+            <div>
+              <p class="text-sm font-medium">Single Class</p>
+              <p class="text-xs text-gray-500">Add one class</p>
+            </div>
+          </a>
+          <a href="{% url 'admin_bulk_create_classes' %}" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 last:rounded-b-lg">
+            <span style="font-size: 20px;">📦</span>
+            <div>
+              <p class="text-sm font-medium">Multiple Classes</p>
+              <p class="text-xs text-gray-500">Add 1-10 classes at once</p>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+
+
+  <!-- Filter -->
+  <div class="max-w-md mb-6">
+    <label class="block text-sm font-medium text-gray-700 mb-1">
+      Filter by School
+    </label>
+
+    <select id="schoolFilter"
+            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <option value="{% url 'class_sections_list' %}"
+              {% if not school %}selected{% endif %}>
+        All Schools
+      </option>
+
+      {% for s in schools %}
+        <option value="{% url 'class_sections_list_by_school' s.id %}"
+                {% if school and s.id == school.id %}selected{% endif %}>
+          {{ s.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+
+
+  <!-- Class Cards -->
+  <div class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+
+    {% for class_section in class_sections %}
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition p-5 flex flex-col relative class-card" data-class-id="{{ class_section.id }}">
+
+
+
+      <!-- Icon -->
+      <div class="flex justify-center mb-3">
+        <div class="w-14 h-14 rounded-full text-white flex items-center justify-center bg-gradient-to-br from-green-500 to-green-300">
+          📘
+        </div>
+      </div>
+
+      <!-- Class info -->
+      <h5 class="text-base font-semibold text-gray-900 text-center">
+        {{ class_section.class_level }}
+      </h5>
+
+      <span class="block mx-auto mt-1 text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-700 text-center">
+        Section {{ class_section.section|default:"—" }}
+      </span>
+
+      <p class="text-gray-500 text-sm text-center mt-2">
+        {{ class_section.school.name }}
+      </p>
+
+      <!-- Actions -->
+      <div class="mt-auto flex flex-wrap justify-center gap-2 pt-3">
+
+        <a href="{% url 'admin_class_sessions' class_section.id %}"
+           class="px-3 py-1.5 border border-green-500 text-green-600 rounded-lg text-xs hover:bg-green-50">
+          Sessions
+        </a>
+
+        <a href="{% url 'class_attendance' class_section.id %}"
+           class="px-3 py-1.5 border border-yellow-500 text-yellow-600 rounded-lg text-xs hover:bg-yellow-50">
+          Attendance
+        </a>
+
+        <a href="{% url 'assign_facilitator' class_section.id %}"
+           class="px-3 py-1.5 border border-purple-500 text-purple-600 rounded-lg text-xs hover:bg-purple-50">
+          Assign Facilitator
+        </a>
+
+        <a href="{% url 'edit_class_section' class_section.id %}"
+           class="px-3 py-1.5 border border-blue-500 text-blue-600 rounded-lg text-xs hover:bg-blue-50">
+          Edit
+        </a>
+
+        <form action="{% url 'class_section_delete' class_section.id %}"
+              method="post"
+              onsubmit="return confirm('Are you sure you want to delete this class?');">
+          {% csrf_token %}
+          <button type="submit"
+                  class="px-3 py-1.5 border border-red-500 text-red-600 rounded-lg text-xs hover:bg-red-50">
+            Delete
+          </button>
+        </form>
+
+      </div>
+
+    </div>
+    {% empty %}
+
+    <!-- Empty state -->
+    <div class="col-span-full text-center py-10">
+      <img src="{% static 'admin/assets/img/empty-state.svg' %}" class="mx-auto mb-4 w-32">
+      <h5 class="text-lg font-semibold text-gray-800 mb-1">No Classes Found</h5>
+
+      {% if school %}
+      <p class="text-gray-500 mb-3">
+        Start by creating the first class for <strong>{{ school.name }}</strong>
+      </p>
+      <a href="{% url 'class_section_add' school.id %}"
+         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+        Setup First Class
+      </a>
+      {% else %}
+      <p class="text-gray-500">Select a school to view or add classes</p>
+      {% endif %}
+    </div>
+
+    {% endfor %}
+  </div>
+
+</div>
+
+<script>
+document.getElementById("schoolFilter").addEventListener("change", function () {
+  window.location.href = this.value;
+});
+
+
+
+
+</script>
+
+{% endblock %}

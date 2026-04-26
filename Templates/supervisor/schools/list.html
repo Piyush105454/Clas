@@ -1,0 +1,261 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-6">
+
+  <!-- MAP VIEW TOGGLE -->
+  <div class="flex gap-2 justify-end">
+    <button id="listViewBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
+      <span class="material-symbols-outlined inline mr-1">list</span> List View
+    </button>
+    <button id="mapViewBtn" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+      <span class="material-symbols-outlined inline mr-1">map</span> Map View
+    </button>
+  </div>
+
+  <!-- MAP CONTAINER (Hidden by default) -->
+  <div id="mapContainer" class="hidden bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden" style="height: 600px;">
+    <div id="map" style="width: 100%; height: 100%;"></div>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div id="listView">
+
+  <!-- TOP BAR -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 md:p-6 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 md:gap-4 items-center">
+
+      <div class="lg:col-span-3">
+        <h4 class="text-lg md:text-xl font-bold text-gray-900">Schools List</h4>
+        <p class="text-xs md:text-sm text-gray-500 mt-1">
+          <span id="schoolCount">{{ schools|length }}</span> schools
+        </p>
+      </div>
+
+      <div class="lg:col-span-4 md:col-span-2">
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px] md:text-[20px]">search</span>
+          <input id="searchInput"
+                 type="text"
+                 class="w-full pl-10 pr-4 py-2 md:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                 placeholder="Search schools...">
+        </div>
+      </div>
+
+      <div class="lg:col-span-2 md:col-span-2">
+        <select id="statusFilter" class="w-full px-3 md:px-4 py-2 md:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+          <option value="">All Status</option>
+          <option value="1">Active</option>
+          <option value="0">Inactive</option>
+        </select>
+      </div>
+
+      <div class="lg:col-span-3 md:col-span-2 flex gap-2">
+        <a href="{% url 'supervisor_school_create' %}"
+           class="flex-1 inline-flex items-center justify-center gap-2 px-3 md:px-4 py-2 md:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm text-xs md:text-sm font-medium">
+          <span class="material-symbols-outlined text-[18px] md:text-[20px]">add</span>
+          <span class="hidden sm:inline">Add School</span>
+          <span class="sm:hidden">Add</span>
+        </a>
+        <a href="{% url 'cluster_create' %}"
+           class="flex-1 inline-flex items-center justify-center gap-2 px-3 md:px-4 py-2 md:py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 shadow-sm text-xs md:text-sm font-medium">
+          <span class="material-symbols-outlined text-[18px] md:text-[20px]">location_on</span>
+          <span class="hidden sm:inline">Add Cluster</span>
+          <span class="sm:hidden">Cluster</span>
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- GRID -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+
+    {% for school in schools %}
+    <div class="school-card bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition" data-name="{{ school.name|lower }}" data-status="{{ school.status }}">
+      <div class="p-4 md:p-6 flex flex-col h-full text-center">
+
+        <div class="mb-3 md:mb-4">
+          <div class="w-12 md:w-14 h-12 md:h-14 mx-auto rounded-full bg-green-100 text-green-600 flex justify-center items-center">
+            <span class="material-symbols-outlined text-2xl md:text-3xl">school</span>
+          </div>
+        </div>
+
+        <h6 class="text-sm md:text-base font-semibold text-gray-900 mb-2 line-clamp-2">{{ school.name }}</h6>
+
+        <span class="inline-flex px-2 md:px-3 py-1 rounded-full text-xs font-medium mb-3 md:mb-4 justify-center
+          {% if school.status == 1 %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+          {% if school.status == 1 %}Active{% else %}Inactive{% endif %}
+        </span>
+
+        <div class="text-xs md:text-sm text-gray-600 space-y-1 md:space-y-2 mb-4 md:mb-6">
+          <div class="flex justify-center gap-2 items-center">
+            <span class="material-symbols-outlined text-[16px] md:text-[18px]">group</span>
+            <span>Students: <strong>{{ school.total_students|default:0 }}</strong></span>
+          </div>
+          <div class="flex justify-center gap-2 items-center">
+            <span class="material-symbols-outlined text-[16px] md:text-[18px]">person</span>
+            <span>Facilitators: <strong>{{ school.active_facilitators|default:0 }}</strong></span>
+          </div>
+          <div class="flex justify-center gap-2 items-center">
+            <span class="material-symbols-outlined text-[16px] md:text-[18px]">class</span>
+            <span>Classes: <strong>{{ school.total_classes|default:0 }}</strong></span>
+          </div>
+        </div>
+
+        <div class="mt-auto flex gap-2">
+
+          <a href="{% url 'supervisor_school_detail' school.id %}"
+             class="flex-1 inline-flex items-center justify-center gap-1 md:gap-2 px-2 md:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-xs md:text-sm font-medium">
+            <span class="material-symbols-outlined text-[16px] md:text-[18px]">info</span>
+            <span class="hidden sm:inline">Details</span>
+          </a>
+
+          <a href="{% url 'supervisor_school_edit' school.id %}"
+             class="flex-1 inline-flex items-center justify-center gap-1 md:gap-2 px-2 md:px-4 py-2 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 text-xs md:text-sm font-medium">
+            <span class="material-symbols-outlined text-[16px] md:text-[18px]">edit</span>
+            <span class="hidden sm:inline">Edit</span>
+          </a>
+
+        </div>
+
+      </div>
+    </div>
+    {% empty %}
+      <div class="col-span-full text-center p-6 md:p-8 bg-blue-50 border rounded-lg">
+        <span class="material-symbols-outlined text-4xl md:text-6xl text-blue-400 mb-4 block">school</span>
+        <p class="text-blue-800 font-medium text-sm md:text-base">No schools found</p>
+      </div>
+    {% endfor %}
+  </div>
+  </div>
+</div>
+
+<!-- Leaflet CSS & JS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<script>
+let map = null;
+let markers = [];
+
+const schoolsData = [
+  {% for school in schools %}
+  {
+    id: "{{ school.id|escapejs }}",
+    name: "{{ school.name|escapejs }}",
+    address: "{{ school.address|escapejs|default:'' }}",
+    district: "{{ school.district|escapejs|default:'' }}",
+    lat: {{ school.latitude|default:28.7041 }},
+    lng: {{ school.longitude|default:77.1025 }},
+    students: {{ school.total_students|default:0 }},
+    facilitators: {{ school.active_facilitators|default:0 }},
+    classes: {{ school.total_classes|default:0 }},
+    status: {{ school.status }}
+  }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+];
+
+function initMap() {
+  if (map) return;
+  
+  // Start with better zoom level to show more detail
+  map = L.map('map').setView([28.7041, 77.1025], 6);
+  
+  // Use better tile layer with more detail
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19,
+    minZoom: 3
+  }).addTo(map);
+  
+  schoolsData.forEach(school => {
+    // Use blue icon markers for all schools
+    const marker = L.marker([school.lat, school.lng], {
+      icon: L.icon({
+        iconUrl: `data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 32' fill='%233b82f6'%3e%3cpath d='M12 0C5.4 0 0 5.4 0 12c0 8 12 20 12 20s12-12 12-20c0-6.6-5.4-12-12-12zm0 16c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z'/%3e%3c/svg%3e`,
+        iconSize: [32, 40],
+        iconAnchor: [16, 40],
+        popupAnchor: [0, -40]
+      })
+    }).addTo(map);
+    
+    const popupContent = `
+      <div style="width: 280px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+        <div style="background: linear-gradient(135deg, ${school.status ? '#3b82f6' : '#ef4444'}, ${school.status ? '#1e40af' : '#dc2626'}); color: white; padding: 12px; border-radius: 8px 8px 0 0; margin: -6px -6px 0 -6px;">
+          <h6 style="margin: 0; font-weight: 700; font-size: 0.95rem;">${school.name}</h6>
+          <p style="margin: 4px 0 0 0; font-size: 0.8rem; opacity: 0.9;">${school.district}</p>
+        </div>
+        <div style="padding: 12px; background: #f9fafb;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+              <div style="font-size: 1.2rem; font-weight: 700; color: #3b82f6;">${school.students}</div>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Students</div>
+            </div>
+            <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+              <div style="font-size: 1.2rem; font-weight: 700; color: #10b981;">${school.facilitators}</div>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Facilitators</div>
+            </div>
+            <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+              <div style="font-size: 1.2rem; font-weight: 700; color: #f59e0b;">${school.classes}</div>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Classes</div>
+            </div>
+            <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+              <span style="display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; background-color: ${school.status ? '#dcfce7' : '#fee2e2'}; color: ${school.status ? '#166534' : '#991b1b'};">${school.status ? '✓ Active' : '✗ Inactive'}</span>
+            </div>
+          </div>
+          <a href="/supervisor/schools/${school.id}/" style="display: block; width: 100%; padding: 8px 12px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; text-align: center; border: none; cursor: pointer;">View Details →</a>
+        </div>
+      </div>
+    `;
+    
+    marker.bindPopup(popupContent);
+    markers.push(marker);
+  });
+}
+
+document.getElementById('mapViewBtn').addEventListener('click', function() {
+  document.getElementById('listView').classList.add('hidden');
+  document.getElementById('mapContainer').classList.remove('hidden');
+  document.getElementById('listViewBtn').classList.remove('bg-blue-600', 'text-white');
+  document.getElementById('listViewBtn').classList.add('border', 'border-gray-300', 'text-gray-700', 'hover:bg-gray-50');
+  document.getElementById('mapViewBtn').classList.remove('border', 'border-gray-300', 'text-gray-700', 'hover:bg-gray-50');
+  document.getElementById('mapViewBtn').classList.add('bg-blue-600', 'text-white');
+  
+  setTimeout(() => {
+    initMap();
+    if (map) map.invalidateSize();
+  }, 100);
+});
+
+document.getElementById('listViewBtn').addEventListener('click', function() {
+  document.getElementById('listView').classList.remove('hidden');
+  document.getElementById('mapContainer').classList.add('hidden');
+  document.getElementById('listViewBtn').classList.add('bg-blue-600', 'text-white');
+  document.getElementById('listViewBtn').classList.remove('border', 'border-gray-300', 'text-gray-700', 'hover:bg-gray-50');
+  document.getElementById('mapViewBtn').classList.add('border', 'border-gray-300', 'text-gray-700', 'hover:bg-gray-50');
+  document.getElementById('mapViewBtn').classList.remove('bg-blue-600', 'text-white');
+});
+</script>
+
+<script>
+document.getElementById("searchInput").addEventListener("input", e => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll(".school-card").forEach(card => {
+    const name = card.getAttribute("data-name");
+    const matches = name.includes(q);
+    card.parentElement.classList.toggle("hidden", !matches);
+  });
+});
+
+document.getElementById("statusFilter").addEventListener("change", e => {
+  const status = e.target.value;
+  document.querySelectorAll(".school-card").forEach(card => {
+    const cardStatus = card.getAttribute("data-status");
+    const matches = !status || cardStatus === status;
+    card.parentElement.classList.toggle("hidden", !matches);
+  });
+});
+</script>
+
+{% endblock %}

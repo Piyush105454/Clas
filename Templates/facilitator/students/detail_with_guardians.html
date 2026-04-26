@@ -1,0 +1,495 @@
+{% extends "facilitator/shared/base.html" %}
+{% load static %}
+
+{% block title %}{{ student.full_name }} - Student Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="{% url 'facilitator_students_list' %}">Students</a>
+                            </li>
+                            <li class="breadcrumb-item active">{{ student.full_name }}</li>
+                        </ol>
+                    </nav>
+                    <h2 class="mb-0">
+                        <i class="fas fa-user me-2"></i>
+                        {{ student.full_name }}
+                    </h2>
+                    <p class="text-muted mb-0">Student Details and Attendance Record</p>
+                </div>
+                <div>
+                    <a href="{% url 'facilitator_student_edit' student.id %}" class="btn btn-primary">
+                        <i class="fas fa-edit me-1"></i>
+                        Edit Student
+                    </a>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Left Column: Student Info + Guardians -->
+                <div class="col-lg-4">
+                    <!-- Student Information Card -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-id-card me-1"></i>
+                                Student Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-center mb-4">
+                                <div class="avatar-lg bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center">
+                                    <i class="fas fa-user fa-2x"></i>
+                                </div>
+                                <h4 class="mt-2 mb-0">{{ student.full_name }}</h4>
+                                <p class="text-muted">{{ enrollment.class_section.display_name }}</p>
+                            </div>
+                            
+                            <div class="row text-center mb-3">
+                                <div class="col-4">
+                                    <div class="border-end">
+                                        <h5 class="text-success mb-0">{{ stats.present_count }}</h5>
+                                        <small class="text-muted">Present</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="border-end">
+                                        <h5 class="text-danger mb-0">{{ stats.absent_count }}</h5>
+                                        <small class="text-muted">Absent</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <h5 class="text-primary mb-0">{{ stats.attendance_percentage }}%</h5>
+                                    <small class="text-muted">Attendance</small>
+                                </div>
+                            </div>
+                            
+                            <hr>
+                            
+                            <div class="mb-3">
+                                <strong>Enrollment Number:</strong><br>
+                                <code>{{ student.enrollment_number }}</code>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Gender:</strong><br>
+                                {% if student.gender == 'M' %}
+                                    <i class="fas fa-mars text-primary"></i> Male
+                                {% elif student.gender == 'F' %}
+                                    <i class="fas fa-venus text-danger"></i> Female
+                                {% else %}
+                                    {{ student.gender }}
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>School:</strong><br>
+                                {{ enrollment.school.name }}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Class:</strong><br>
+                                <span class="badge bg-info">{{ enrollment.class_section.display_name }}</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Academic Year:</strong><br>
+                                {{ enrollment.class_section.academic_year }}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Enrollment Date:</strong><br>
+                                {{ enrollment.start_date|date:"M d, Y" }}
+                            </div>
+                            
+                            <div class="mb-0">
+                                <strong>Status:</strong><br>
+                                {% if enrollment.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Guardian Management Card -->
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-users me-1"></i>
+                                Guardians
+                            </h5>
+                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addGuardianModal">
+                                <i class="fas fa-plus me-1"></i>Add
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            {% if guardians %}
+                                <div class="list-group list-group-flush">
+                                    {% for guardian in guardians %}
+                                        <div class="list-group-item px-0 py-3 border-bottom">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-1">
+                                                        <i class="fas fa-user-circle me-2 text-primary"></i>
+                                                        {{ guardian.name }}
+                                                    </h6>
+                                                    <small class="text-muted d-block">
+                                                        <strong>Relation:</strong> {{ guardian.relation|title }}
+                                                    </small>
+                                                    <small class="text-muted d-block">
+                                                        <strong>Phone:</strong> {{ guardian.phone_number }}
+                                                    </small>
+                                                    {% if guardian.email %}
+                                                        <small class="text-muted d-block">
+                                                            <strong>Email:</strong> {{ guardian.email }}
+                                                        </small>
+                                                    {% endif %}
+                                                    {% if guardian.connection_notes %}
+                                                        <small class="text-muted d-block mt-1">
+                                                            <strong>Notes:</strong> {{ guardian.connection_notes }}
+                                                        </small>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="btn-group-vertical btn-group-sm ms-2">
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                                            onclick="editGuardian('{{ guardian.id }}')" title="Edit">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                            onclick="deleteGuardian('{{ guardian.id }}')" title="Delete">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-user-friends fa-2x text-muted mb-2"></i>
+                                    <p class="text-muted mb-2">No guardians added yet</p>
+                                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addGuardianModal">
+                                        <i class="fas fa-plus me-1"></i>Add Guardian
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Attendance & Stats -->
+                <div class="col-lg-8">
+                    <!-- Attendance Statistics -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-chart-bar me-1"></i>
+                                Attendance Statistics
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="text-center p-3 bg-light rounded">
+                                        <h3 class="text-primary mb-1">{{ stats.total_sessions }}</h3>
+                                        <small class="text-muted">Total Sessions</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center p-3 bg-light rounded">
+                                        <h3 class="text-success mb-1">{{ stats.present_count }}</h3>
+                                        <small class="text-muted">Present</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center p-3 bg-light rounded">
+                                        <h3 class="text-danger mb-1">{{ stats.absent_count }}</h3>
+                                        <small class="text-muted">Absent</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center p-3 bg-light rounded">
+                                        <h3 class="{% if stats.attendance_percentage >= 75 %}text-success{% elif stats.attendance_percentage >= 50 %}text-warning{% else %}text-danger{% endif %} mb-1">
+                                            {{ stats.attendance_percentage }}%
+                                        </h3>
+                                        <small class="text-muted">Attendance Rate</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {% if stats.attendance_percentage < 75 %}
+                                <div class="alert alert-warning mt-3">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    <strong>Low Attendance:</strong> This student's attendance is below 75%. Consider following up with parents or guardians.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Recent Attendance -->
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-calendar-check me-1"></i>
+                                Recent Attendance
+                            </h5>
+                            <span class="badge bg-primary">Last 10 Sessions</span>
+                        </div>
+                        <div class="card-body">
+                            {% if attendance_records %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Day</th>
+                                                <th>Topic</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for attendance in attendance_records %}
+                                                <tr>
+                                                    <td>{{ attendance.actual_session.date|date:"M d, Y" }}</td>
+                                                    <td>
+                                                        <span class="badge bg-secondary">
+                                                            {% if attendance.actual_session.planned_session.day_number >= 998 %}
+                                                                {{ attendance.actual_session.planned_session.title }}
+                                                            {% else %}
+                                                                Day {{ attendance.actual_session.planned_session.day_number }}
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <small>{{ attendance.actual_session.planned_session.topic|default:"Session" }}</small>
+                                                    </td>
+                                                    <td>
+                                                        {% if attendance.status == 'present' %}
+                                                            <span class="badge bg-success">
+                                                                <i class="fas fa-check me-1"></i>Present
+                                                            </span>
+                                                        {% elif attendance.status == 'absent' %}
+                                                            <span class="badge bg-danger">
+                                                                <i class="fas fa-times me-1"></i>Absent
+                                                            </span>
+                                                        {% else %}
+                                                            <span class="badge bg-secondary">{{ attendance.status|title }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                                    <h6 class="text-muted">No Attendance Records</h6>
+                                    <p class="text-muted mb-0">No attendance has been recorded for this student yet.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'facilitator_students_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>
+                            Back to Students
+                        </a>
+                        <div>
+                            <a href="{% url 'facilitator_students_list' %}?class={{ enrollment.class_section.id }}" 
+                               class="btn btn-outline-info me-2">
+                                <i class="fas fa-users me-1"></i>
+                                View Classmates
+                            </a>
+                            <a href="{% url 'facilitator_student_edit' student.id %}" class="btn btn-primary">
+                                <i class="fas fa-edit me-1"></i>
+                                Edit Student
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Guardian Modal -->
+<div class="modal fade" id="addGuardianModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2"></i>
+                    Add Guardian
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="guardianForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="guardianName" class="form-label">Guardian Name *</label>
+                        <input type="text" class="form-control" id="guardianName" name="name" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="guardianRelation" class="form-label">Relation to Student *</label>
+                        <select class="form-select" id="guardianRelation" name="relation" required>
+                            <option value="">-- Select Relation --</option>
+                            <option value="mother">Mother</option>
+                            <option value="father">Father</option>
+                            <option value="brother">Brother</option>
+                            <option value="sister">Sister</option>
+                            <option value="grandmother">Grandmother</option>
+                            <option value="grandfather">Grandfather</option>
+                            <option value="aunt">Aunt</option>
+                            <option value="uncle">Uncle</option>
+                            <option value="cousin">Cousin</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="guardianPhone" class="form-label">Phone Number *</label>
+                        <input type="tel" class="form-control" id="guardianPhone" name="phone_number" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="guardianEmail" class="form-label">Email Address</label>
+                        <input type="email" class="form-control" id="guardianEmail" name="email">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="guardianConnection" class="form-label">Connection/Notes</label>
+                        <textarea class="form-control" id="guardianConnection" name="connection_notes" rows="2" 
+                                  placeholder="e.g., Primary contact, Emergency contact, etc."></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Attachment Assessment Questions</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="q1" name="attachment_q1" value="true">
+                            <label class="form-check-label" for="q1">
+                                Student shows strong emotional bond with this guardian
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="q2" name="attachment_q2" value="true">
+                            <label class="form-check-label" for="q2">
+                                Student seeks comfort/support from this guardian
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="q3" name="attachment_q3" value="true">
+                            <label class="form-check-label" for="q3">
+                                This guardian is actively involved in student's education
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Save Guardian
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar-lg {
+        width: 80px;
+        height: 80px;
+        font-size: 24px;
+    }
+    
+    .bg-light {
+        background-color: #f8f9fa !important;
+    }
+
+    .card {
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+
+    .card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .card-header {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    }
+
+    .badge {
+        padding: 0.5rem 0.75rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .progress {
+        background-color: #e9ecef;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        transition: width 0.6s ease;
+    }
+
+    .alert {
+        border-radius: 0.5rem;
+        border: none;
+    }
+
+    .list-group-item {
+        background-color: transparent;
+    }
+
+    .list-group-item:last-child {
+        border-bottom: none !important;
+    }
+
+    .btn-group-vertical {
+        gap: 0.25rem;
+    }
+
+    @media (max-width: 576px) {
+        .card-body {
+            padding: 0.75rem;
+        }
+
+        .card-header {
+            padding: 0.75rem;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 0.35rem 0.5rem;
+        }
+
+        h6 {
+            font-size: 0.9rem;
+        }
+    }
+</style>
+{% endblock %}

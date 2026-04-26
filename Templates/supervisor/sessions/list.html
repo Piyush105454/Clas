@@ -1,0 +1,339 @@
+{% extends base_template|default:"supervisor/shared/base.html" %}
+
+{% block title %}Sessions - Supervisor{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Sessions Management</h1>
+        <p class="text-gray-600">View and manage all sessions across your schools</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <form method="get" id="filterForm" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <!-- School Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">School</label>
+                <select id="schoolFilter" name="school_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Schools</option>
+                    {% for school in schools %}
+                    <option value="{{ school.id }}" {% if school.id|stringformat:"s" == selected_school %}selected{% endif %}>
+                        {{ school.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Class Filter (Cascading) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Class</label>
+                <select id="classFilter" name="class_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Classes</option>
+                    {% for class in selected_school_classes %}
+                    <option value="{{ class.id }}" {% if class.id|stringformat:"s" == selected_class %}selected{% endif %}>
+                        {{ class.display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="text-gray-500 mt-1 block" id="classInfo"></small>
+            </div>
+
+            <!-- Status Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Status</option>
+                    <option value="conducted" {% if selected_status == "conducted" %}selected{% endif %}>Conducted</option>
+                    <option value="holiday" {% if selected_status == "holiday" %}selected{% endif %}>Holiday</option>
+                    <option value="cancelled" {% if selected_status == "cancelled" %}selected{% endif %}>Cancelled</option>
+                </select>
+            </div>
+
+            <!-- Date Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                <select name="date_filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="all" {% if selected_date_filter == "all" %}selected{% endif %}>All Dates</option>
+                    <option value="today" {% if selected_date_filter == "today" %}selected{% endif %}>Today</option>
+                    <option value="past" {% if selected_date_filter == "past" %}selected{% endif %}>Past</option>
+                    <option value="future" {% if selected_date_filter == "future" %}selected{% endif %}>Future</option>
+                    <option value="week" {% if selected_date_filter == "week" %}selected{% endif %}>This Week</option>
+                    <option value="month" {% if selected_date_filter == "month" %}selected{% endif %}>This Month</option>
+                </select>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="flex gap-2 items-end">
+                <button type="submit" id="filterBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex-1 flex items-center justify-center gap-2">
+                    <span id="filterBtnText">Filter</span>
+                    <span id="filterSpinner" class="hidden">
+                        <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
+                </button>
+                <a href="?" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+                    Clear
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 flex flex-col items-center gap-4">
+            <svg class="animate-spin h-12 w-12 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-gray-700 font-medium">Loading sessions...</p>
+        </div>
+    </div>
+
+    <!-- Sessions Table -->
+    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+        {% if sessions %}
+        <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">School</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Class</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Day</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Date</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Action</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for session in sessions %}
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4 text-sm text-gray-900">{{ session.class_section.school.name }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        {{ session.class_section.display_name }}
+                        {% if session.grouped_session_id %}
+                        <span class="ml-2 px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">Grouped</span>
+                        {% else %}
+                        <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Single</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900">Day {{ session.day_number }}</td>
+                    <td class="px-6 py-4 text-sm">
+                        {% if session.actual_session_data %}
+                            {% if session.actual_session_data.status == 1 %}
+                                <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Conducted</span>
+                            {% elif session.actual_session_data.status == 2 %}
+                                <span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Holiday</span>
+                            {% elif session.actual_session_data.status == 3 %}
+                                <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">Cancelled</span>
+                            {% else %}
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Planned</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Planned</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        {% if session.actual_session_data.date %}
+                            {{ session.actual_session_data.date|date:"M d, Y" }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-sm">
+                        <div class="flex gap-2">
+                            {% if is_admin %}
+                                <a href="{% url 'admin_session_detail' session.id %}" class="text-blue-600 hover:text-blue-800 font-medium text-xs px-2 py-1 bg-blue-50 rounded hover:bg-blue-100">
+                                    Details
+                                </a>
+                            {% else %}
+                                <a href="{% url 'supervisor_session_detail' session.id %}" class="text-blue-600 hover:text-blue-800 font-medium text-xs px-2 py-1 bg-blue-50 rounded hover:bg-blue-100">
+                                    Details
+                                </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="px-6 py-8 text-center">
+                        <div class="text-gray-500">
+                            <p class="font-medium mb-2">No sessions found</p>
+                            <p class="text-sm">
+                                {% if selected_status or selected_date_filter != 'all' %}
+                                    No sessions match your filter criteria. Try adjusting your filters.
+                                {% else %}
+                                    No sessions found for this class
+                                {% endif %}
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <div class="text-gray-400 mb-4">
+                <span class="material-symbols-outlined text-6xl">search_off</span>
+            </div>
+            <p class="text-lg text-gray-600 mb-2">No Sessions Filtered</p>
+            <p class="text-sm text-gray-500">Adjust filters above to see session data.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination Controls -->
+    {% if sessions and paginator.num_pages > 1 %}
+    <div class="mt-6 flex items-center justify-between">
+        <div class="text-sm text-gray-600">
+            <!-- Removed pagination info text as requested -->
+        </div>
+        <div class="flex gap-2">
+            {% if sessions.has_previous %}
+            <a href="?page=1{% if selected_school %}&school_id={{ selected_school }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_filter %}&date_filter={{ selected_date_filter }}{% endif %}" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                First
+            </a>
+            <a href="?page={{ sessions.previous_page_number }}{% if selected_school %}&school_id={{ selected_school }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_filter %}&date_filter={{ selected_date_filter }}{% endif %}" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                Previous
+            </a>
+            {% endif %}
+
+            {% for num in paginator.page_range %}
+                {% if sessions.number == num %}
+                <span class="px-3 py-2 bg-blue-600 text-white rounded font-semibold">{{ num }}</span>
+                {% elif num > sessions.number|add:'-3' and num < sessions.number|add:'3' %}
+                <a href="?page={{ num }}{% if selected_school %}&school_id={{ selected_school }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_filter %}&date_filter={{ selected_date_filter }}{% endif %}" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                    {{ num }}
+                </a>
+                {% endif %}
+            {% endfor %}
+
+            {% if sessions.has_next %}
+            <a href="?page={{ sessions.next_page_number }}{% if selected_school %}&school_id={{ selected_school }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_filter %}&date_filter={{ selected_date_filter }}{% endif %}" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                Next
+            </a>
+            <a href="?page={{ paginator.num_pages }}{% if selected_school %}&school_id={{ selected_school }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_date_filter %}&date_filter={{ selected_date_filter }}{% endif %}" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                Last
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+const classData = {{ class_data_json|safe }};
+
+// Show loading indicator
+function showLoading() {
+    document.getElementById('loadingIndicator').classList.remove('hidden');
+    document.getElementById('filterBtn').disabled = true;
+    document.getElementById('filterBtnText').classList.add('hidden');
+    document.getElementById('filterSpinner').classList.remove('hidden');
+}
+
+// Hide loading indicator
+function hideLoading() {
+    document.getElementById('loadingIndicator').classList.add('hidden');
+    document.getElementById('filterBtn').disabled = false;
+    document.getElementById('filterBtnText').classList.remove('hidden');
+    document.getElementById('filterSpinner').classList.add('hidden');
+}
+
+// Handle form submission
+document.getElementById('filterForm').addEventListener('submit', function(e) {
+    const schoolId = document.getElementById('schoolFilter').value;
+    const classId = document.getElementById('classFilter').value;
+    
+    // Only show loading if both school and class are selected
+    if (schoolId && classId) {
+        showLoading();
+    }
+});
+
+document.getElementById('schoolFilter').addEventListener('change', function() {
+    const schoolId = this.value;
+    const classFilter = document.getElementById('classFilter');
+    const classInfo = document.getElementById('classInfo');
+    
+    classFilter.innerHTML = '<option value="">All Classes</option>';
+    classInfo.textContent = '';
+    
+    if (schoolId) {
+        // Load classes via AJAX
+        fetch(`/supervisor/get-classes-by-school/?school_id=${schoolId}`)
+            .then(response => response.json())
+            .then(data => {
+                data.classes.forEach(cls => {
+                    const option = document.createElement('option');
+                    option.value = cls.id;
+                    option.textContent = cls.name + (cls.is_grouped ? ' (Grouped - ' + cls.grouped_count + ' classes)' : ' (Single)');
+                    classFilter.appendChild(option);
+                });
+                
+                // If there was a previously selected class, restore it
+                const previousClass = '{{ selected_class }}';
+                if (previousClass) {
+                    classFilter.value = previousClass;
+                }
+            })
+            .catch(error => console.error('Error loading classes:', error));
+    }
+});
+
+document.getElementById('classFilter').addEventListener('change', function() {
+    const schoolId = document.getElementById('schoolFilter').value;
+    const classId = this.value;
+    const classInfo = document.getElementById('classInfo');
+    
+    classInfo.textContent = '';
+    
+    if (schoolId && classId) {
+        // Get class info from loaded data
+        fetch(`/supervisor/get-classes-by-school/?school_id=${schoolId}`)
+            .then(response => response.json())
+            .then(data => {
+                const selectedClass = data.classes.find(cls => cls.id === classId);
+                if (selectedClass) {
+                    if (selectedClass.is_grouped) {
+                        classInfo.textContent = 'This is a grouped session with ' + selectedClass.grouped_count + ' classes';
+                    } else {
+                        classInfo.textContent = 'This is a single class session';
+                    }
+                }
+            })
+            .catch(error => console.error('Error loading class info:', error));
+    }
+});
+
+window.addEventListener('load', function() {
+    const schoolId = document.getElementById('schoolFilter').value;
+    if (schoolId) {
+        document.getElementById('schoolFilter').dispatchEvent(new Event('change'));
+    }
+    
+    // Hide loading indicator when page finishes loading
+    hideLoading();
+});
+
+
+// Get CSRF token from cookie
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

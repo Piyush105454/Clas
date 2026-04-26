@@ -1,0 +1,118 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-6">
+
+  <!-- Back Button -->
+  <div>
+    <a href="{% url 'clusters_list' %}"
+       class="inline-flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+      <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+      <span>Back to Clusters</span>
+    </a>
+  </div>
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-900">{{ cluster.name }}</h2>
+      <p class="text-sm text-gray-500 mt-1">{{ cluster.district }}, {{ cluster.state }}</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'cluster_edit' cluster.id %}"
+         class="inline-flex items-center gap-2 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 text-sm font-medium">
+        <span class="material-symbols-outlined text-[18px]">edit</span>
+        <span>Edit</span>
+      </a>
+      <form method="post" action="{% url 'cluster_delete' cluster.id %}" style="display: inline;" onsubmit="return confirm('Delete this cluster?');">
+        {% csrf_token %}
+        <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 text-sm font-medium">
+          <span class="material-symbols-outlined text-[18px]">delete</span>
+          <span>Delete</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cluster Info -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">Cluster Information</h3>
+      <div class="space-y-4">
+        <div>
+          <p class="text-sm text-gray-600">District</p>
+          <p class="text-base font-medium text-gray-900">{{ cluster.district }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-600">State</p>
+          <p class="text-base font-medium text-gray-900">{{ cluster.state }}</p>
+        </div>
+        {% if cluster.description %}
+        <div>
+          <p class="text-sm text-gray-600">Description</p>
+          <p class="text-base text-gray-900">{{ cluster.description }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">📍 Center Location</h3>
+      <div class="space-y-4">
+        {% if cluster.latitude and cluster.longitude %}
+        <div>
+          <p class="text-sm text-gray-600">Coordinates</p>
+          <p class="text-base font-medium text-gray-900">{{ cluster.latitude }}, {{ cluster.longitude }}</p>
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500">No coordinates set</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Schools in Cluster -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+      <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+        <span class="material-symbols-outlined text-xl">school</span>
+        <span>Schools in this Cluster</span>
+      </h3>
+      <span class="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+        {{ schools|length }} schools
+      </span>
+    </div>
+
+    <div class="p-6">
+      {% if schools %}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for school in schools %}
+        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div class="flex items-start justify-between mb-2">
+            <div>
+              <h4 class="font-semibold text-gray-900">{{ school.name }}</h4>
+              <p class="text-xs text-gray-600 mt-1">{{ school.block }}, {{ school.district }}</p>
+            </div>
+            <span class="px-2 py-1 bg-{% if school.status %}green{% else %}red{% endif %}-100 text-{% if school.status %}green{% else %}red{% endif %}-800 text-xs font-medium rounded">
+              {% if school.status %}Active{% else %}Inactive{% endif %}
+            </span>
+          </div>
+          <a href="{% url 'supervisor_school_detail' school.id %}"
+             class="text-blue-600 hover:text-blue-700 text-sm font-medium mt-3 inline-block">
+            View Details →
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center py-12">
+        <span class="material-symbols-outlined text-gray-300 text-6xl mb-3 block">school</span>
+        <p class="text-gray-600 font-medium">No schools assigned to this cluster yet</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

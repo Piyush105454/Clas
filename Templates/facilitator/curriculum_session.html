@@ -1,0 +1,821 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% block content %}
+<div class="curriculum-page">
+<div class="container-fluid px-2 px-md-4">
+    <!-- Simple Header -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="fw-bold mb-1">{{ class_section.school.name }}</h4>
+                    <h6 class="text-muted mb-0">{{ class_section.class_level }} - {{ class_section.section }}</h6>
+                </div>
+                <span class="badge bg-primary fs-6" id="currentDayBadge">Day 1</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Navigation -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="row g-3 align-items-end">
+                        <!-- Language Selection -->
+                        <div class="col-md-4">
+                            <label class="form-label small mb-2">Language</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="language" id="englishBtn" value="english" checked>
+                                <label class="btn btn-outline-primary" for="englishBtn">English</label>
+                                
+                                <input type="radio" class="btn-check" name="language" id="hindiBtn" value="hindi">
+                                <label class="btn btn-outline-primary" for="hindiBtn">हिंदी</label>
+                            </div>
+                        </div>
+
+                        <!-- Day Navigation -->
+                        <div class="col-md-6">
+                            <label class="form-label small mb-2">Go to Day (1-150)</label>
+                            <div class="d-flex gap-2">
+                                <button id="prevDayBtn" class="btn btn-outline-secondary" title="Previous Day">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                
+                                <input type="number" 
+                                       id="dayInput" 
+                                       class="form-control text-center" 
+                                       value="1"
+                                       min="1" 
+                                       max="150"
+                                       style="max-width: 100px;">
+                                
+                                <button id="nextDayBtn" class="btn btn-outline-secondary" title="Next Day">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                                
+                                <button id="goBtn" class="btn btn-primary">Go</button>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="col-md-2">
+                            <label class="form-label small mb-2">Actions</label>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-outline-primary btn-sm" onclick="window.print()" title="Print">
+                                    <i class="fas fa-print"></i>
+                                </button>
+                                <button id="refreshBtn" class="btn btn-outline-success btn-sm" title="Refresh">
+                                    <i class="fas fa-sync"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Curriculum Content -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <span id="contentDayLabel">Day 1</span> - 
+                        <span id="contentLanguageLabel">English</span> Curriculum
+                    </h6>
+                    <button class="btn btn-sm btn-outline-primary" onclick="window.print()">
+                        <i class="fas fa-print me-1"></i>Print
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="curriculumContent" style="min-height: 400px;">
+                        <div class="text-center p-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading Day 1 content...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Simple Session Data -->
+<script id="sessionData" type="application/json">
+{
+    "classId": "{{ class_section.id }}",
+    "curriculumUrl": "{% url 'curriculum_content_api' %}"
+}
+</script>
+
+<script>
+class SimpleCurriculumNavigator {
+    constructor() {
+        this.sessionData = JSON.parse(document.getElementById('sessionData').textContent);
+        this.currentDay = 1;
+        this.currentLanguage = 'english';
+        this.cache = new Map();
+        this.maxCacheSize = 10; // Only keep 10 days in cache to prevent memory issues
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.loadCurriculumContent(1, 'english');
+    }
+
+    // Cache management to prevent memory issues
+    manageCacheSize() {
+        if (this.cache.size > this.maxCacheSize) {
+            // Remove oldest entries to keep cache size manageable
+            const entries = Array.from(this.cache.entries());
+            const entriesToRemove = entries.slice(0, entries.length - this.maxCacheSize);
+            
+            entriesToRemove.forEach(([key]) => {
+                this.cache.delete(key);
+            });
+            
+            console.log(`Cache cleaned. Size: ${this.cache.size}`);
+        }
+    }
+
+    // Clear cache when switching languages to prevent mixed content
+    clearCache() {
+        this.cache.clear();
+        console.log('Cache cleared');
+    }
+
+    setupEventListeners() {
+        // Language selector
+        document.querySelectorAll('input[name="language"]').forEach(input => {
+            input.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    this.switchLanguage(e.target.value);
+                }
+            });
+        });
+
+        // Day input
+        const dayInput = document.getElementById('dayInput');
+        dayInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.goToDay();
+            }
+        });
+
+        // Navigation buttons
+        document.getElementById('prevDayBtn').addEventListener('click', () => {
+            if (this.currentDay > 1) {
+                this.navigateToDay(this.currentDay - 1);
+            }
+        });
+
+        document.getElementById('nextDayBtn').addEventListener('click', () => {
+            if (this.currentDay < 150) {
+                this.navigateToDay(this.currentDay + 1);
+            }
+        });
+
+        document.getElementById('goBtn').addEventListener('click', () => {
+            this.goToDay();
+        });
+
+        // Cache management button
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            this.clearCache();
+            this.loadCurriculumContent(this.currentDay, this.currentLanguage);
+            this.showNotification('Content refreshed successfully');
+        });
+    }
+
+    goToDay() {
+        const dayInput = document.getElementById('dayInput');
+        const day = parseInt(dayInput.value);
+        
+        if (day >= 1 && day <= 150) {
+            this.navigateToDay(day);
+        } else {
+            alert('Please enter a day number between 1 and 150');
+            dayInput.focus();
+        }
+    }
+
+    navigateToDay(day) {
+        this.currentDay = day;
+        
+        // CRITICAL: Clear content immediately to prevent accumulation
+        const contentDiv = document.getElementById('curriculumContent');
+        contentDiv.innerHTML = '';
+        
+        // Update UI
+        document.getElementById('dayInput').value = day;
+        document.getElementById('contentDayLabel').textContent = `Day ${day}`;
+        document.getElementById('currentDayBadge').textContent = `Day ${day}`;
+        
+        // Update navigation buttons
+        document.getElementById('prevDayBtn').disabled = day <= 1;
+        document.getElementById('nextDayBtn').disabled = day >= 150;
+        
+        // Update URL without reloading page
+        const url = new URL(window.location);
+        url.searchParams.set('day', day);
+        window.history.replaceState({}, '', url); // Use replaceState instead of pushState to prevent history buildup
+        
+        // Load content (this will show loading spinner first)
+        this.loadCurriculumContent(day, this.currentLanguage);
+        
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    switchLanguage(language) {
+        this.currentLanguage = language;
+        document.getElementById('contentLanguageLabel').textContent = 
+            language === 'hindi' ? 'हिंदी' : 'English';
+        
+        // Clear cache when switching languages to prevent mixed content
+        this.clearCache();
+        
+        // Update URL
+        const url = new URL(window.location);
+        url.searchParams.set('language', language);
+        window.history.replaceState({}, '', url);
+        
+        // Load content
+        this.loadCurriculumContent(this.currentDay, language);
+        
+        // Show notification
+        this.showNotification(`Switched to ${language === 'hindi' ? 'हिंदी' : 'English'}`);
+    }
+
+    async loadCurriculumContent(day, language) {
+        const contentDiv = document.getElementById('curriculumContent');
+        
+        // CRITICAL: Clear previous content immediately to prevent accumulation
+        contentDiv.innerHTML = '';
+        
+        // Show loading for current day only
+        contentDiv.innerHTML = `
+            <div class="text-center p-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading Day ${day} content...</p>
+            </div>
+        `;
+
+        try {
+            const cacheKey = `${language}_${day}`;
+            
+            // Check cache first
+            if (this.cache.has(cacheKey)) {
+                // CRITICAL: Clear and show only cached content
+                contentDiv.innerHTML = '';
+                contentDiv.innerHTML = this.cache.get(cacheKey);
+                return;
+            }
+
+            // Fetch content
+            const response = await fetch(`${this.sessionData.curriculumUrl}?day=${day}&language=${language}`);
+            if (!response.ok) throw new Error('Failed to load content');
+            
+            const content = await response.text();
+            
+            // Clean the content to remove any navigation buttons or interfering elements
+            const cleanedContent = this.cleanCurriculumContent(content);
+            
+            // CRITICAL: Clear content div completely before adding new content
+            contentDiv.innerHTML = '';
+            
+            // Cache and display ONLY the cleaned content
+            this.cache.set(cacheKey, cleanedContent);
+            this.manageCacheSize(); // Prevent cache from growing too large
+            contentDiv.innerHTML = cleanedContent;
+            
+        } catch (error) {
+            console.error('Error loading curriculum content:', error);
+            // CRITICAL: Clear and show only error message
+            contentDiv.innerHTML = '';
+            contentDiv.innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Error Loading Content</h6>
+                    <p>Failed to load Day ${day} curriculum content.</p>
+                    <button class="btn btn-outline-danger btn-sm" onclick="window.curriculum.loadCurriculumContent(${day}, '${language}')">
+                        <i class="fas fa-redo me-1"></i>Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // Clean curriculum content to remove interfering navigation elements
+    cleanCurriculumContent(htmlContent) {
+        try {
+            // Create a temporary div to parse HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlContent;
+            
+            // Remove any buttons that might interfere with navigation
+            const buttonsToRemove = tempDiv.querySelectorAll('button, input[type="button"], input[type="submit"]');
+            buttonsToRemove.forEach(btn => {
+                // Only remove if it looks like navigation (contains words like "next", "previous", "day", etc.)
+                const btnText = btn.textContent.toLowerCase();
+                if (btnText.includes('next') || btnText.includes('previous') || btnText.includes('day') || 
+                    btnText.includes('go') || btnText.includes('load') || btnText.includes('navigate')) {
+                    btn.remove();
+                }
+            });
+            
+            // Keep links but ensure they open in new tabs and have proper styling
+            const links = tempDiv.querySelectorAll('a');
+            links.forEach(link => {
+                // Remove onclick handlers that might interfere
+                link.removeAttribute('onclick');
+                
+                // Ensure external links open in new tab
+                if (link.href && (link.href.startsWith('http') || link.href.startsWith('https'))) {
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                }
+                
+                // Add proper link styling
+                link.style.color = '#0066cc';
+                link.style.textDecoration = 'underline';
+                link.classList.add('curriculum-link');
+            });
+            
+            // Remove any scripts that might interfere
+            const scripts = tempDiv.querySelectorAll('script');
+            scripts.forEach(script => script.remove());
+            
+            // Remove any remaining onclick handlers
+            const elementsWithOnclick = tempDiv.querySelectorAll('[onclick]');
+            elementsWithOnclick.forEach(element => {
+                element.removeAttribute('onclick');
+            });
+            
+            // Enhance table styling for better mobile display
+            const tables = tempDiv.querySelectorAll('table');
+            tables.forEach(table => {
+                table.classList.add('table', 'table-responsive', 'curriculum-table');
+                table.style.fontSize = '14px';
+            });
+            
+            // Wrap the cleaned content in a container with better styling
+            return `
+                <div class="curriculum-content-wrapper">
+                    <div class="alert alert-info alert-sm mb-3 d-flex align-items-center">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <small>Use the navigation controls above to switch between days and languages. Links will open in new tabs.</small>
+                    </div>
+                    <div class="curriculum-body">
+                        ${tempDiv.innerHTML}
+                    </div>
+                </div>
+            `;
+            
+        } catch (error) {
+            console.error('Error cleaning curriculum content:', error);
+            // If cleaning fails, return original content but with a warning
+            return `
+                <div class="alert alert-warning alert-sm mb-3">
+                    <small><i class="fas fa-exclamation-triangle me-1"></i>
+                    Content loaded with original formatting. Use navigation controls above.
+                    </small>
+                </div>
+                <div class="curriculum-body">
+                    ${htmlContent}
+                </div>
+            `;
+        }
+    }
+
+    showNotification(message) {
+        // Remove any existing notifications first
+        const existingToasts = document.querySelectorAll('.curriculum-toast');
+        existingToasts.forEach(toast => toast.remove());
+        
+        // Simple notification
+        const toast = document.createElement('div');
+        toast.className = 'position-fixed top-0 end-0 p-3 curriculum-toast';
+        toast.style.zIndex = '1050';
+        toast.innerHTML = `
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i>${message}
+                <button type="button" class="btn-close" onclick="this.closest('.curriculum-toast').remove()"></button>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    window.curriculum = new SimpleCurriculumNavigator();
+    
+    // Handle URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlDay = parseInt(urlParams.get('day')) || 1;
+    const urlLanguage = urlParams.get('language') || 'english';
+    
+    if (urlLanguage && ['english', 'hindi'].includes(urlLanguage)) {
+        document.getElementById(urlLanguage + 'Btn').checked = true;
+        window.curriculum.currentLanguage = urlLanguage;
+    }
+    
+    if (urlDay !== 1) {
+        window.curriculum.navigateToDay(urlDay);
+    }
+});
+
+// Handle browser back/forward
+window.addEventListener('popstate', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const day = parseInt(urlParams.get('day')) || 1;
+    const language = urlParams.get('language') || 'english';
+    
+    document.getElementById(language + 'Btn').checked = true;
+    window.curriculum.currentLanguage = language;
+    window.curriculum.navigateToDay(day);
+});
+</script>
+
+<style>
+/* Enhanced curriculum page styles - Isolated with .curriculum-page prefix */
+.curriculum-page .container-fluid {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.curriculum-page #curriculumContent {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    overflow: hidden;
+    position: relative;
+}
+
+/* Enhanced curriculum content styling */
+.curriculum-page .curriculum-content-wrapper {
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+}
+
+.curriculum-page .curriculum-body {
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+/* Better table styling for curriculum content */
+.curriculum-page .curriculum-table,
+.curriculum-page .curriculum-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    font-size: 13px;
+    background: white;
+}
+
+.curriculum-page .curriculum-table td,
+.curriculum-page .curriculum-body table td,
+.curriculum-page .curriculum-table th,
+.curriculum-page .curriculum-body table th {
+    padding: 12px 8px;
+    border: 1px solid #dee2e6;
+    vertical-align: top;
+    word-wrap: break-word;
+}
+
+/* Enhanced link styling - Override admin styles */
+.curriculum-page .curriculum-body a,
+.curriculum-page .curriculum-link,
+.curriculum-page a[href] {
+    color: #0066cc !important;
+    text-decoration: underline !important;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.curriculum-page .curriculum-body a:hover,
+.curriculum-page .curriculum-link:hover,
+.curriculum-page a[href]:hover {
+    color: #004499 !important;
+    text-decoration: underline !important;
+}
+
+.curriculum-page .curriculum-body a:visited,
+.curriculum-page .curriculum-link:visited {
+    color: #551a8b !important;
+}
+
+/* YouTube and external link styling */
+.curriculum-page .curriculum-body a[href*="youtube"],
+.curriculum-page .curriculum-body a[href*="youtu.be"] {
+    color: #77cceb !important;
+    font-weight: 600;
+}
+
+.curriculum-page .curriculum-body a[href*="youtube"]:before,
+.curriculum-page .curriculum-body a[href*="youtu.be"]:before {
+    content: "▶ ";
+    color: #68c9e9;
+}
+
+/* Special styling for different content types */
+.curriculum-page .curriculum-table .s0,
+.curriculum-page .curriculum-body .s0 {
+    background-color: #d9ead3 !important;
+    font-weight: bold;
+    font-size: 16px;
+    text-align: center;
+    padding: 15px;
+}
+
+.curriculum-page .curriculum-table .s1,
+.curriculum-page .curriculum-body .s1 {
+    background-color: #f0f8ff;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.curriculum-page .curriculum-table .s2,
+.curriculum-page .curriculum-body .s2 {
+    background-color: #fff2cc;
+    text-align: center;
+}
+
+/* Navigation styling - Override admin button styles */
+.curriculum-page #dayInput {
+    font-weight: bold !important;
+    text-align: center;
+    border: 2px solid #007bff !important;
+    border-radius: 6px !important;
+    background: white !important;
+    color: #333 !important;
+}
+
+.curriculum-page #dayInput:focus {
+    border-color: #0056b3 !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+    outline: none !important;
+}
+
+/* Override admin button styles for curriculum page */
+.curriculum-page .btn {
+    border-radius: 6px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+    text-decoration: none !important;
+}
+
+.curriculum-page .btn:disabled {
+    opacity: 0.5 !important;
+}
+
+.curriculum-page .btn-outline-primary {
+    border-color: #007bff !important;
+    color: #007bff !important;
+    background: white !important;
+}
+
+.curriculum-page .btn-outline-primary:hover:not(:disabled) {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+    color: white !important;
+}
+
+.curriculum-page .btn-outline-secondary {
+    border-color: #6c757d !important;
+    color: #6c757d !important;
+    background: white !important;
+}
+
+.curriculum-page .btn-outline-secondary:hover:not(:disabled) {
+    background-color: #6c757d !important;
+    border-color: #6c757d !important;
+    color: white !important;
+}
+
+.curriculum-page .btn-outline-success {
+    border-color: #28a745 !important;
+    color: #28a745 !important;
+    background: white !important;
+}
+
+.curriculum-page .btn-outline-success:hover:not(:disabled) {
+    background-color: #28a745 !important;
+    border-color: #28a745 !important;
+    color: white !important;
+}
+
+.curriculum-page .btn-primary {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+    color: white !important;
+}
+
+.curriculum-page .btn-primary:hover:not(:disabled) {
+    background-color: #0056b3 !important;
+    border-color: #0056b3 !important;
+}
+
+/* Language button group styling */
+.curriculum-page .btn-group .btn-check:checked + .btn {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+    color: white !important;
+}
+
+/* Alert styling */
+.curriculum-page .alert-sm {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+/* Card styling - Override admin styles */
+.curriculum-page .card {
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    border-radius: 8px !important;
+}
+
+.curriculum-page .card-header {
+    background: linear-gradient(135deg, #007bff, #0056b3) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+
+.curriculum-page .badge {
+    font-size: 14px !important;
+    padding: 8px 12px !important;
+    background-color: #007bff !important;
+    color: white !important;
+}
+
+/* Mobile responsive design */
+@media (max-width: 768px) {
+    .curriculum-page .container-fluid {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    
+    .curriculum-page .card-body {
+        padding: 15px;
+    }
+    
+    .curriculum-page #dayInput {
+        max-width: 70px;
+        font-size: 14px;
+    }
+    
+    .curriculum-page .curriculum-table,
+    .curriculum-page .curriculum-body table {
+        font-size: 12px;
+    }
+    
+    .curriculum-page .curriculum-table td,
+    .curriculum-page .curriculum-body table td {
+        padding: 8px 4px;
+    }
+    
+    .curriculum-page .curriculum-content-wrapper {
+        padding: 15px;
+    }
+    
+    .curriculum-page .curriculum-body {
+        font-size: 13px;
+    }
+    
+    /* Stack navigation controls on mobile */
+    .curriculum-page .row.g-3 > div {
+        margin-bottom: 10px;
+    }
+    
+    /* Better button sizing on mobile */
+    .curriculum-page .btn-sm {
+        padding: 4px 8px !important;
+        font-size: 12px !important;
+    }
+    
+    /* Horizontal scroll for wide tables */
+    .curriculum-page .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+@media (max-width: 576px) {
+    .curriculum-page .curriculum-table,
+    .curriculum-page .curriculum-body table {
+        font-size: 11px;
+    }
+    
+    .curriculum-page .curriculum-table td,
+    .curriculum-page .curriculum-body table td {
+        padding: 6px 3px;
+    }
+    
+    .curriculum-page .curriculum-content-wrapper {
+        padding: 10px;
+    }
+    
+    /* Stack language buttons on very small screens */
+    .curriculum-page .btn-group {
+        flex-direction: column;
+    }
+    
+    .curriculum-page .btn-group .btn {
+        border-radius: 4px !important;
+        margin-bottom: 2px;
+    }
+}
+
+/* Desktop enhancements */
+@media (min-width: 992px) {
+    .curriculum-page .curriculum-table,
+    .curriculum-page .curriculum-body table {
+        font-size: 14px;
+    }
+    
+    .curriculum-page .curriculum-table td,
+    .curriculum-page .curriculum-body table td {
+        padding: 15px 10px;
+    }
+    
+    .curriculum-page .curriculum-content-wrapper {
+        padding: 25px;
+    }
+    
+    .curriculum-page .curriculum-body {
+        font-size: 15px;
+    }
+}
+
+/* Print styles */
+@media print {
+    .curriculum-page .card-header,
+    .curriculum-page .row:not(:last-child),
+    .curriculum-page .alert {
+        display: none !important;
+    }
+    
+    .curriculum-page #curriculumContent {
+        background: white !important;
+        box-shadow: none !important;
+    }
+    
+    .curriculum-page .curriculum-body a {
+        color: #000 !important;
+        text-decoration: underline !important;
+    }
+    
+    .curriculum-page .curriculum-table,
+    .curriculum-page .curriculum-body table {
+        font-size: 12px;
+    }
+}
+
+/* Loading animation */
+.curriculum-page .spinner-border {
+    animation: curriculum-spinner-border 0.75s linear infinite;
+}
+
+@keyframes curriculum-spinner-border {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Enhanced visual feedback */
+.curriculum-page .curriculum-day-content {
+    animation: curriculum-fadeIn 0.3s ease-in;
+}
+
+@keyframes curriculum-fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Better focus indicators for accessibility */
+.curriculum-page .btn:focus,
+.curriculum-page #dayInput:focus {
+    outline: 2px solid #007bff !important;
+    outline-offset: 2px;
+}
+</style>
+
+{% endblock %}

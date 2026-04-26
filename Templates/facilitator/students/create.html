@@ -1,0 +1,297 @@
+{% extends "facilitator/shared/base.html" %}
+{% load static %}
+
+{% block title %}Add New Student - Facilitator Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="{% url 'facilitator_students_list' %}">Students</a>
+                            </li>
+                            <li class="breadcrumb-item active">Add New Student</li>
+                        </ol>
+                    </nav>
+                    <h2 class="mb-0">
+                        <i class="fas fa-user-plus me-2"></i>
+                        Add New Student
+                    </h2>
+                    <p class="text-muted mb-0">Create a new student record and enroll them in a class</p>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-user me-1"></i>
+                                Student Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" id="studentForm">
+                                {% csrf_token %}
+                                
+                                <!-- Student Basic Information -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="{{ form.full_name.id_for_label }}" class="form-label">
+                                            Full Name <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.full_name }}
+                                        {% if form.full_name.errors %}
+                                            <div class="text-danger small">{{ form.full_name.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="{{ form.enrollment_number.id_for_label }}" class="form-label">
+                                            Enrollment Number <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.enrollment_number }}
+                                        {% if form.enrollment_number.errors %}
+                                            <div class="text-danger small">{{ form.enrollment_number.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="{{ form.gender.id_for_label }}" class="form-label">
+                                            Gender <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.gender }}
+                                        {% if form.gender.errors %}
+                                            <div class="text-danger small">{{ form.gender.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Class Assignment -->
+                                <hr class="my-4">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-chalkboard-teacher me-1"></i>
+                                    Class Assignment
+                                </h6>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="school" class="form-label">
+                                            School <span class="text-danger">*</span>
+                                        </label>
+                                        <select name="school" id="school" class="form-select" required>
+                                            <option value="">Select School</option>
+                                            {% for school in schools %}
+                                                <option value="{{ school.id }}">{{ school.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="form-text">
+                                            Available schools: {{ schools.count }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="class_section" class="form-label">
+                                            Class Section <span class="text-danger">*</span>
+                                        </label>
+                                        <select name="class_section" id="class_section" class="form-select" required disabled>
+                                            <option value="">Select School First</option>
+                                        </select>
+                                        <div class="form-text" id="class_help">
+                                            Select a school to see available classes
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Form Actions -->
+                                <div class="d-flex justify-content-between">
+                                    <a href="{% url 'facilitator_students_list' %}" class="btn btn-secondary">
+                                        <i class="fas fa-arrow-left me-1"></i>
+                                        Cancel
+                                    </a>
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-save me-1"></i>
+                                        Create Student
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Instructions
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <h6>Creating a New Student</h6>
+                                <ul class="mb-0 small">
+                                    <li>Fill in all required fields marked with <span class="text-danger">*</span></li>
+                                    <li>Enrollment number must be unique</li>
+                                    <li>Select the school and class where the student will be enrolled</li>
+                                    <li>You can only assign students to schools you manage</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <h6>Quick Actions</h6>
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'facilitator_students_list' %}" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-list me-1"></i>
+                                        View All Students
+                                    </a>
+                                    <a href="{% url 'facilitator_schools_list' %}" class="btn btn-outline-secondary btn-sm">
+                                        <i class="fas fa-school me-1"></i>
+                                        View My Schools
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    const schoolSelect = document.getElementById('school');
+    const classSelect = document.getElementById('class_section');
+    const classHelp = document.getElementById('class_help');
+    const form = document.getElementById('studentForm');
+    
+    // Add Bootstrap classes to form fields
+    document.querySelectorAll('input[type="text"], input[type="number"]').forEach(field => {
+        field.classList.add('form-control');
+    });
+    
+    // Handle school selection change
+    if (schoolSelect) {
+        schoolSelect.addEventListener('change', function() {
+            const schoolId = this.value;
+            
+            // Reset and disable class dropdown
+            classSelect.innerHTML = '<option value="">Loading...</option>';
+            classSelect.disabled = true;
+            classHelp.innerHTML = 'Loading classes...';
+            
+            if (!schoolId) {
+                classSelect.innerHTML = '<option value="">Select School First</option>';
+                classHelp.innerHTML = 'Select a school to see available classes';
+                return;
+            }
+            
+            // Fetch classes for selected school
+            const url = `/facilitator/ajax/school-classes/?school_id=${schoolId}`;
+            
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    
+                    // Clear dropdown
+                    classSelect.innerHTML = '';
+                    
+                    if (data.error) {
+                        console.error('Server error:', data.error);
+                        classSelect.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                        classHelp.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+                        classSelect.disabled = true;
+                    } else if (data.classes && data.classes.length > 0) {
+                        // Add default option
+                        const defaultOption = document.createElement('option');
+                        defaultOption.value = '';
+                        defaultOption.textContent = 'Select Class Section';
+                        classSelect.appendChild(defaultOption);
+                        
+                        // Add class options
+                        data.classes.forEach(cls => {
+                            const option = document.createElement('option');
+                            option.value = cls.id;
+                            // Format: "5A - Class 5A" or "5 - Class 5"
+                            const displayText = cls.display_name || `${cls.class_level}${cls.section}`;
+                            option.textContent = displayText;
+                            classSelect.appendChild(option);
+                        });
+                        
+                        classHelp.innerHTML = `<span class="text-success">${data.classes.length} class(es) available</span>`;
+                        classSelect.disabled = false;
+                    } else {
+                        classSelect.innerHTML = '<option value="">No classes available</option>';
+                        classHelp.innerHTML = '<span class="text-warning">No classes found for this school</span>';
+                        classSelect.disabled = true;
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    classSelect.innerHTML = '<option value="">Connection Error</option>';
+                    classHelp.innerHTML = `<span class="text-danger">Failed to load classes: ${error.message}</span>`;
+                    classSelect.disabled = true;
+                });
+        });
+    }
+    
+    // Form validation on submit
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const schoolVal = schoolSelect.value;
+            const classVal = classSelect.value;
+            
+            if (!schoolVal || !classVal) {
+                e.preventDefault();
+                alert('Please select both school and class section.');
+                
+                if (!schoolVal) schoolSelect.classList.add('is-invalid');
+                if (!classVal) classSelect.classList.add('is-invalid');
+                
+                return false;
+            }
+            
+            // Check all required fields
+            const requiredFields = form.querySelectorAll('[required]');
+            let isValid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value || !field.value.trim()) {
+                    field.classList.add('is-invalid');
+                    isValid = false;
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+                alert('Please fill in all required fields.');
+                return false;
+            }
+        });
+        
+        // Remove invalid class on input
+        form.querySelectorAll('[required]').forEach(field => {
+            field.addEventListener('input', function() {
+                if (this.value.trim()) {
+                    this.classList.remove('is-invalid');
+                }
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

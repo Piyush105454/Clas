@@ -1,0 +1,68 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-6">
+    
+    <!-- Page Header -->
+    <div class="flex items-center gap-3">
+        <a href="{% url 'supervisor_facilitator_detail' facilitator.id %}" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-gray-600">arrow_back</span>
+        </a>
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Classes in Assigned Schools</h2>
+            <p class="text-sm text-gray-500 mt-1">All classes from {{ facilitator.full_name }}'s assigned schools</p>
+        </div>
+    </div>
+
+    <!-- Facilitator Info -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div class="flex items-center gap-4">
+            <div class="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl">
+                {{ facilitator.full_name|first|upper }}
+            </div>
+            <div>
+                <h3 class="text-xl font-bold text-gray-900">{{ facilitator.full_name }}</h3>
+                <p class="text-gray-600">{{ facilitator.email }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Classes List -->
+    {% if all_classes %}
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="text-left py-3 px-6 font-semibold text-gray-900">School</th>
+                        <th class="text-left py-3 px-6 font-semibold text-gray-900">Class Level</th>
+                        <th class="text-left py-3 px-6 font-semibold text-gray-900">Section</th>
+                        <th class="text-left py-3 px-6 font-semibold text-gray-900">Academic Year</th>
+                        <th class="text-right py-3 px-6 font-semibold text-gray-900">Students</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for class in all_classes %}
+                    <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                        <td class="py-3 px-6 text-gray-900">{{ class.school.name }}</td>
+                        <td class="py-3 px-6 text-gray-900">{{ class.class_level }}</td>
+                        <td class="py-3 px-6 text-gray-900">{{ class.section|default:"—" }}</td>
+                        <td class="py-3 px-6 text-gray-900">{{ class.academic_year }}</td>
+                        <td class="py-3 px-6 text-right text-gray-900">{{ class.enrollments.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-12 text-center">
+        <span class="material-symbols-outlined text-6xl text-gray-300 block mb-4">class</span>
+        <h3 class="text-lg font-semibold text-gray-900 mb-1">No Classes Found</h3>
+        <p class="text-gray-600">No classes in the assigned schools.</p>
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock content %}

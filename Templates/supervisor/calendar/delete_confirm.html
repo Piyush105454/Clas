@@ -1,0 +1,65 @@
+{% extends "supervisor/shared/base.html" %}
+
+{% block title %}Delete Calendar Date{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 p-6">
+    <div class="max-w-2xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Delete Calendar Date</h1>
+            <p class="text-gray-600 mt-2">Are you sure you want to delete this entry?</p>
+        </div>
+
+        <!-- Confirmation Card -->
+        <div class="bg-white rounded-lg shadow-sm p-8">
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-red-800"><strong>Warning:</strong> This action cannot be undone.</p>
+            </div>
+
+            <!-- Entry Details -->
+            <div class="mb-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <p class="text-lg text-gray-900">{{ calendar_date.date }}</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                    <p class="text-lg text-gray-900">{{ calendar_date.get_date_type_display }}</p>
+                </div>
+
+                {% if calendar_date.date_type == 'session' %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Class</label>
+                    <p class="text-lg text-gray-900">{{ calendar_date.class_section.display_name }}</p>
+                </div>
+                {% elif calendar_date.date_type == 'holiday' %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Holiday Name</label>
+                    <p class="text-lg text-gray-900">{{ calendar_date.holiday_name }}</p>
+                </div>
+                {% elif calendar_date.date_type == 'office_work' %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Task Description</label>
+                    <p class="text-lg text-gray-900">{{ calendar_date.office_task_description }}</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex gap-4 pt-6">
+                <form method="POST" class="flex-1">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg">
+                        Delete Entry
+                    </button>
+                </form>
+                <a href="{% url 'supervisor_calendar' %}" class="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg text-center">
+                    Cancel
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

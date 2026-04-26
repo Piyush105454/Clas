@@ -1,0 +1,109 @@
+{% extends "admin/shared/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Delete Curriculum Session</h2>
+            <p class="text-sm text-gray-500 mt-1">This action cannot be undone</p>
+        </div>
+        <a href="{% url 'admin_curriculum_sessions_list' %}" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium">
+            <span class="material-symbols-outlined text-lg mr-1">arrow_back</span>
+            Back to List
+        </a>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm">
+        <div class="p-6">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <div class="flex items-center">
+                    <span class="material-symbols-outlined text-red-600 text-2xl mr-3">warning</span>
+                    <div>
+                        <h5 class="text-lg font-semibold text-red-800">Confirm Deletion</h5>
+                        <p class="text-red-700 mt-1">Are you sure you want to delete this curriculum session? This action cannot be undone.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                    <h6 class="font-semibold text-gray-900 mb-3">Session Details</h6>
+                    <dl class="space-y-2">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Title</dt>
+                            <dd class="text-sm text-gray-900">{{ session.title }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Day</dt>
+                            <dd class="text-sm text-gray-900">{{ session.day_number }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Language</dt>
+                            <dd class="text-sm text-gray-900">{{ session.get_language_display }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Status</dt>
+                            <dd class="text-sm text-gray-900">{{ session.get_status_display }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Created</dt>
+                            <dd class="text-sm text-gray-900">{{ session.created_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Last Updated</dt>
+                            <dd class="text-sm text-gray-900">{{ session.updated_at|date:"M d, Y H:i" }}</dd>
+                        </div>
+                    </dl>
+                </div>
+                <div>
+                    <h6 class="font-semibold text-gray-900 mb-3">Impact</h6>
+                    <div class="space-y-2">
+                        <div class="flex items-center text-sm text-gray-600">
+                            <span class="material-symbols-outlined text-yellow-600 text-lg mr-2">history</span>
+                            {{ session.version_history.count }} version history records will be deleted
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <span class="material-symbols-outlined text-blue-600 text-lg mr-2">analytics</span>
+                            {{ session.usage_logs.count }} usage log entries will be deleted
+                        </div>
+                        {% if session.template %}
+                            <div class="flex items-center text-sm text-gray-600">
+                                <span class="material-symbols-outlined text-green-600 text-lg mr-2">link</span>
+                                Link to template "{{ session.template.name }}" will be removed
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if session.content %}
+            <div class="mb-6">
+                <h6 class="font-semibold text-gray-900 mb-3">Content Preview</h6>
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-48 overflow-y-auto">
+                    <div class="text-sm text-gray-700">
+                        {{ session.content|truncatewords:50|linebreaks }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="flex justify-between pt-4">
+                <a href="{% url 'admin_curriculum_sessions_list' %}" 
+                   class="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
+                    <span class="material-symbols-outlined text-lg mr-1">close</span>
+                    Cancel
+                </a>
+                <form method="POST" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" 
+                            class="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">
+                        <span class="material-symbols-outlined text-lg mr-1">delete</span>
+                        Delete Session
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

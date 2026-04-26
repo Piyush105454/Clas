@@ -1,0 +1,82 @@
+{% extends "admin/shared/base.html" %}
+
+{% block content %}
+
+<div class="py-6 max-w-xl">
+
+  <!-- Page title -->
+  <h5 class="text-lg font-semibold text-gray-900 mb-4">
+    {% if is_edit %}Edit{% else %}Add{% endif %} Day —
+    {{ class_section.class_level }} {{ class_section.section }}
+  </h5>
+
+  <!-- Info -->
+  <div class="mb-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-700">
+    This creates a <strong>Day container</strong>.
+    <br>
+    Activities (English, Hindi, Maths, Computer, etc.) are added inside the day separately.
+  </div>
+
+  <!-- Form -->
+  <form method="post"
+        class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+    {% csrf_token %}
+
+    <!-- Day Number -->
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1">
+        Day Number
+      </label>
+
+      <input type="number"
+             name="day_number"
+             value="{{ planned_session.day_number|default:'' }}"
+             min="1"
+             required
+             class="w-full px-4 py-2.5 border border-gray-300 rounded-lg
+                    focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+
+    <!-- Title -->
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1">
+        Day Title
+      </label>
+
+      <input type="text"
+             name="title"
+             value="{{ planned_session.title|default:'' }}"
+             required
+             class="w-full px-4 py-2.5 border border-gray-300 rounded-lg
+                    focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+
+    <!-- Description -->
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1">
+        Day Description (optional)
+      </label>
+
+      <textarea name="description"
+                rows="4"
+                class="w-full px-4 py-2.5 border border-gray-300 rounded-lg
+                       focus:outline-none focus:ring-2 focus:ring-blue-500">{{ planned_session.description|default:'' }}</textarea>
+    </div>
+
+    <!-- Buttons -->
+    <div class="flex gap-3 mt-4">
+      <button class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        {% if is_edit %}Update Day{% else %}Create Day{% endif %}
+      </button>
+
+      <a href="{% url 'admin_class_sessions' class_section.id %}"
+         class="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+        Cancel
+      </a>
+    </div>
+
+  </form>
+
+</div>
+
+{% endblock %}

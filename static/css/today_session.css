@@ -1,0 +1,898 @@
+/* Today Session Optimized CSS */
+
+/* STEP FLOW BAR */
+.step-flow-bar {
+    background: transparent;
+    padding: 0;
+    margin-bottom: 1.5rem;
+    width: 100%;
+}
+
+.step-flow-container {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px 0;
+    -webkit-overflow-scrolling: touch;
+    background: transparent;
+}
+
+.step-item {
+    flex-shrink: 0;
+    min-width: 85px;
+}
+
+.step-btn {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: 50px;
+    border: 2px solid #dee2e6;
+    background: #f8f9fa;
+    color: #6c757d;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    gap: 2px;
+}
+
+.step-number {
+    font-size: 0.9rem;
+    font-weight: 700;
+    display: block;
+}
+
+.step-label {
+    font-size: 0.65rem;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.step-check {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #198754;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: bold;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.step-btn:hover {
+    border-color: #0d6efd;
+    background: #f0f7ff;
+    color: #0d6efd;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.2);
+}
+
+/* .step-btn.current-step moved below completed-step for dominance */
+
+.step-btn.completed-step {
+    background: #198754 !important;
+    color: white !important;
+    border-color: #198754 !important;
+    box-shadow: 0 4px 12px rgba(25, 135, 84, 0.3) !important;
+}
+
+.step-btn.completed-step .step-check {
+    display: flex !important;
+}
+
+/* dominant state for active step view */
+.step-btn.current-step {
+    background: #ffc107;
+    color: #212529;
+    border-color: #ffc107;
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+}
+
+.step-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #e9ecef;
+    border-color: #dee2e6;
+    color: #6c757d;
+}
+
+.step-arrow {
+    color: #ccc;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    padding: 0 2px;
+    line-height: 1;
+}
+
+/* Curriculum Content */
+.curriculum-content-mobile {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    background: #fff;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.curriculum-content-mobile h1,
+.curriculum-content-mobile h2,
+.curriculum-content-mobile h3,
+.curriculum-content-mobile h4,
+.curriculum-content-mobile h5,
+.curriculum-content-mobile h6 {
+    font-size: 1.1rem !important;
+    line-height: 1.4 !important;
+    margin: 15px 0 10px 0 !important;
+    color: #333 !important;
+    word-wrap: break-word;
+}
+
+.curriculum-content-mobile p {
+    font-size: 0.95rem !important;
+    line-height: 1.5 !important;
+    margin-bottom: 12px !important;
+    color: #555 !important;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.curriculum-content-mobile ul,
+.curriculum-content-mobile ol {
+    padding-left: 20px !important;
+    margin-bottom: 15px !important;
+}
+
+.curriculum-content-mobile li {
+    font-size: 0.9rem !important;
+    line-height: 1.4 !important;
+    margin-bottom: 8px !important;
+    color: #555 !important;
+    word-wrap: break-word;
+}
+
+.curriculum-content-mobile table {
+    width: 100% !important;
+    font-size: 0.85rem !important;
+    border-collapse: collapse !important;
+    margin: 15px 0 !important;
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.curriculum-content-mobile td,
+.curriculum-content-mobile th {
+    padding: 8px !important;
+    border: 1px solid #ddd !important;
+    text-align: left !important;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.curriculum-content-mobile img {
+    max-width: 100% !important;
+    height: auto !important;
+    border-radius: 8px !important;
+    margin: 10px 0 !important;
+}
+
+/* Desktop */
+@media (min-width: 768px) {
+    .step-item {
+        min-width: 95px;
+    }
+
+    .step-btn {
+        font-size: 0.85rem;
+        padding: 10px 12px;
+        height: 40px;
+    }
+
+    .step-arrow {
+        font-size: 1.2rem;
+        padding: 0 4px;
+    }
+
+    .session-layout .col-md-4 {
+        order: 1;
+    }
+
+    .session-layout .col-md-8 {
+        order: 2;
+    }
+
+    .workflow-nav {
+        background: transparent;
+        padding: 0;
+    }
+
+    .workflow-nav h6 {
+        display: none;
+    }
+}
+
+/* Tablet */
+@media (max-width: 767px) {
+    .step-flow-container {
+        gap: 4px;
+        padding: 6px 0;
+    }
+
+    .step-item {
+        min-width: 75px;
+    }
+
+    .step-btn {
+        font-size: 0.75rem;
+        padding: 6px 8px;
+        height: 36px;
+    }
+
+    .step-arrow {
+        font-size: 1rem;
+        padding: 0 1px;
+    }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .step-flow-container {
+        gap: 2px;
+        padding: 4px 0;
+    }
+
+    .step-item {
+        min-width: 65px;
+    }
+
+    .step-btn {
+        font-size: 0.7rem;
+        padding: 5px 6px;
+        height: 34px;
+    }
+
+    .step-arrow {
+        font-size: 0.9rem;
+        padding: 0;
+    }
+}
+
+/* Extra small */
+@media (max-width: 360px) {
+    .step-item {
+        min-width: 60px;
+    }
+
+    .step-btn {
+        font-size: 0.65rem;
+        padding: 4px 4px;
+        height: 32px;
+    }
+
+    .step-arrow {
+        font-size: 0.8rem;
+    }
+
+    .step-flow-bar {
+        margin-bottom: 3.5rem;
+    }
+
+    .step-progress-bar {
+        margin-bottom: 3rem;
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .session-container {
+        padding: 10px;
+    }
+
+    .session-layout {
+        flex-direction: column;
+    }
+
+    .step-flow-bar {
+        margin-bottom: 2.5rem;
+    }
+
+    .step-progress-bar {
+        margin-bottom: 2rem;
+    }
+
+    .session-layout .col-md-4 {
+        margin-bottom: 20px;
+        order: 1;
+    }
+
+    .session-layout .col-md-8 {
+        order: 2;
+    }
+
+    .curriculum-content-mobile {
+        max-height: none !important;
+        overflow-y: visible !important;
+        padding: 12px;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
+
+    .curriculum-content-mobile h1,
+    .curriculum-content-mobile h2,
+    .curriculum-content-mobile h3 {
+        font-size: 1rem !important;
+        margin: 12px 0 8px 0 !important;
+    }
+
+    .curriculum-content-mobile h4,
+    .curriculum-content-mobile h5,
+    .curriculum-content-mobile h6 {
+        font-size: 0.95rem !important;
+        margin: 10px 0 6px 0 !important;
+    }
+
+    .curriculum-content-mobile p,
+    .curriculum-content-mobile li {
+        font-size: 0.85rem !important;
+        line-height: 1.4 !important;
+    }
+
+    .curriculum-content-mobile table {
+        font-size: 0.8rem !important;
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .curriculum-content-mobile td,
+    .curriculum-content-mobile th {
+        padding: 6px !important;
+        font-size: 0.75rem !important;
+        white-space: normal;
+        word-wrap: break-word;
+        min-width: 80px;
+    }
+
+    .workflow-nav .nav-pills {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .workflow-nav .nav-link {
+        font-size: 0.8rem;
+        padding: 8px 12px;
+        margin-bottom: 5px;
+        margin-right: 5px;
+        flex: 1;
+        min-width: 120px;
+        text-align: center;
+    }
+
+    .workflow-nav {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+
+    .workflow-nav h6 {
+        text-align: center;
+        margin-bottom: 15px;
+        color: #495057;
+        font-weight: 600;
+    }
+
+    .card {
+        margin-bottom: 15px;
+    }
+
+    .card-body {
+        padding: 15px;
+    }
+
+    .language-selector-card {
+        position: sticky;
+        top: 10px;
+        z-index: 100;
+    }
+
+    .btn {
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 0.95rem;
+        border-radius: 6px;
+        touch-action: manipulation;
+    }
+
+    .btn-sm {
+        min-height: 40px;
+        padding: 8px 10px;
+        font-size: 0.9rem;
+    }
+
+    .btn:active {
+        opacity: 0.8;
+    }
+
+    .modal-dialog {
+        margin: 10px;
+    }
+
+    .modal-content {
+        border-radius: 8px;
+    }
+
+    .modal-header {
+        padding: 12px;
+    }
+
+    .modal-body {
+        padding: 12px;
+    }
+
+    .modal-footer {
+        padding: 12px;
+    }
+
+    .form-control,
+    .form-select {
+        font-size: 16px;
+        padding: 10px;
+        border-radius: 4px;
+    }
+
+    .form-label {
+        font-size: 0.9rem;
+        margin-bottom: 6px;
+    }
+
+    .tab-content {
+        padding: 0;
+    }
+
+    .tab-pane {
+        padding: 12px 0;
+        display: none;
+    }
+
+    .tab-pane.show.active {
+        display: block;
+    }
+
+    .tab-pane h6 {
+        font-size: 1rem;
+        margin-bottom: 12px;
+    }
+
+    .card {
+        margin-bottom: 12px;
+        border-radius: 8px;
+    }
+
+    .card-header {
+        padding: 10px 12px;
+    }
+
+    .card-body {
+        padding: 12px;
+    }
+
+    .workflow-nav .nav-link {
+        font-size: 0.85rem;
+        padding: 8px 10px;
+        margin-bottom: 6px;
+        border-radius: 4px;
+    }
+
+    .workflow-nav .nav-link.active {
+        background-color: #0d6efd;
+        color: white;
+    }
+
+    body {
+        font-size: 16px;
+    }
+
+    .dropdown-menu {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 90vw !important;
+        max-width: 400px !important;
+        max-height: 80vh !important;
+        overflow-y: auto !important;
+        z-index: 1050 !important;
+        border-radius: 8px;
+    }
+
+    .dropdown-menu.show {
+        display: block !important;
+    }
+
+    .alert {
+        padding: 12px;
+        margin-bottom: 12px;
+        border-radius: 6px;
+    }
+
+    .progress {
+        height: 8px;
+        border-radius: 4px;
+    }
+
+    .badge {
+        padding: 6px 8px;
+        font-size: 0.8rem;
+    }
+
+    input,
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+
+    .row > [class*="col-"] {
+        padding-right: 6px;
+        padding-left: 6px;
+    }
+
+    .row {
+        margin-right: -6px;
+        margin-left: -6px;
+    }
+}
+
+@media (max-width: 576px) {
+    .session-container {
+        padding: 8px;
+    }
+
+    .step-flow-bar {
+        margin-bottom: 3rem;
+    }
+
+    .step-progress-bar {
+        margin-bottom: 2.5rem;
+    }
+
+    .curriculum-content-mobile {
+        padding: 10px;
+        font-size: 0.85rem;
+    }
+
+    .curriculum-content-mobile h1,
+    .curriculum-content-mobile h2,
+    .curriculum-content-mobile h3,
+    .curriculum-content-mobile h4,
+    .curriculum-content-mobile h5,
+    .curriculum-content-mobile h6 {
+        font-size: 0.9rem !important;
+        margin: 8px 0 4px 0 !important;
+    }
+
+    .curriculum-content-mobile p,
+    .curriculum-content-mobile li {
+        font-size: 0.8rem !important;
+        line-height: 1.3 !important;
+    }
+
+    .curriculum-content-mobile table {
+        font-size: 0.7rem !important;
+    }
+
+    .curriculum-content-mobile td,
+    .curriculum-content-mobile th {
+        padding: 4px !important;
+        font-size: 0.7rem !important;
+        min-width: 60px;
+    }
+
+    .workflow-nav .nav-link {
+        font-size: 0.75rem;
+        padding: 6px 10px;
+    }
+
+    .card-body {
+        padding: 12px;
+    }
+
+    .btn {
+        min-height: 48px;
+        padding: 12px 10px;
+        font-size: 0.95rem;
+    }
+
+    .btn-sm {
+        min-height: 44px;
+        padding: 10px 8px;
+        font-size: 0.9rem;
+    }
+
+    .card {
+        margin-bottom: 10px;
+    }
+
+    .form-control,
+    .form-select {
+        font-size: 16px;
+        padding: 12px;
+    }
+
+    .modal-dialog {
+        margin: 5px;
+    }
+
+    .modal-content {
+        border-radius: 12px;
+    }
+}
+
+/* Utilities */
+.curriculum-expanded {
+    max-height: none !important;
+    overflow-y: visible !important;
+}
+
+/* Tab Pane Visibility Fix */
+.tab-pane {
+    display: none !important;
+}
+
+.tab-pane.show,
+.tab-pane.active {
+    display: block !important;
+}
+
+/* Hide hidden form containers completely - remove from document flow */
+#studentFeedbackFormContainer[style*="display: none"],
+#teacherFeedbackForm[style*="display: none"],
+#facilitatorStudentFeedbackForm[style*="display: none"],
+#studentFeedbackSummary[style*="display: none"] {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+}
+
+/* Ensure feedback tab doesn't have excessive padding */
+#feedback {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.mobile-notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1050;
+    min-width: 250px;
+    max-width: 90vw;
+}
+
+.quick-attendance-access {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 1040;
+}
+
+.btn-floating {
+    border-radius: 50px !important;
+    padding: 12px 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.btn-floating:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}
+
+.btn-floating i {
+    font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+    .quick-attendance-access {
+        bottom: 20px;
+        right: 20px;
+    }
+
+    .btn-floating {
+        padding: 10px 16px;
+        border-radius: 50px !important;
+    }
+
+    .btn-floating .btn-text {
+        display: none !important;
+    }
+
+    .btn-floating i {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .quick-attendance-access {
+        bottom: 15px;
+        right: 15px;
+    }
+
+    .btn-floating {
+        padding: 8px 12px;
+    }
+}
+
+.row.g-2 {
+    gap: 0.5rem !important;
+}
+
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:active {
+    transform: scale(0.98);
+}
+
+.modal {
+    -webkit-overflow-scrolling: auto;
+}
+
+.modal-dialog {
+    max-height: 90vh;
+}
+
+.modal-content {
+    border-radius: 12px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+.modal-body {
+    overflow-y: auto;
+    max-height: calc(90vh - 200px);
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.nav-link:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.btn-group .btn.rating-btn.active {
+    z-index: 3;
+}
+
+input[type="file"] {
+    cursor: pointer;
+}
+
+
+/* SKELETON LOADER STYLES */
+.skeleton-line {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.skeleton-header {
+    padding: 1rem;
+}
+
+.skeleton-content {
+    padding: 1rem;
+}
+
+/* --- COMPACT CIRCLE MOBILE STEPPER REDESIGN --- */
+@media (max-width: 768px) {
+    .step-flow-container {
+        justify-content: flex-start !important;
+        gap: 4px !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding: 10px 0 !important;
+    }
+    .step-item {
+        min-width: auto !important;
+        flex-shrink: 1 !important;
+    }
+    .step-btn {
+        width: 48px !important; /* Small rectangle widths */
+        height: 38px !important;
+        min-width: 46px !important;
+        border-radius: 6px !important; /* Slightly rounded rect */
+        padding: 2px !important;
+        justify-content: center !important;
+        box-shadow: none !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+    }
+    .step-number {
+        font-size: 0.8rem !important;
+        line-height: 1.1 !important;
+    }
+    .step-label {
+        display: block !important;
+        font-size: 0.52rem !important;
+        line-height: 1 !important;
+        white-space: normal !important;
+        text-align: center !important;
+        margin-top: 1px !important;
+        word-break: break-word !important; /* Allow break inside words if too long */
+        width: 100% !important;
+        overflow: hidden !important;
+    }
+    .step-status-text {
+        display: none !important; /* remove redundant (Current) text inside button */
+    }
+    .step-arrow {
+        font-size: 0.7rem !important;
+        color: #ddd !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .step-check {
+        top: -6px !important;
+        right: -6px !important;
+        width: 17px !important;
+        height: 17px !important;
+        font-size: 0.7rem !important;
+    }
+
+    /* Shrink all tall buttons to fit on 1 line on mobile */
+    .btn-lg {
+        padding: 8px 10px !important;
+        font-size: 0.82rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        height: auto !important;
+    }
+}

@@ -1,0 +1,390 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% block extra_css %}
+<style>
+@media (max-width: 768px) {
+    .container-fluid { padding: 10px; }
+
+    .enrollment-col { display: none; }
+
+    .enrollment-mobile {
+        font-size: 0.75rem;
+        color: #6c757d;
+        display: block;
+    }
+
+    .form-select { font-size: 16px; } /* Prevent zoom */
+}
+
+@media (min-width: 769px) {
+    .enrollment-mobile { display: none; }
+    .enrollment-col { display: table-cell; }
+}
+
+.marked-present { background-color: #d4edda; }
+.marked-absent { background-color: #f8d7da; }
+.marked-leave { background-color: #fff3cd; }
+
+.prefilled-row {
+    border-left: 4px solid #0d6efd !important;
+}
+
+.observation-notes {
+    font-size: 0.85rem;
+    padding: 6px;
+    resize: vertical;
+    min-height: 60px;
+    width: 100%;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+/* Ensure table cells can contain textareas */
+.table td {
+    vertical-align: top;
+    padding: 8px;
+}
+
+/* Make columns wider for notes */
+.notes-column {
+    min-width: 150px;
+    max-width: 250px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="card shadow-sm">
+    <div class="card-header">
+      <h5 class="mb-0">
+        <i class="fas fa-users me-2"></i>Mark Attendance
+      </h5>
+      <small class="text-muted">
+        {{ session.planned_session.class_section.school.name }} —
+        {{ session.planned_session.class_section.class_level }}-{{ session.planned_session.class_section.section }} —
+        {% if session.planned_session.day_number >= 998 %}
+          {{ session.planned_session.title }} — {{ session.date }}
+        {% else %}
+          Day {{ session.planned_session.day_number }} — {{ session.date }}
+        {% endif %}
+      </small>
+    </div>
+
+    <div class="card-body">
+
+      <div class="alert alert-info">
+        <strong>Session:</strong> {{ session.planned_session.title }} <br>
+        <strong>Date:</strong> {{ session.date }} <br>
+        <strong>Total Students:</strong> {{ enrollments.count }}
+      </div>
+
+      <form method="post" id="attendanceForm">
+        {% csrf_token %}
+
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Student</th>
+                <th class="enrollment-col">Enrollment</th>
+                <th>Attendance</th>
+                <th>Visible Change</th>
+                <th>Invisible Change</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for e in enrollments %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+
+                <td>
+                  <strong>{{ e.student.full_name }}</strong>
+                  <small class="enrollment-mobile">{{ e.student.enrollment_number }}</small>
+                </td>
+
+                <td class="enrollment-col">
+                  <span class="badge bg-secondary">{{ e.student.enrollment_number }}</span>
+                </td>
+
+                <!-- ✅ FIXED DJANGO NAME -->
+                <td>
+                  <select name="attendance_{{ e.id }}"
+                          class="form-select attendance-select">
+                    <option value="">-- Select --</option>
+                    <option value="present" {% if e.existing_attendance.status == 1 %}selected{% endif %}>✅ Present</option>
+                    <option value="absent" {% if e.existing_attendance.status == 2 %}selected{% endif %}>❌ Absent</option>
+                    <option value="leave" {% if e.existing_attendance.status == 3 %}selected{% endif %}>📅 Leave</option>
+                  </select>
+                </td>
+
+                <!-- ✅ ADDED -->
+                <td class="notes-column">
+                  <textarea name="visible_change_{{ e.id }}"
+                            class="form-control observation-notes"
+                            rows="2"
+                            placeholder="Observable changes...">{{ e.existing_attendance.visible_change_notes|default:'' }}</textarea>
+                </td>
+
+                <td class="notes-column">
+                  <textarea name="invisible_change_{{ e.id }}"
+                            class="form-control observation-notes"
+                            rows="2"
+                            placeholder="Internal changes...">{{ e.existing_attendance.invisible_change_notes|default:'' }}</textarea>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ✅ Quick Actions & Summary (Aligned with Grouped UI) -->
+        <div class="row mb-4">
+          <div class="col-md-7">
+            <div class="card border-success h-100">
+              <div class="card-body py-2">
+                <h6 class="card-title text-success mb-2">
+                  <i class="fas fa-magic me-1"></i>Quick Actions
+                </h6>
+                <div class="btn-group btn-group-sm w-100" role="group">
+                  <button type="button" class="btn btn-outline-success" onclick="markAll('present')">
+                    <i class="fas fa-check me-1"></i>All Present
+                  </button>
+                  <button type="button" class="btn btn-outline-danger" onclick="markAll('absent')">
+                    <i class="fas fa-times me-1"></i>All Absent
+                  </button>
+                  <button type="button" class="btn btn-outline-warning" onclick="markAll('leave')">
+                    <i class="fas fa-calendar-times me-1"></i>All Leave
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary" onclick="markAll('')">
+                    <i class="fas fa-undo me-1"></i>Clear All
+                  </button>
+                  <button type="button" class="btn btn-outline-info" id="loadPreviousDayBtn">
+                    <i class="fas fa-history me-1"></i>Prev Day
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-5">
+            <div class="card border-info h-100">
+              <div class="card-body py-2">
+                <h6 class="card-title text-info mb-2">
+                  <i class="fas fa-chart-pie me-1"></i>Attendance Summary
+                </h6>
+                <div id="attendanceSummary">
+                  <!-- JS will populate this -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+ 
+        <!-- Footer Buttons -->
+        <div class="d-flex justify-content-between align-items-center">
+          <a href="{% if session.planned_session.day_number >= 998 %}{% url 'facilitator_attendance' %}{% else %}{% url 'facilitator_class_today_session' session.planned_session.class_section.id %}{% endif %}"
+             class="btn btn-outline-secondary">
+             <i class="fas fa-arrow-left me-1"></i>Back
+          </a>
+          <button type="button"
+                  class="btn btn-success btn-lg px-5"
+                  id="saveAttendanceBtn">
+            <i class="fas fa-save me-2"></i>Save Attendance
+          </button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    const selects = document.querySelectorAll('.attendance-select');
+    const saveBtn = document.getElementById('saveAttendanceBtn');
+    const loadPrevBtn = document.getElementById('loadPreviousDayBtn');
+    const form = document.getElementById('attendanceForm');
+
+    selects.forEach(select => {
+        select.addEventListener('change', () => {
+            updateSummary();
+            updateRow(select);
+            removePrefilledHighlight(select);
+        });
+        updateRow(select);
+    });
+
+    updateSummary();
+
+    // ✅ Load Previous Day Attendance
+    loadPrevBtn.addEventListener('click', function() {
+        loadPrevBtn.disabled = true;
+        loadPrevBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+
+        // Extract session ID from URL: /facilitator/session/<id>/attendance/
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        const actualSessionId = pathParts[2]; // Index 2 after filtering empty strings
+
+        fetch(`/api/facilitator/session/${actualSessionId}/previous-attendance/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    populatePreviousAttendance(data.data);
+                    alert(`✅ ${data.message}`);
+                    updateSummary();
+                } else {
+                    alert(`ℹ️ ${data.message}`);
+                }
+                resetLoadButton();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('❌ Error loading previous day attendance');
+                resetLoadButton();
+            });
+    });
+
+    function resetLoadButton() {
+        loadPrevBtn.disabled = false;
+        loadPrevBtn.innerHTML = '<i class="fas fa-history me-1"></i>Previous Day';
+    }
+
+    function populatePreviousAttendance(attendanceData) {
+        selects.forEach(select => {
+            const enrollmentId = select.name.replace('attendance_', '');
+            
+            if (attendanceData[enrollmentId]) {
+                const data = attendanceData[enrollmentId];
+                
+                // Map status number to value
+                const statusMap = {
+                    1: 'present',
+                    2: 'absent',
+                    3: 'leave'
+                };
+                
+                select.value = statusMap[data.status] || '';
+                
+                // Mark row as prefilled
+                const row = select.closest('tr');
+                if (row) {
+                    row.classList.add('prefilled-row');
+                }
+                
+                // Populate notes if they exist
+                const visibleNotesField = document.querySelector(`textarea[name="visible_change_${enrollmentId}"]`);
+                const invisibleNotesField = document.querySelector(`textarea[name="invisible_change_${enrollmentId}"]`);
+                
+                if (visibleNotesField && data.visible_change_notes) {
+                    visibleNotesField.value = data.visible_change_notes;
+                }
+                
+                if (invisibleNotesField && data.invisible_change_notes) {
+                    invisibleNotesField.value = data.invisible_change_notes;
+                }
+                
+                updateRow(select);
+            }
+        });
+    }
+
+    function removePrefilledHighlight(select) {
+        const row = select.closest('tr');
+        if (row) {
+            row.classList.remove('prefilled-row');
+        }
+    }
+
+    saveBtn.addEventListener('click', function() {
+
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+        const formData = new FormData(form);
+
+        fetch(form.action || window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(async response => {
+
+            const text = await response.text();
+
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error("NON JSON RESPONSE:", text);
+                alert("⚠ Session expired. Please refresh page.");
+                throw new Error("Invalid JSON");
+            }
+        })
+        .then(data => {
+
+            if (data.success) {
+                alert(`✅ Attendance Saved!\nSaved: ${data.saved}\nUpdated: ${data.updated}\nNot Marked: ${data.skipped}`);
+                window.location.href = data.redirect_url;
+            } else {
+                alert("❌ " + data.message);
+                resetButton();
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            resetButton();
+        });
+
+    });
+
+    function resetButton() {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Attendance';
+    }
+
+    function updateSummary() {
+        let present = 0, absent = 0, leave = 0, notMarked = 0;
+
+        selects.forEach(select => {
+            if (select.value === 'present') present++;
+            else if (select.value === 'absent') absent++;
+            else if (select.value === 'leave') leave++;
+            else notMarked++;
+        });
+
+        document.getElementById('attendanceSummary').innerHTML = `
+            <div class="row text-center">
+                <div class="col-3 text-success"><strong>${present}</strong><br><small>Present</small></div>
+                <div class="col-3 text-danger"><strong>${absent}</strong><br><small>Absent</small></div>
+                <div class="col-3 text-warning"><strong>${leave}</strong><br><small>Leave</small></div>
+                <div class="col-3 text-muted"><strong>${notMarked}</strong><br><small>Not Marked</small></div>
+            </div>
+        `;
+    }
+
+    function updateRow(select) {
+        const row = select.closest('tr');
+
+        row.classList.remove('marked-present','marked-absent','marked-leave');
+
+        if (select.value === 'present') row.classList.add('marked-present');
+        if (select.value === 'absent') row.classList.add('marked-absent');
+        if (select.value === 'leave') row.classList.add('marked-leave');
+    }
+
+    window.markAll = function(status) {
+        selects.forEach(select => {
+            select.value = status;
+            updateRow(select);
+            removePrefilledHighlight(select);
+        });
+        updateSummary();
+    };
+
+});
+</script>
+
+{% endblock %}

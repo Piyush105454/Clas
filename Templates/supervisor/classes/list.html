@@ -1,0 +1,247 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-6">
+
+  <!-- Page Header -->
+  <div class="flex justify-between items-start">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-900">Classes</h2>
+      <p class="text-sm text-gray-500 mt-1">Manage all classes across schools</p>
+    </div>
+    <div class="relative group">
+      <button class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium text-sm shadow-sm">
+        <span class="material-symbols-outlined text-[20px]">add</span>
+        <span>Add Class</span>
+        <span class="material-symbols-outlined text-[18px]">expand_more</span>
+      </button>
+      
+      <!-- Dropdown Menu -->
+      <div class="absolute right-0 mt-0 w-56 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+        <a href="{% url 'supervisor_class_create' %}" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 border-b border-gray-100 first:rounded-t-lg">
+          <span class="material-symbols-outlined text-[20px] text-blue-600">add_circle</span>
+          <div>
+            <p class="text-sm font-medium">Single Class</p>
+            <p class="text-xs text-gray-500">Add one class</p>
+          </div>
+        </a>
+        <a href="{% url 'supervisor_class_bulk_create' %}" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 border-b border-gray-100">
+          <span class="material-symbols-outlined text-[20px] text-green-600">add_box</span>
+          <div>
+            <p class="text-sm font-medium">Multiple Classes</p>
+            <p class="text-xs text-gray-500">Add 1-10 classes at once</p>
+          </div>
+        </a>
+        <a href="{% url 'supervisor_calendar_add_date' %}" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 last:rounded-b-lg">
+          <span class="material-symbols-outlined text-[20px] text-purple-600">groups</span>
+          <div>
+            <p class="text-sm font-medium">Grouped Session</p>
+            <p class="text-xs text-gray-500">Group classes & share session</p>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Section -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Search -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Search</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">search</span>
+          <input id="searchInput"
+                 type="text"
+                 class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                 placeholder="Search by class level...">
+        </div>
+      </div>
+
+      <!-- School Filter -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">School</label>
+        <select id="schoolFilter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" onchange="document.location='?school=' + this.value;">
+          <option value="">All Schools</option>
+          {% for school in schools %}
+            <option value="{{ school.id }}" {% if selected_school == school.id|stringformat:"s" %}selected{% endif %}>{{ school.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Status Filter -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+        <select id="statusFilter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Results Count -->
+    <div class="mt-4 pt-4 border-t border-gray-200">
+      {% if selected_school %}
+        <p class="text-sm text-gray-600">
+          Showing <span id="classCount" class="font-semibold">{{ classes.paginator.count }}</span> total classes
+          {% if classes.has_other_pages %}
+            (Page {{ classes.number }} of {{ classes.paginator.num_pages }})
+          {% endif %}
+        </p>
+      {% else %}
+        <p class="text-sm text-gray-600">
+          Select a school to view classes
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+
+  <!-- Classes Table -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    {% if selected_school %}
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">School</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Class Level</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Section</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Academic Year</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Grouped</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            {% for class in classes %}
+            <tr class="class-row hover:bg-gray-50 transition-colors" data-school="{{ class.school.id }}" data-name="{{ class.class_level|lower }}-{{ class.section|lower }}" data-status="{% if class.is_active %}active{% else %}inactive{% endif %}" data-class-id="{{ class.id }}">
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm">
+                    <span class="material-symbols-outlined text-lg">school</span>
+                  </div>
+                  <span class="text-sm font-medium text-gray-900">{{ class.school.name }}</span>
+                </div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ class.class_level }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ class.section|default:"—" }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ class.academic_year }}</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                {% with grouped_sessions=class.planned_sessions.all|dictsort:"grouped_session_id" %}
+                  {% if grouped_sessions %}
+                    {% with first_grouped=grouped_sessions.0 %}
+                      {% if first_grouped.grouped_session_id %}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          <span class="material-symbols-outlined text-sm">groups</span>
+                          <span>Grouped</span>
+                        </span>
+                      {% else %}
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          <span class="material-symbols-outlined text-sm">person</span>
+                          <span>Single</span>
+                        </span>
+                      {% endif %}
+                    {% endwith %}
+                  {% else %}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                      <span class="material-symbols-outlined text-sm">person</span>
+                      <span>Single</span>
+                    </span>
+                  {% endif %}
+                {% endwith %}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {% if class.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                  {% if class.is_active %}Active{% else %}Inactive{% endif %}
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <div class="flex items-center gap-2">
+                  <a href="{% url 'assign_facilitator' class.id %}"
+                     class="inline-flex items-center gap-1 px-3 py-1.5 border border-purple-500 text-purple-600 rounded-lg text-xs hover:bg-purple-50 transition-colors font-medium">
+                    <span class="material-symbols-outlined text-base">person_add</span>
+                    <span>Assign</span>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="px-6 py-12 text-center">
+                <span class="material-symbols-outlined text-gray-300 text-5xl block mb-3">inbox</span>
+                <p class="text-sm text-gray-500">No classes found for this school</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="px-6 py-12 text-center">
+        <span class="material-symbols-outlined text-gray-300 text-6xl block mb-4">school</span>
+        <p class="text-lg font-medium text-gray-900 mb-2">Select a School</p>
+        <p class="text-sm text-gray-500">Choose a school from the filter above to view its classes</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Pagination -->
+  {% if selected_school and classes.has_other_pages %}
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 flex items-center justify-between">
+    <div class="text-sm text-gray-600">
+      Page <span class="font-semibold">{{ classes.number }}</span> of <span class="font-semibold">{{ classes.paginator.num_pages }}</span>
+    </div>
+    <div class="flex gap-2">
+      {% if classes.has_previous %}
+        <a href="?page=1{% if selected_school %}&school={{ selected_school }}{% endif %}" class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">First</a>
+        <a href="?page={{ classes.previous_page_number }}{% if selected_school %}&school={{ selected_school }}{% endif %}" class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">Previous</a>
+      {% endif %}
+      
+      {% if classes.has_next %}
+        <a href="?page={{ classes.next_page_number }}{% if selected_school %}&school={{ selected_school }}{% endif %}" class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">Next</a>
+        <a href="?page={{ classes.paginator.num_pages }}{% if selected_school %}&school={{ selected_school }}{% endif %}" class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">Last</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+// Initialize filters on page load
+document.addEventListener("DOMContentLoaded", function() {
+  filterClasses();
+  
+  // Add event listeners for client-side filtering
+  document.getElementById("searchInput").addEventListener("input", filterClasses);
+  document.getElementById("statusFilter").addEventListener("change", filterClasses);
+  // School filter now submits the form (server-side filtering)
+});
+
+function filterClasses() {
+  const searchQ = document.getElementById("searchInput").value.toLowerCase();
+  const schoolId = document.getElementById("schoolFilter").value;
+  const status = document.getElementById("statusFilter").value;
+  let visibleCount = 0;
+
+  document.querySelectorAll(".class-row").forEach(row => {
+    const name = row.getAttribute("data-name");
+    const rowSchool = row.getAttribute("data-school");
+    const rowStatus = row.getAttribute("data-status");
+
+    const matchesSearch = !searchQ || name.includes(searchQ);
+    const matchesSchool = !schoolId || rowSchool === schoolId;
+    const matchesStatus = !status || rowStatus === status;
+
+    const isVisible = matchesSearch && matchesSchool && matchesStatus;
+    row.classList.toggle("hidden", !isVisible);
+    
+    if (isVisible) visibleCount++;
+  });
+  document.getElementById("classCount").textContent = visibleCount;
+}
+</script>
+
+
+{% endblock %}

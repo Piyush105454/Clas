@@ -1,0 +1,297 @@
+{% extends "admin/shared/base.html" %}
+
+{% block extra_css %}
+<style>
+/* Performance optimized styles */
+.card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.stats-card.hindi {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.stats-card.english {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Optimize form interactions */
+.form-select, .form-input {
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-select:focus, .form-input:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+/* Lazy loading skeleton */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+@keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+  <div>
+    <h4 class="text-xl font-bold text-gray-900">
+      Sessions Management
+    </h4>
+    <p class="text-gray-500 text-sm">Choose session type to manage</p>
+  </div>
+</div>
+
+<!-- Horizontal Filter Bar -->
+<div class="bg-white border border-gray-200 rounded-xl shadow-sm mb-8 p-6">
+  <div class="flex items-center gap-4 mb-6">
+    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+      <span class="material-symbols-outlined text-blue-600 text-2xl">calendar_month</span>
+    </div>
+    <div>
+      <h5 class="text-lg font-bold text-gray-900">Class Sessions Management</h5>
+      <p class="text-xs text-gray-500 uppercase font-semibold">Select a school and class to manage execution</p>
+    </div>
+  </div>
+
+  <form method="get" action="#" class="flex flex-wrap items-end gap-4" id="classSessionForm" onsubmit="return navigateToClassSessions(event)">
+    <div class="flex-1 min-w-[300px]">
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">Select School</label>
+      <select name="school" id="schoolSelect" onchange="loadClasses(this.value)" 
+              class="form-select w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 text-sm font-medium transition-all">
+        <option value="">-- Select school --</option>
+        {% for s in schools %}
+          <option value="{{ s.id }}" {% if request.GET.school == s.id|stringformat:'s' %}selected{% endif %}>
+            {{ s.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="flex-1 min-w-[300px]">
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">Select Class Section</label>
+      <select name="class" id="classSelect"
+              class="form-select w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 text-sm font-medium transition-all">
+        <option value="">-- Select class --</option>
+        {% for c in classes %}
+          <option value="{{ c.id }}" {% if request.GET.class == c.id|stringformat:'s' %}selected{% endif %}>{{ c.class_level }} - {{ c.section }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <button type="submit" class="px-8 py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all duration-200 flex items-center gap-2 group" id="manageClassBtn">
+      <span id="classLoadingSpinner" class="hidden loading-spinner"></span>
+      <span>Manage Sessions</span>
+      <span class="material-symbols-outlined text-[20px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+    </button>
+  </form>
+</div>
+
+ 
+
+
+
+<script>
+// Performance optimized JavaScript
+let classLoadingCache = new Map();
+let isLoadingClasses = false;
+
+function navigateToClassSessions(event) {
+  event.preventDefault();
+  
+  const schoolSelect = document.getElementById('schoolSelect');
+  const classSelect = document.getElementById('classSelect');
+  
+  console.log('Form submitted:', {
+    school: schoolSelect ? schoolSelect.value : 'not found',
+    class: classSelect ? classSelect.value : 'not found'
+  });
+  
+  if (!schoolSelect || !schoolSelect.value) {
+    alert('Please select a school first.');
+    return false;
+  }
+  
+  if (!classSelect || !classSelect.value) {
+    alert('Please select a class first.');
+    return false;
+  }
+  
+  // Navigate immediately without any delays
+  const url = `/admin/classes/${classSelect.value}/sessions/`;
+  console.log('Navigating to:', url);
+  
+  // Use location.replace for faster navigation
+  window.location.replace(url);
+  return false;
+}
+
+function loadClasses(schoolId) {
+  const classSelect = document.getElementById('classSelect');
+  const loadingSpinner = document.getElementById('classLoadingSpinner');
+  
+  // Clear existing options
+  classSelect.innerHTML = '<option value="">-- Loading classes... --</option>';
+  
+  if (!schoolId) {
+    classSelect.innerHTML = '<option value="">-- Select class --</option>';
+    return;
+  }
+  
+  // Check cache first
+  if (classLoadingCache.has(schoolId)) {
+    populateClasses(classLoadingCache.get(schoolId));
+    return;
+  }
+  
+  if (isLoadingClasses) return;
+  
+  isLoadingClasses = true;
+  loadingSpinner.classList.remove('hidden');
+  
+  // Make optimized AJAX request with timeout and error handling
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+  
+  fetch(`/api/school-classes/?school_id=${schoolId}`, {
+    signal: controller.signal,
+    headers: {
+      'Cache-Control': 'max-age=600' // 10 minutes cache
+    }
+  })
+    .then(response => {
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    })
+    .then(data => {
+      // Cache the result
+      classLoadingCache.set(schoolId, data);
+      populateClasses(data);
+    })
+    .catch(error => {
+      console.error('Error loading classes:', error);
+      classSelect.innerHTML = '<option value="">-- Error loading classes --</option>';
+      
+      // Show user-friendly error message
+      if (error.name === 'AbortError') {
+        classSelect.innerHTML = '<option value="">-- Request timeout, please try again --</option>';
+      }
+    })
+    .finally(() => {
+      isLoadingClasses = false;
+      loadingSpinner.classList.add('hidden');
+    });
+}
+
+function populateClasses(data) {
+  const classSelect = document.getElementById('classSelect');
+  classSelect.innerHTML = '<option value="">-- Select class --</option>';
+  
+  if (data.classes && data.classes.length > 0) {
+    data.classes.forEach(cls => {
+      const option = document.createElement('option');
+      option.value = cls.id;
+      option.textContent = `${cls.class_level} - ${cls.section}`;
+      classSelect.appendChild(option);
+    });
+  } else {
+    classSelect.innerHTML = '<option value="">-- No classes found --</option>';
+  }
+}
+
+// Load classes on page load if school is already selected
+document.addEventListener('DOMContentLoaded', function() {
+  const schoolSelect = document.getElementById('schoolSelect');
+  if (schoolSelect && schoolSelect.value) {
+    loadClasses(schoolSelect.value);
+  }
+  
+  // Add keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    // Alt + C for curriculum sessions
+    if (e.altKey && e.key === 'c') {
+      e.preventDefault();
+      window.location.href = '{% url "admin_curriculum_sessions_list" %}';
+    }
+    
+    // Alt + N for new curriculum session
+    if (e.altKey && e.key === 'n') {
+      e.preventDefault();
+      window.location.href = '{% url "admin_curriculum_session_create" %}';
+    }
+  });
+  
+  // Preload critical resources
+  preloadResources();
+});
+
+function preloadResources() {
+  // Preload curriculum sessions list
+  const curriculumLink = document.createElement('link');
+  curriculumLink.rel = 'prefetch';
+  curriculumLink.href = '{% url "admin_curriculum_sessions_list" %}';
+  document.head.appendChild(curriculumLink);
+  
+  // Preload create session page
+  const createLink = document.createElement('link');
+  createLink.rel = 'prefetch';
+  createLink.href = '{% url "admin_curriculum_session_create" %}';
+  document.head.appendChild(createLink);
+}
+
+function showStaticRecentActivity() {
+  // Function removed - Recent Session Activity section has been deleted
+}
+
+// Add smooth transitions
+document.documentElement.style.scrollBehavior = 'smooth';
+
+// Performance monitoring
+if ('performance' in window) {
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      const perfData = performance.getEntriesByType('navigation')[0];
+      if (perfData.loadEventEnd - perfData.loadEventStart > 3000) {
+        console.warn('Page load took longer than 3 seconds');
+      }
+    }, 0);
+  });
+}
+</script>
+
+{% endblock %}

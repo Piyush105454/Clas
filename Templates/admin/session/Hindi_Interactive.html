@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>हिंदी पाठ्यक्रम - दिन नेवीगेटर</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        
+        .curriculum-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .day-navigator {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .day-btn {
+            min-width: 45px;
+            height: 45px;
+            margin: 3px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .day-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .day-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .curriculum-content {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .content-header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            margin: 0;
+        }
+        
+        .curriculum-table {
+            font-size: 14px;
+            margin: 0;
+        }
+        
+        .curriculum-table td {
+            padding: 12px;
+            vertical-align: top;
+            border: 1px solid #dee2e6;
+        }
+        
+        .curriculum-table .s0 {
+            background-color: #d9ead3;
+            font-weight: bold;
+            font-size: 18px;
+            text-align: center;
+            color: #2d5016;
+        }
+        
+        .curriculum-table .s1 {
+            background-color: #d9ead3;
+            font-weight: bold;
+            text-align: center;
+            color: #2d5016;
+        }
+        
+        .curriculum-table .s4 {
+            background-color: #ffffff;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .curriculum-table a {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .curriculum-table a:hover {
+            text-decoration: underline;
+        }
+        
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            flex-direction: column;
+        }
+        
+        .search-box {
+            max-width: 300px;
+            margin: 0 auto 1rem;
+        }
+        
+        .quick-jump {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        
+        .language-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 768px) {
+            .day-btn {
+                min-width: 35px;
+                height: 35px;
+                font-size: 12px;
+            }
+            
+            .curriculum-header {
+                padding: 1rem 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="curriculum-header">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <h1 class="display-4 mb-2">
+                        <i class="fas fa-book-open me-3"></i>
+                        हिंदी पाठ्यक्रम नेवीगेटर
+                    </h1>
+                    <p class="lead mb-0">इंटरैक्टिव दिन-वार पाठ्यक्रम सामग्री</p>
+                    <div class="language-badge">
+                        <i class="fas fa-language me-1"></i>
+                        हिंदी
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Day Navigator -->
+        <div class="day-navigator">
+            <div class="row">
+                <div class="col-12">
+                    <h5 class="text-center mb-3">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        दिन चुनें (1-150)
+                    </h5>
+                    
+                    <!-- Search Box -->
+                    <div class="search-box">
+                        <input type="number" id="daySearch" class="form-control" 
+                               placeholder="दिन संख्या दर्ज करें (1-150)" 
+                               min="1" max="150">
+                    </div>
+                    
+                    <!-- Quick Jump Buttons -->
+                    <div class="quick-jump">
+                        <button class="btn btn-outline-primary btn-sm" onclick="jumpToDay(1)">
+                            <i class="fas fa-fast-backward me-1"></i>दिन 1
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="jumpToDay(25)">दिन 25</button>
+                        <button class="btn btn-outline-success btn-sm" onclick="jumpToDay(50)">दिन 50</button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="jumpToDay(75)">दिन 75</button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="jumpToDay(100)">दिन 100</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="jumpToDay(150)">
+                            दिन 150<i class="fas fa-fast-forward ms-1"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Day Buttons Container -->
+                    <div id="dayButtons" class="text-center" style="max-height: 300px; overflow-y: auto;">
+                        <!-- Day buttons will be generated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Day Display -->
+        <div class="row mb-3">
+            <div class="col-12 text-center">
+                <div class="d-flex justify-content-center align-items-center gap-3">
+                    <button id="prevDay" class="btn btn-outline-primary" onclick="navigateDay(-1)">
+                        <i class="fas fa-chevron-left"></i> पिछला दिन
+                    </button>
+                    <h3 class="mb-0">
+                        <span class="badge bg-primary fs-5" id="currentDayBadge">दिन 1</span>
+                    </h3>
+                    <button id="nextDay" class="btn btn-outline-primary" onclick="navigateDay(1)">
+                        अगला दिन <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Curriculum Content -->
+        <div class="curriculum-content">
+            <div class="content-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-book me-2"></i>
+                    <span id="contentTitle">दिन 1 - पाठ्यक्रम सामग्री</span>
+                </h4>
+            </div>
+            <div id="curriculumContent" style="min-height: 400px;">
+                <div class="loading-spinner">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">लोड हो रहा है...</span>
+                    </div>
+                    <p class="mt-3 text-muted">दिन 1 की सामग्री लोड हो रही है...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        class HindiCurriculumNavigator {
+            constructor() {
+                this.currentDay = 1;
+                this.totalDays = 150;
+                this.cache = new Map();
+                this.hindiContent = null;
+                this.init();
+            }
+
+            async init() {
+                await this.loadHindiContent();
+                this.generateDayButtons();
+                this.setupEventListeners();
+                this.loadDay(1);
+            }
+
+            async loadHindiContent() {
+                // We don't need to load the full content anymore
+                // We'll use the API for individual day content
+                this.hindiContent = true; // Just mark as loaded
+            }
+
+            generateDayButtons() {
+                const container = document.getElementById('dayButtons');
+                container.innerHTML = '';
+
+                for (let day = 1; day <= this.totalDays; day++) {
+                    const button = document.createElement('button');
+                    button.className = 'btn btn-outline-secondary day-btn';
+                    button.textContent = day;
+                    button.setAttribute('data-day', day);
+                    button.onclick = () => this.loadDay(day);
+                    
+                    if (day === this.currentDay) {
+                        button.classList.add('active');
+                    }
+                    
+                    container.appendChild(button);
+                }
+            }
+
+            setupEventListeners() {
+                // Search box
+                const searchBox = document.getElementById('daySearch');
+                searchBox.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        const day = parseInt(e.target.value);
+                        if (day >= 1 && day <= this.totalDays) {
+                            this.loadDay(day);
+                            e.target.value = '';
+                        }
+                    }
+                });
+
+                // Keyboard navigation
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') {
+                        this.navigateDay(-1);
+                    } else if (e.key === 'ArrowRight') {
+                        this.navigateDay(1);
+                    }
+                });
+            }
+
+            navigateDay(direction) {
+                const newDay = this.currentDay + direction;
+                if (newDay >= 1 && newDay <= this.totalDays) {
+                    this.loadDay(newDay);
+                }
+            }
+
+            jumpToDay(day) {
+                if (day >= 1 && day <= this.totalDays) {
+                    this.loadDay(day);
+                }
+            }
+
+            async extractDayContent(day) {
+                try {
+                    const response = await fetch(`/api/curriculum/content/?day=${day}&language=hindi`);
+                    if (!response.ok) {
+                        throw new Error('Failed to load content');
+                    }
+                    return await response.text();
+                } catch (error) {
+                    return `<div class="alert alert-danger m-3">दिन ${day} की सामग्री लोड करने में त्रुटि: ${error.message}</div>`;
+                }
+            }
+
+            async loadDay(day) {
+                this.currentDay = day;
+                
+                // Update UI
+                document.getElementById('currentDayBadge').textContent = `दिन ${day}`;
+                document.getElementById('contentTitle').textContent = `दिन ${day} - हिंदी पाठ्यक्रम सामग्री`;
+                
+                // Update navigation buttons
+                document.getElementById('prevDay').disabled = day <= 1;
+                document.getElementById('nextDay').disabled = day >= this.totalDays;
+                
+                // Update day buttons
+                document.querySelectorAll('.day-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (parseInt(btn.getAttribute('data-day')) === day) {
+                        btn.classList.add('active');
+                        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+
+                // Load content
+                const contentDiv = document.getElementById('curriculumContent');
+                
+                // Check cache
+                if (this.cache.has(day)) {
+                    contentDiv.innerHTML = this.cache.get(day);
+                    return;
+                }
+
+                // Show loading
+                contentDiv.innerHTML = `
+                    <div class="loading-spinner">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">लोड हो रहा है...</span>
+                        </div>
+                        <p class="mt-3 text-muted">दिन ${day} की सामग्री लोड हो रही है...</p>
+                    </div>
+                `;
+
+                // Extract and display content
+                try {
+                    const content = await this.extractDayContent(day);
+                    this.cache.set(day, content);
+                    contentDiv.innerHTML = content;
+                } catch (error) {
+                    contentDiv.innerHTML = `<div class="alert alert-danger m-3">दिन ${day} की सामग्री लोड करने में त्रुटि।</div>`;
+                }
+
+                // Update URL
+                const url = new URL(window.location);
+                url.searchParams.set('day', day);
+                window.history.pushState({}, '', url);
+            }
+        }
+
+        // Global functions for button clicks
+        function navigateDay(direction) {
+            if (window.hindiNav) {
+                window.hindiNav.navigateDay(direction);
+            }
+        }
+
+        function jumpToDay(day) {
+            if (window.hindiNav) {
+                window.hindiNav.jumpToDay(day);
+            }
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            window.hindiNav = new HindiCurriculumNavigator();
+            
+            // Check URL for initial day
+            const urlParams = new URLSearchParams(window.location.search);
+            const initialDay = parseInt(urlParams.get('day')) || 1;
+            if (initialDay !== 1) {
+                setTimeout(() => {
+                    window.hindiNav.loadDay(initialDay);
+                }, 1000);
+            }
+        });
+
+        // Handle browser back/forward
+        window.addEventListener('popstate', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const day = parseInt(urlParams.get('day')) || 1;
+            if (window.hindiNav) {
+                window.hindiNav.loadDay(day);
+            }
+        });
+    </script>
+</body>
+</html>

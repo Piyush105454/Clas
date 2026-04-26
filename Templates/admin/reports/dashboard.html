@@ -1,0 +1,1123 @@
+{% extends 'admin/shared/base.html' %}
+
+{% block title %}Reports Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Page Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Reports Dashboard</h2>
+            <p class="text-sm text-gray-500 mt-1">Comprehensive analytics and downloadable reports</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="exportAllReports()"
+                class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                <span class="material-symbols-outlined text-lg">download</span>
+                Export All
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
+        <form id="reportFilters" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">School</label>
+                <div class="relative" id="reportSchoolMultiSelect">
+                    <button type="button" onclick="toggleDropdown('reportSchoolDropdown')" id="reportSchoolBtn"
+                        class="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500">
+                        <span id="reportSchoolSelectedText" class="truncate">All Schools</span>
+                        <span class="material-symbols-outlined text-gray-400">expand_more</span>
+                    </button>
+                    <div id="reportSchoolDropdown"
+                        class="hidden absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto p-2">
+                        <label class="flex items-center p-2 border-b border-gray-100 mb-2 bg-gray-50 sticky top-0 z-10 cursor-pointer rounded text-sm font-bold text-gray-700">
+                            <input type="checkbox" onchange="toggleAllCheckboxes('reportSchoolDropdown', this.checked, updateReportSchoolSelection)" class="rounded text-blue-600 focus:ring-blue-500 mr-3">
+                            Select All
+                        </label>
+                        {% for school in schools %}
+                        <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <input type="checkbox" data-name="school_id" value="{{ school.id }}"
+                                onchange="updateReportSchoolSelection()" class="rounded text-blue-600 focus:ring-blue-500 mr-3">
+                            <span class="text-sm text-gray-700">{{ school.name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Class</label>
+                <div class="relative" id="reportClassMultiSelect">
+                    <button type="button" onclick="toggleDropdown('reportClassDropdown')" id="reportClassBtn"
+                        class="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500">
+                        <span id="reportClassSelectedText" class="truncate">All Classes</span>
+                        <span class="material-symbols-outlined text-gray-400">expand_more</span>
+                    </button>
+                    <div id="reportClassDropdown"
+                        class="hidden absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto p-2">
+                        <div id="reportClassOptionsContainer">
+                            <p class="text-gray-400 text-xs p-2 text-center">Select school(s) first</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                <select name="date_range"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month" selected>This Month</option>
+                    <option value="quarter">This Quarter</option>
+                    <option value="year">This Year</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button type="button" onclick="applyFilters()"
+                    class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Apply Filters
+                </button>
+            </div>
+        </form>
+
+        <!-- Custom Date Range (Hidden by default) -->
+        <div id="customDateRange" class="hidden mt-4 grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                <input type="date" name="start_date" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                <input type="date" name="end_date" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+    </div>
+
+
+
+
+    <!-- Report Tabs -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="border-b border-gray-200">
+            <nav class="flex space-x-8 px-6" aria-label="Tabs">
+                <button onclick="switchTab('students')"
+                    class="tab-button active py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
+                    Students Report
+                </button>
+                <button onclick="switchTab('facilitators')"
+                    class="tab-button py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                    Facilitators Report
+                </button>
+                <button onclick="switchTab('attendance')"
+                    class="tab-button py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                    Attendance Report
+                </button>
+                <button onclick="switchTab('sessions')"
+                    class="tab-button py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                    Sessions Report
+                </button>
+                <button onclick="switchTab('feedback')"
+                    class="tab-button py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                    Feedback Report
+                </button>
+            </nav>
+        </div>
+
+        <!-- Students Report Tab -->
+        <div id="students-tab" class="tab-content p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Students Report</h3>
+                <button onclick="downloadPDF('students')"
+                    class="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
+                    Download PDF
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Student Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Enrollment No</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Class</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                School</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Attendance Rate</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Last Session</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be loaded via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="students-load-more" class="mt-4 flex justify-center hidden">
+                <button onclick="loadMoreData('students')" class="px-6 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">expand_more</span>
+                    Load More Students
+                </button>
+            </div>
+        </div>
+
+        <!-- Facilitators Report Tab -->
+        <div id="facilitators-tab" class="tab-content p-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Facilitators Report</h3>
+                <button onclick="downloadPDF('facilitators')"
+                    class="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
+                    Download PDF
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Facilitator Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Email</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Schools Assigned</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Sessions Conducted</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Last Active</th>
+                        </tr>
+                    </thead>
+                    <tbody id="facilitatorsTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be loaded via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="facilitators-load-more" class="mt-4 flex justify-center hidden">
+                <button onclick="loadMoreData('facilitators')" class="px-6 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">expand_more</span>
+                    Load More Facilitators
+                </button>
+            </div>
+        </div>
+
+        <!-- Attendance Report Tab -->
+        <div id="attendance-tab" class="tab-content p-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Attendance Report</h3>
+                <div class="flex gap-2">
+                    <button onclick="downloadPDF('attendance')"
+                        class="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                        <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
+                        Download PDF
+                    </button>
+                    <button onclick="downloadExcel('attendance')"
+                        class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        <span class="material-symbols-outlined text-lg">table_view</span>
+                        Download Excel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Attendance Summary Charts - STABLE PERMANENT FIX -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-gray-50 rounded-lg overflow-hidden border border-gray-100" style="height: 350px;">
+                    <div class="p-4 border-b border-gray-100 bg-white">
+                        <h4 class="text-sm font-semibold text-gray-700">Daily Attendance Trend</h4>
+                    </div>
+                    <div style="position: relative; height: 280px; width: 100%; overflow: hidden;">
+                        <canvas id="attendanceChart" style="display: block; width: 100%; height: 280px;"></canvas>
+                    </div>
+                </div>
+                <div class="bg-gray-50 rounded-lg overflow-hidden border border-gray-100" style="height: 340px;">
+                    <div class="p-4 border-b border-gray-100 bg-white">
+                        <h4 class="text-sm font-semibold text-gray-700">Attendance by Class</h4>
+                    </div>
+                    <div style="position: relative; height: 280px; width: 100%; overflow: hidden;">
+                        <canvas id="classAttendanceChart" style="display: block; width: 100%; height: 280px;"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                School</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Class</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Total Students</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Present</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Absent</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Attendance %</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Facilitator</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attendanceTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be loaded via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="attendance-load-more" class="mt-4 flex justify-center hidden">
+                <button onclick="loadMoreData('attendance')" class="px-6 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">expand_more</span>
+                    Load More Records
+                </button>
+            </div>
+        </div>
+
+        <!-- Sessions Report Tab -->
+        <div id="sessions-tab" class="tab-content p-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Sessions Report</h3>
+                <button onclick="downloadPDF('sessions')"
+                    class="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
+                    Download PDF
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Session Topic</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Day Number</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Session Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Class</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Facilitator</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessionsTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be loaded via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="sessions-load-more" class="mt-4 flex justify-center hidden">
+                <button onclick="loadMoreData('sessions')" class="px-6 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">expand_more</span>
+                    Load More Sessions
+                </button>
+            </div>
+        </div>
+
+        <!-- Feedback Report Tab -->
+        <div id="feedback-tab" class="tab-content p-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Feedback Report</h3>
+                <button onclick="downloadPDF('feedback')"
+                    class="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
+                    Download PDF
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Session</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Facilitator</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Rating</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Feedback</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Category</th>
+                        </tr>
+                    </thead>
+                    <tbody id="feedbackTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be loaded via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="feedback-load-more" class="mt-4 flex justify-center hidden">
+                <button onclick="loadMoreData('feedback')" class="px-6 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">expand_more</span>
+                    Load More Feedback
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay - Improved and less intrusive -->
+<div id="loadingOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center">
+    <div class="bg-white rounded-lg p-6 flex flex-col items-center gap-3 max-w-xs mx-4 shadow-xl">
+        <div class="loading-spinner w-6 h-6"></div>
+        <div class="text-center">
+            <h3 class="text-base font-semibold text-gray-900">Processing</h3>
+            <p class="text-xs text-gray-600 mt-1">Please wait...</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let currentTab = 'students';
+    let currentFilters = {};
+    let dataCache = {}; 
+    
+    // Pagination state
+    let tabState = {
+        students: { page: 1, hasMore: false, isLoading: false },
+        facilitators: { page: 1, hasMore: false, isLoading: false },
+        attendance: { page: 1, hasMore: false, isLoading: false },
+        sessions: { page: 1, hasMore: false, isLoading: false },
+        feedback: { page: 1, hasMore: false, isLoading: false }
+    };
+
+    function switchTab(tabName) {
+        // Close all dropdowns
+        document.querySelectorAll('[id$="Dropdown"]').forEach(d => d.classList.add('hidden'));
+
+        // Prevent multiple rapid clicks
+        if (window.switchingTab) return;
+        window.switchingTab = true;
+
+        // Hide all tabs immediately
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.add('hidden');
+        });
+
+        // Remove active class from all buttons
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
+            btn.classList.add('border-transparent', 'text-gray-500');
+        });
+
+        // Show selected tab immediately
+        const selectedTab = document.getElementById(tabName + '-tab');
+        selectedTab.classList.remove('hidden');
+
+        // Add active class to selected button
+        event.target.classList.add('active', 'border-blue-500', 'text-blue-600');
+        event.target.classList.remove('border-transparent', 'text-gray-500');
+
+        currentTab = tabName;
+
+        // Load data if not already loaded or if filters changed
+        if (document.getElementById(tabName + 'TableBody').children.length === 0) {
+            loadTabData(tabName);
+        }
+
+        window.switchingTab = false;
+    }
+
+    // Toggle dropdowns
+    function toggleDropdown(id) {
+        const dropdown = document.getElementById(id);
+        const allDropdowns = document.querySelectorAll('[id$="Dropdown"]');
+        allDropdowns.forEach(d => {
+            if (d.id !== id) d.classList.add('hidden');
+        });
+        dropdown.classList.toggle('hidden');
+    }
+
+    // Update School selection and Class options
+    function updateReportSchoolSelection() {
+        const selected = Array.from(document.querySelectorAll('#reportSchoolDropdown input[data-name="school_id"]:checked'))
+            .map(cb => cb.value);
+        const text = document.getElementById('reportSchoolSelectedText');
+
+        if (selected.length === 0) {
+            text.innerText = 'All Schools';
+        } else if (selected.length === 1) {
+            const label = document.querySelector(`#reportSchoolDropdown input[value="${selected[0]}"]`).nextElementSibling.innerText;
+            text.innerText = label;
+        } else {
+            text.innerText = `${selected.length} schools selected`;
+        }
+
+        updateReportClassOptions(selected);
+    }
+
+    // Update Class options based on selected schools
+    function updateReportClassOptions(schoolIds) {
+        const container = document.getElementById('reportClassOptionsContainer');
+        const text = document.getElementById('reportClassSelectedText');
+
+        if (schoolIds.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-xs p-2 text-center">Select school(s) first</p>';
+            text.innerText = 'All Classes';
+            return;
+        }
+
+        container.innerHTML = '<div class="loading-spinner w-4 h-4 mx-auto my-2"></div>';
+
+        fetch(`/admin/reports/classes/${schoolIds.join(',')}/`)
+            .then(r => r.json())
+            .then(classes => {
+                if (classes.length === 0) {
+                    container.innerHTML = '<p class="text-gray-400 text-xs p-2 text-center">No classes found</p>';
+                } else {
+                    let html = `
+                        <label class="flex items-center p-2 border-b border-gray-100 mb-2 bg-gray-50 sticky top-0 z-10 cursor-pointer rounded text-sm font-bold text-gray-700">
+                            <input type="checkbox" onchange="toggleAllCheckboxes('reportClassOptionsContainer', this.checked, updateReportClassSelection)" class="rounded text-blue-600 focus:ring-blue-500 mr-3">
+                            Select All
+                        </label>
+                    `;
+                    html += classes.map(cls => `
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="checkbox" data-name="class_id" value="${cls.id}" 
+                            onchange="updateReportClassSelection()" class="rounded text-blue-600 focus:ring-blue-500 mr-3">
+                        <span class="text-sm text-gray-700">${cls.name}</span>
+                    </label>
+                `).join('');
+                    container.innerHTML = html;
+                }
+                updateReportClassSelection();
+            })
+            .catch(err => {
+                console.error('Error fetching classes:', err);
+                container.innerHTML = '<p class="text-red-500 text-xs p-2">Error loading classes</p>';
+            });
+    }
+
+    // Update Class selection text
+    function updateReportClassSelection() {
+        const selected = Array.from(document.querySelectorAll('#reportClassOptionsContainer input[data-name="class_id"]:checked'))
+            .map(cb => cb.value);
+        const text = document.getElementById('reportClassSelectedText');
+
+        if (selected.length === 0) {
+            text.innerText = 'All Classes';
+        } else if (selected.length === 1) {
+            const label = document.querySelector(`#reportClassOptionsContainer input[value="${selected[0]}"]`).nextElementSibling.innerText;
+            text.innerText = label;
+        } else {
+            text.innerText = `${selected.length} classes selected`;
+        }
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('#reportSchoolMultiSelect') && !e.target.closest('#reportClassMultiSelect')) {
+            const schoolDropdown = document.getElementById('reportSchoolDropdown');
+            const classDropdown = document.getElementById('reportClassDropdown');
+            if (schoolDropdown) schoolDropdown.classList.add('hidden');
+            if (classDropdown) classDropdown.classList.add('hidden');
+        }
+    });
+
+    // Apply filters
+    function applyFilters() {
+        const form = document.getElementById('reportFilters');
+        const formData = new FormData(form);
+        currentFilters = Object.fromEntries(formData);
+
+        // Collect multi-select values Correctly - Skip "Select All" checkbox
+        currentFilters.school_id = Array.from(document.querySelectorAll('#reportSchoolDropdown input[data-name="school_id"]:checked'))
+            .map(cb => cb.value);
+        currentFilters.class_id = Array.from(document.querySelectorAll('#reportClassOptionsContainer input[data-name="class_id"]:checked'))
+            .map(cb => cb.value);
+
+        // Clear cache and reset pagination when filters change
+        dataCache = {};
+        Object.keys(tabState).forEach(tab => tabState[tab].page = 1);
+
+        // Clear all tables
+        document.querySelectorAll('[id$="TableBody"]').forEach(tbody => tbody.innerHTML = '');
+        
+        // Load current tab
+        loadTabData(currentTab);
+
+        // Add loading state to button
+        const btn = document.querySelector('#reportFilters button[onclick^="applyFilters"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `
+            <div class="flex items-center justify-center gap-2">
+                <div class="loading-spinner w-4 h-4 border-2 border-white border-t-transparent animate-spin"></div>
+                <span>Processing...</span>
+            </div>
+        `;
+        }
+
+        // Load data for current tab
+        loadTabData(currentTab);
+
+        // Update summary cards
+        updateSummaryCards();
+    }
+
+
+    // Update summary cards - simplified to avoid additional requests
+    function updateSummaryCards() {
+        // For now, keep the existing values to avoid additional server requests
+        // In a real implementation, you might update these based on current filter results
+        console.log('Summary cards updated for current filters');
+    }
+
+    function loadTabData(tabName, isLoadMore = false) {
+        if (tabState[tabName].isLoading) return;
+        
+        const state = tabState[tabName];
+        if (!isLoadMore) state.page = 1;
+
+        state.isLoading = true;
+        
+        // Show in-table loading for first page
+        if (!isLoadMore) {
+            const tbody = document.getElementById(tabName + 'TableBody');
+            const colCount = tbody.closest('table').querySelector('thead tr').children.length;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" class="px-6 py-12 text-center"><div class="loading-spinner w-8 h-8 mx-auto mb-4"></div><p>Fetching ${tabName} report...</p></td></tr>`;
+        }
+
+        const payload = { ...currentFilters, page: state.page, limit: 10 }; // Load 10 at a time as requested
+
+        fetch(`/admin/reports/data/${tabName}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.error) throw new Error(result.error);
+            
+            const data = result.data || [];
+            state.hasMore = result.has_more;
+            
+            // ✅ FIX: Handle attendance report dictionary structure
+            if (tabName === 'attendance' && !Array.isArray(data)) {
+                // If it's a dict, extract table data and update charts
+                populateTable(tabName, data.attendance_data || [], isLoadMore);
+                if (!isLoadMore) updateCharts(data);
+            } else {
+                // For all other reports, data is already an array
+                populateTable(tabName, data, isLoadMore);
+            }
+            
+            // Toggle Load More button
+            const loadMoreBtn = document.getElementById(tabName + '-load-more');
+            if (loadMoreBtn) {
+                if (state.hasMore) {
+                    loadMoreBtn.classList.remove('hidden');
+                } else {
+                    loadMoreBtn.classList.add('hidden');
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            showTableError(tabName, err.message);
+        })
+        .finally(() => {
+            state.isLoading = false;
+            const btn = document.querySelector('#reportFilters button[onclick^="applyFilters"]');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'Apply Filters';
+            }
+        });
+    }
+
+    function loadMoreData(tabName) {
+        tabState[tabName].page++;
+        loadTabData(tabName, true);
+    }
+
+    // Show error in table instead of global notification
+    function showTableError(tabName, message) {
+        const tableBody = document.getElementById(tabName + 'TableBody');
+        if (tableBody) {
+            const colCount = tableBody.closest('table').querySelector('thead tr').children.length;
+            tableBody.innerHTML = `
+            <tr>
+                <td colspan="${colCount}" class="px-6 py-12 text-center">
+                    <div class="flex flex-col items-center justify-center gap-4">
+                        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                            <span class="material-symbols-outlined text-red-600 text-2xl">error</span>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-lg font-medium text-gray-900">Unable to load data</p>
+                            <p class="text-sm text-gray-500 mt-1">${message}</p>
+                            <button onclick="loadTabData('${tabName}')" class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                                Try Again
+                            </button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+        }
+    }
+
+    // Show error message
+    function showError(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50';
+        errorDiv.innerHTML = `
+        <div class="flex items-center">
+            <span class="material-symbols-outlined mr-2">error</span>
+            <span>${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-red-700 hover:text-red-900">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+    `;
+        document.body.appendChild(errorDiv);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (errorDiv.parentElement) {
+                errorDiv.remove();
+            }
+        }, 5000);
+    }
+
+    // Populate table with data - improved with better empty state
+    function populateTable(tabName, data, isAppend = false) {
+        const tbody = document.getElementById(tabName + 'TableBody');
+        
+        if (!isAppend) {
+            tbody.innerHTML = '';
+        } else {
+            // Remove any loading indicator from previous appends if needed
+        }
+
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            if (isAppend) return; // Don't show empty state if just appending
+            const colCount = tbody.closest('table').querySelector('thead tr').children.length;
+            tbody.innerHTML = `
+            <tr>
+                <td colspan="${colCount}" class="px-6 py-12 text-center">
+                    <div class="flex flex-col items-center justify-center gap-4">
+                        <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span class="material-symbols-outlined text-gray-400 text-2xl">inbox</span>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-lg font-medium text-gray-900">No data found</p>
+                            <p class="text-sm text-gray-500 mt-1">Try adjusting your filters or date range</p>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+            return;
+        }
+
+        // Use document fragment for better performance
+        const fragment = document.createDocumentFragment();
+
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = generateTableRow(tabName, row);
+            fragment.appendChild(tr);
+        });
+
+        tbody.appendChild(fragment);
+    }
+
+    // Generate table row HTML based on tab type
+    function generateTableRow(tabName, row) {
+        switch (tabName) {
+            case 'students':
+                return `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${row.name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.enrollment_number}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.class_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.school_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.attendance_rate >= 80 ? 'bg-green-100 text-green-800' : row.attendance_rate >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}">
+                        ${row.attendance_rate}%
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.last_session || 'N/A'}</td>
+            `;
+            case 'facilitators':
+                return `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${row.name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.email}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.schools_count}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.sessions_conducted}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.last_active}</td>
+            `;
+            case 'attendance':
+                return `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.date}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.school_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.class_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.total_students}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">${row.present}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">${row.absent}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.attendance_percentage >= 80 ? 'bg-green-100 text-green-800' : row.attendance_percentage >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}">
+                        ${row.attendance_percentage}%
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.facilitator_name}</td>
+            `;
+            case 'sessions':
+                return `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.date}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${row.topic}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Day ${row.day_number}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+                        ${row.session_type}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.class_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.facilitator_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                        ${row.status === 'Conducted' ? 'bg-green-100 text-green-800' : (row.status === 'Pending' || row.status === 'Holiday') ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}">
+                        ${row.status}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.duration || 'N/A'}</td>
+            `;
+            case 'feedback':
+                return `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.date}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.session_topic}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.facilitator_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div class="flex items-center">
+                        <span class="text-yellow-400">★</span>
+                        <span class="ml-1">${row.rating}/5</span>
+                    </div>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">${row.feedback_text}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        ${row.category}
+                    </span>
+                </td>
+            `;
+        }
+    }
+
+    // Download PDF
+    function downloadPDF(reportType) {
+        const url = `/admin/reports/download/pdf/${reportType}/`;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = url;
+
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = getCookie('csrftoken');
+        form.appendChild(csrfInput);
+
+        // Add filters
+        Object.entries(currentFilters).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+                value.forEach(val => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = `${key}[]`;
+                    input.value = val;
+                    form.appendChild(input);
+                });
+            } else {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form.appendChild(input);
+            }
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
+    // Download Excel
+    function downloadExcel(reportType) {
+        const url = `/admin/reports/download/excel/${reportType}/`;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = url;
+
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = getCookie('csrftoken');
+        form.appendChild(csrfInput);
+
+        // Add filters
+        Object.entries(currentFilters).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+                value.forEach(val => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = `${key}[]`;
+                    input.value = val;
+                    form.appendChild(input);
+                });
+            } else {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form.appendChild(input);
+            }
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
+    // Export All Reports into a single Excel
+    function exportAllReports() {
+        const url = `/admin/reports/download/excel_all/`;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = url;
+        
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = getCookie('csrftoken');
+        form.appendChild(csrfInput);
+        
+        // Add filters
+        if (typeof currentFilters !== 'undefined') {
+            Object.entries(currentFilters).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                    value.forEach(val => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = `${key}[]`;
+                        input.value = val;
+                        form.appendChild(input);
+                    });
+                } else {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = value;
+                    form.appendChild(input);
+                }
+            });
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
+
+    // Global chart instances to allow destruction before re-creation
+    let attendanceChartInstance = null;
+    let classAttendanceChartInstance = null;
+
+    // Update charts for attendance tab
+    function updateCharts(data) {
+        // Destroy existing charts if they exist
+        if (attendanceChartInstance) attendanceChartInstance.destroy();
+        if (classAttendanceChartInstance) classAttendanceChartInstance.destroy();
+
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false, // Now safe with rigid container AND position: relative
+            resizeDelay: 50, // BREAKS THE FEEDBACK LOOP
+            animation: {
+                duration: 400
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { usePointStyle: true, boxWidth: 6, font: { size: 11 } }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 10,
+                    displayColors: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { stepSize: 20, font: { size: 10 } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 0 }
+                }
+            }
+        };
+
+        // Daily attendance trend chart
+        const ctx1 = document.getElementById('attendanceChart').getContext('2d');
+        attendanceChartInstance = new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: data.daily_labels || [],
+                datasets: [{
+                    label: 'Attendance %',
+                    data: data.daily_attendance || [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#3b82f6'
+                }]
+            },
+            options: commonOptions
+        });
+
+        // Class attendance chart
+        const ctx2 = document.getElementById('classAttendanceChart').getContext('2d');
+        classAttendanceChartInstance = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: data.class_labels || [],
+                datasets: [{
+                    label: 'Attendance %',
+                    data: data.class_attendance || [],
+                    backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                    borderColor: '#10b981',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: commonOptions
+        });
+    }
+
+    // Utility functions
+    function showLoading() {
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+        document.getElementById('loadingOverlay').classList.add('flex');
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        document.getElementById('loadingOverlay').classList.remove('flex');
+    }
+
+    // Helper: toggle all checkboxes
+    function toggleAllCheckboxes(containerId, state, callback) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            cb.checked = state;
+        });
+        if (callback) callback();
+    }
+
+    // Helper: get cookie value (for CSRF)
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Initialize page with faster loading - improved
+    document.addEventListener('DOMContentLoaded', function () {
+        // Show initial loading state for students tab with better styling
+        const studentsTableBody = document.getElementById('studentsTableBody');
+        studentsTableBody.innerHTML = `
+        <tr>
+            <td colspan="6" class="px-6 py-12 text-center bg-gray-50">
+                <div class="flex flex-col items-center justify-center gap-4">
+                    <div class="loading-spinner w-8 h-8"></div>
+                    <div class="text-center">
+                        <p class="text-lg font-medium text-gray-900">Loading students data</p>
+                        <p class="text-sm text-gray-500 mt-1">Please wait while we fetch your report...</p>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    `;
+
+        // Load initial data immediately - no delay
+        loadTabData('students');
+
+        // Setup date range toggle
+        document.querySelector('select[name="date_range"]').addEventListener('change', function () {
+            const customRange = document.getElementById('customDateRange');
+            if (this.value === 'custom') {
+                customRange.classList.remove('hidden');
+            } else {
+                customRange.classList.add('hidden');
+            }
+        });
+
+        // Setup school change to load classes with debouncing - reduced debounce time
+        let schoolChangeTimeout;
+        document.querySelector('select[name="school_id"]').addEventListener('change', function () {
+            const schoolId = this.value;
+            const classSelect = document.querySelector('select[name="class_id"]');
+
+            clearTimeout(schoolChangeTimeout);
+            schoolChangeTimeout = setTimeout(() => {
+                if (schoolId) {
+                    classSelect.innerHTML = '<option value="">Loading classes...</option>';
+                    classSelect.disabled = true;
+
+                    fetch(`/admin/reports/classes/${schoolId}/`)
+                        .then(response => response.json())
+                        .then(classes => {
+                            classSelect.innerHTML = '<option value="">All Classes</option>';
+                            classes.forEach(cls => {
+                                classSelect.innerHTML += `<option value="${cls.id}">${cls.name}</option>`;
+                            });
+                            classSelect.disabled = false;
+                        })
+                        .catch(error => {
+                            console.error('Error loading classes:', error);
+                            classSelect.innerHTML = '<option value="">Error loading classes</option>';
+                            classSelect.disabled = false;
+                        });
+                } else {
+                    classSelect.innerHTML = '<option value="">All Classes</option>';
+                    classSelect.disabled = false;
+                }
+            }, 200); // Reduced debounce to 200ms
+        });
+    });
+</script>
+{% endblock %}

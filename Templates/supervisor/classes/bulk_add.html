@@ -1,0 +1,99 @@
+{% extends 'supervisor/shared/base.html' %}
+
+{% block content %}
+<div class="space-y-6">
+    
+    <!-- Page Header -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-900">Add Multiple Classes</h2>
+        <p class="text-sm text-gray-500 mt-1">Group and manage {{ class_count }} selected classes</p>
+    </div>
+
+    <!-- Selected Classes Summary -->
+    <div class="bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-6">
+        <div class="flex items-start gap-4">
+            <div class="flex-shrink-0">
+                <span class="material-symbols-outlined text-blue-600 text-[32px]">info</span>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-sm font-semibold text-blue-900 mb-2">Selected Classes</h3>
+                <p class="text-sm text-blue-700 mb-3">You have selected {{ class_count }} classes to add as a group:</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {% for class in selected_classes %}
+                    <div class="flex items-center gap-2 text-sm text-blue-800 bg-white bg-opacity-50 px-3 py-2 rounded">
+                        <span class="material-symbols-outlined text-base">check_circle</span>
+                        <span>{{ class.school.name }} - {{ class.class_level }} {{ class.section }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-6">
+        {% csrf_token %}
+        
+        <!-- Group Name -->
+        <div>
+            <label for="class_name" class="block text-sm font-medium text-gray-700 mb-2">
+                Group Name <span class="text-red-500">*</span>
+            </label>
+            <input type="text" 
+                   id="class_name" 
+                   name="class_name" 
+                   required
+                   placeholder="e.g., Grade 5 - Morning Batch"
+                   class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <p class="text-xs text-gray-500 mt-1">Give this group of classes a meaningful name</p>
+        </div>
+
+        <!-- Description -->
+        <div>
+            <label for="description" class="block text-sm font-medium text-gray-700 mb-2">
+                Description (Optional)
+            </label>
+            <textarea id="description" 
+                      name="description" 
+                      rows="4"
+                      placeholder="Add any notes or details about this group..."
+                      class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+            <p class="text-xs text-gray-500 mt-1">Optional notes for reference</p>
+        </div>
+
+        <!-- Hidden field for selected IDs -->
+        <input type="hidden" name="selected_ids" value="{{ selected_ids }}">
+
+        <!-- Action Buttons -->
+        <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+            <a href="{% url 'supervisor_classes_list' %}" 
+               class="px-4 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-sm">
+                Cancel
+            </a>
+            <button type="submit" 
+                    class="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors font-medium text-sm shadow-sm">
+                <span class="material-symbols-outlined text-[20px]">check</span>
+                <span>Add Group</span>
+            </button>
+        </div>
+    </form>
+
+    <!-- Info Box -->
+    <div class="bg-gray-50 border border-gray-200 rounded-xl shadow-sm p-6">
+        <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-gray-600 text-[24px] flex-shrink-0">help</span>
+            <div>
+                <h3 class="text-sm font-semibold text-gray-900 mb-2">What happens next?</h3>
+                <ul class="text-sm text-gray-600 space-y-1">
+                    <li>✓ All {{ class_count }} selected classes will be grouped together</li>
+                    <li>✓ You can manage them as a single unit</li>
+                    <li>✓ Individual class settings remain unchanged</li>
+                    <li>✓ You can edit or remove the group anytime</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

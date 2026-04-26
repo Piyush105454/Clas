@@ -1,0 +1,123 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+ENV/
+env/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+/media
+/staticfiles
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug and temporary files
+debug_*.py
+debug_*.txt
+test_*.py
+verify_*.py
+cleanup_*.py
+diagnose_*.py
+inspect_*.py
+find_*.py
+reproduce_*.py
+deep_debug_*.py
+final_*.py
+dump_*.py
+check_*.py
+fix_*.py
+dedup.py
+diag_dups.py
+
+# Debug output files
+*.txt
+chachi_*.txt
+reproduction_*.txt
+deep_debug_*.txt
+debug_output_*.txt
+debug_results_*.txt
+
+# Old files
+old_*.py
+old_*.html
+*.bak
+*.backup
+
+# SQL debug files
+*.sql
+
+# Documentation (Allow specific guides)
+# DATABASE_*.md
+# DEPLOYMENT_*.md
+# DOCUMENTATION_*.md
+# PRODUCTION_*.md
+# QUICK_*.md
+# GROUPED_*.md
+# DB_*.md
+
+# Temporary directories
+tmp/
+temp/
+scratch/
+.hypothesis/
+lesson_plans/
+facilitator_tasks/
+
+# Maintenance scripts
+fix_database_tables.py
+inspect_student.py
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Cache
+.cache/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if using frontend build tools)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Misc
+changes.md
+*.orig
+.kiro/

@@ -1,0 +1,3926 @@
+{% extends "facilitator/shared/base.html" %}
+{% load static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/today_session.css' %}?v=3.6">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/step-status-api.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+<!-- DEBUG: Session Type Information -->
+<!-- session_type: {{ session_type }} -->
+<!-- grouped_session_id: {{ grouped_session_id }} -->
+<!-- detection_method: {{ detection_method }} -->
+<!-- is_grouped_session: {{ is_grouped_session }} -->
+<!-- grouped_classes_count: {{ grouped_classes|length }} -->
+<!-- content_source: {{ content_source }} -->
+
+<!-- FORCE CACHE CLEAR FOR ALL USERS - v3.3 -->
+<script>
+  // Smart localStorage cleanup - clear only when it's a NEW DAY
+  console.log('🧹 Smart localStorage cleanup - checking if new day...');
+
+  // Get today's date
+  const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+  const lastSessionDate = localStorage.getItem('lastSessionDate');
+  const classId = '{{ class_section.id }}'; // Get current class ID
+
+  console.log('Today:', today, 'Last session date:', lastSessionDate, 'Class ID:', classId);
+
+  // If it's a new day, clear the completed steps
+  if (lastSessionDate !== today) {
+    console.log('📅 New day detected! Clearing previous day steps...');
+
+    // List of keys to remove for new day
+    const keysToRemove = [
+      'completedSteps',
+      'currentWorkflowStep',
+      'currentStep',
+      'sessionCompleted',
+      `step2_completed_${classId}`,
+      `step2_completed_date_${classId}`,
+      `step5_completed_${classId}`,
+      `step5_completed_date_${classId}`
+    ];
+
+    keysToRemove.forEach(key => {
+      if (localStorage.getItem(key)) {
+        console.log(`🗑️ Removing: ${key}`);
+        localStorage.removeItem(key);
+      }
+    });
+
+    // Remove ALL class-specific keys from ALL classes (not just current class)
+    // This prevents stale data from other classes
+    Object.keys(localStorage).forEach(key => {
+      if (key.match(/^(completedSteps_|currentWorkflowStep_|sessionCompleted_|step2_completed_|step5_completed_|step2_completed_date_|step5_completed_date_)/)) {
+        console.log(`🗑️ Removing old class key: ${key}`);
+        localStorage.removeItem(key);
+      }
+    });
+
+    // Update the date
+    localStorage.setItem('lastSessionDate', today);
+    console.log('✅ Steps cleared for new day');
+  } else {
+    console.log('✅ Same day - preserving completed steps');
+  }
+</script>
+<div id="loadingSkeleton" class="session-container">
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="skeleton-header mb-3">
+        <div class="skeleton-line" style="width: 30%; height: 24px;"></div>
+      </div>
+      <div class="skeleton-content">
+        <div class="skeleton-line mb-2" style="width: 100%; height: 16px;"></div>
+        <div class="skeleton-line mb-2" style="width: 95%; height: 16px;"></div>
+        <div class="skeleton-line" style="width: 80%; height: 16px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="text-center py-5">
+    <div class="spinner-border text-primary mb-3" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="text-muted">Loading your session...</p>
+  </div>
+</div>
+
+<!-- ACTUAL CONTENT - Hidden until page fully loads -->
+<div id="actualContent" class="session-container" style="display: none;">
+
+  <div class="session-container">
+
+    <!-- GROUPED SESSION HEADER (if applicable) -->
+    {% if is_grouped_session %}
+    <div class="alert alert-info mb-3 border-2">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h5 class="mb-2">
+            <i class="bi bi-collection"></i> Grouped Session
+          </h5>
+          <p class="mb-0">
+            <strong>Classes:</strong>
+            {% for grouped_class in grouped_classes %}
+            <span class="badge bg-info me-2">{{ grouped_class.display_name }}</span>
+            {% endfor %}
+          </p>
+        </div>
+        <a href="{% url 'facilitator_classes' %}" class="btn btn-outline-info btn-sm">
+          <i class="bi bi-arrow-left"></i> Back to Classes
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Language Selector -->
+    <div class="row mb-3">
+      <div class="col-12">
+        <div class="card shadow-sm language-selector-card">
+          <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <small class="text-muted">
+                <i class="fas fa-language me-1"></i>
+                Curriculum Language: 
+              </small>
+              <div class="btn-group btn-group-sm" role="group" id="languageSelector">
+                <input type="radio" class="btn-check" name="language" id="englishBtn" value="english" checked>
+                <label class="btn btn-outline-primary" for="englishBtn">E</label>
+
+                <input type="radio" class="btn-check" name="language" id="hindiBtn" value="hindi">
+                <label class="btn btn-outline-primary" for="hindiBtn">H</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        const languageSelector = document.getElementById('languageSelector');
+        if (!languageSelector) return;
+
+        languageSelector.addEventListener('change', function (e) {
+          const language = e.target.value;
+          const contentDiv = document.getElementById('curriculumContent');
+          if (!contentDiv) return;
+
+          if (language === 'hindi') {
+            contentDiv.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">लोड हो रहा है...</p></div>';
+
+            fetch('/static/hindi_curriculum.html')
+              .then(r => r.text())
+              .then(html => {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const rows = doc.querySelectorAll('table.waffle tbody tr');
+                const currentDay = parseInt('{{ current_day|default:"1" }}') || 1;
+                let dayRow = null;
+
+                for (let row of rows) {
+                  const firstCell = row.querySelector('td, th');
+                  if (firstCell && (firstCell.textContent.trim() === `दिन ${currentDay}` || firstCell.textContent.trim() === `Day ${currentDay}`)) {
+                    dayRow = row.cloneNode(true);
+                    break;
+                  }
+                }
+
+                if (dayRow) {
+                  const table = document.createElement('table');
+                  table.className = 'table table-bordered table-sm';
+                  table.style.fontSize = '13px';
+                  const tbody = document.createElement('tbody');
+                  tbody.appendChild(dayRow);
+                  table.appendChild(tbody);
+                  contentDiv.innerHTML = '';
+                  contentDiv.appendChild(table);
+
+                  contentDiv.querySelectorAll('a').forEach(link => {
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                  });
+                } else {
+                  contentDiv.innerHTML = '<div class="alert alert-warning">सामग्री नहीं मिली</div>';
+                }
+              })
+              .catch(err => {
+                console.error('Error:', err);
+                contentDiv.innerHTML = '<div class="alert alert-danger">त्रुटि: सामग्री लोड नहीं हो सकी</div>';
+              });
+          } else if (language === 'english') {
+            location.reload();
+          }
+        });
+      });
+    </script>
+
+    {% if planned_session %}
+    <!-- Session Control Panel -->
+    <div class="session-control-panel mb-2">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <!-- HEADER -->
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="badge bg-primary fs-6">
+              Day {{ current_day }}
+            </span>
+
+            {% if session_status == "holiday" and is_today %}
+            <div class="alert alert-warning border-2 w-100 mt-2 mb-0">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-calendar-event fs-4 me-3"></i>
+                <div>
+                  <h6 class="mb-1 fw-bold">{% if is_sunday %}Weekly Off{% else %}Holiday Today{% endif %}</h6>
+                  <p class="mb-0 small">
+                    {% if is_sunday %}
+                    Sundays are weekly holidays. Enjoy your day off!
+                    {% elif holiday_today %}
+                    <strong>{{ holiday_today.holiday_name }}</strong>: {{ holiday_today.notes|default:"No sessions scheduled." }}
+                    {% else %}
+                    No sessions scheduled for today.
+                    {% endif %}
+                  </p>
+                </div>
+              </div>
+            </div>
+            {% elif session_status == "holiday" %}
+            <span class="badge bg-warning" data-session-status>Holiday</span>
+            {% elif session_status == "cancelled" %}
+            <span class="badge bg-danger" data-session-status>Cancelled</span>
+            {% elif session_status == "pending" and is_today %}
+            <span class="badge bg-info" data-session-status>In Progress (Today)</span>
+            {% elif session_status == "pending" %}
+            <span class="badge bg-info" data-session-status>Pending</span>
+            {% elif session_status == "conducted" and is_today %}
+            <span class="badge bg-success" data-session-status>Completed (Today)</span>
+            {% elif session_status == "conducted" %}
+            <span class="badge bg-success" data-session-status>Completed</span>
+            {% else %}
+            <span class="badge bg-info" data-session-status>Ready</span>
+            {% endif %}
+          </div>
+
+          <!-- PROGRESS INDICATOR -->
+          {% if progress_metrics %}
+          <div class="mb-3">
+
+            <small class="text-muted">
+              {{ progress_metrics.conducted_sessions }} conducted,
+              {{ progress_metrics.cancelled_sessions }} cancelled,
+              {{ progress_metrics.pending_sessions }} pending
+            </small>
+          </div>
+          <script>
+            requestAnimationFrame(() => {
+              document.querySelectorAll('[data-width]').forEach(el => {
+                el.style.width = el.getAttribute('data-width') + '%';
+              });
+            });
+          </script>
+          {% endif %}
+
+          <!-- STEP FLOW BAR - Enhanced with Progress Indicators -->
+          <div class="step-flow-bar mb-3 mt-3">
+            <div class="step-flow-container">
+              <!-- Step 1: Lesson Plan -->
+              <div class="step-item">
+                <button class="step-btn step-btn-1" data-step="1" onclick="goToStep(1)" title="Lesson Plan">
+                  <span class="step-number">1</span>
+                  <span class="step-label">Lesson Plan</span>
+                  <span class="step-check" style="display: none;">✓</span>
+                </button>
+              </div>
+              <div class="step-arrow">→</div>
+
+              <!-- Step 2: Preparation -->
+              <div class="step-item">
+                <button class="step-btn step-btn-2" data-step="2" onclick="goToStep(2)" title="Preparation">
+                  <span class="step-number">2</span>
+                  <span class="step-label">Prep</span>
+                  <span class="step-check" style="display: none;">✓</span>
+                </button>
+              </div>
+              <div class="step-arrow">→</div>
+
+              <!-- Step 3: Conduct -->
+              <div class="step-item">
+                <button class="step-btn step-btn-3" data-step="3" onclick="goToStep(3)" title="Conduct">
+                  <span class="step-number">3</span>
+                  <span class="step-label">Conduct</span>
+                  <span class="step-check" style="display: none;">✓</span>
+                </button>
+              </div>
+              <div class="step-arrow">→</div>
+
+              <!-- Step 4: Attendance -->
+              <div class="step-item">
+                <button class="step-btn step-btn-4" data-step="4" onclick="handleStep4Click(event)"
+                  title="Click to show attendance content. Ctrl+Click to go directly to attendance page">
+                  <span class="step-number">4</span>
+                  <span class="step-label">Attendance</span>
+                  <span class="step-check" style="display: none;">✓</span>
+                </button>
+              </div>
+              <div class="step-arrow">→</div>
+
+              <!-- Step 5: Upload -->
+              <div class="step-item">
+                <button class="step-btn step-btn-5" data-step="5" onclick="goToStep(5)" title="Upload">
+                  <span class="step-number">5</span>
+                  <span class="step-label">Upload</span>
+                  <span class="step-check" style="display: none;">✓</span>
+                </button>
+              </div>
+              <div class="step-arrow">→</div>
+
+              <!-- Step 6: Feedback -->
+              <div class="step-item">
+                <button class="step-btn step-btn-6" data-step="6" onclick="goToStep(6)" title="Feedback">
+                  <span class="step-number">6</span>
+                  <span class="step-label">Feedback</span>
+                  <span class="step-check" style="display: none;">✓</span>
+                </button>
+              </div>
+              <div class="step-arrow">→</div>
+
+              <!-- Step 7: Reward (Optional) -->
+              <div class="step-item">
+                <button class="step-btn step-btn-7" data-step="7" onclick="goToStep(7)" title="Reward (Optional)">
+                  <span class="step-number">7</span>
+                  <span class="step-label">Reward</span>
+                  <span class="step-check" style="display: none;">✓</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <script>
+            function handleStep4Click(event) {
+              // If Ctrl key is pressed, go directly to attendance page
+              if (event.ctrlKey || event.metaKey) {
+                const plannedSessionId = '{{ planned_session.id|default:"" }}';
+                if (plannedSessionId) {
+                  window.open(`/facilitator/planned-session/${plannedSessionId}/attendance/`, '_blank');
+                } else {
+                  alert('Session information missing');
+                }
+              } else {
+                // Normal click - show attendance tab content
+                goToStep(4);
+              }
+              event.preventDefault();
+            }
+          </script>
+
+          <!-- ATTENDANCE BUTTON in content area -->
+          {% if not actual_session or session_status != 'conducted' %}
+          <div class="text-center mt-3" id="attendanceButton" style="display: none;">
+          {% else %}
+          <div class="text-center mt-3" id="attendanceButton">
+          {% endif %}
+            {% if planned_session %}
+            <a href="{% url 'mark_attendance_redirect' planned_session.id %}" class="btn btn-primary btn-lg">
+              <i class="fas fa-users me-1"></i>Go to Attendance Page
+            </a>
+            <p class="text-muted mt-2">
+              <small>Click above or Step 4 in the workflow to mark attendance</small>
+            </p>
+            {% endif %}
+          </div>
+
+          <!-- SESSION STEPS DETAILS -->
+          {% if planned_session.steps.exists %}
+          <div class="alert alert-info border-2 mb-3">
+            <div class="d-flex align-items-center mb-2">
+              <strong class="me-2">📋 Session Activities ({{ planned_session.steps.count }} steps):</strong>
+              <span class="badge bg-info">Required</span>
+            </div>
+            <div class="mt-2" style="font-size: 0.9rem;">
+              {% for step in planned_session.steps.all %}
+              <div class="mb-2 d-flex align-items-start">
+                <span class="badge bg-primary me-2 mt-1">{{ step.order }}</span>
+                <div class="flex-grow-1">
+                  <strong>{{ step.title }}</strong>
+                  {% if step.duration_minutes %}
+                  <span class="badge bg-secondary ms-2">⏱️ {{ step.duration_minutes }}min</span>
+                  {% endif %}
+                  {% if step.youtube_url %}
+                  <a href="{{ step.youtube_url }}" target="_blank" class="ms-2 text-danger" title="Watch video">
+                    <i class="fas fa-play-circle"></i> Video
+                  </a>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- WORKFLOW NAVIGATION (HIDDEN) -->
+          <div class="workflow-nav mb-3" style="display:none;">
+            <div class="nav nav-pills flex-column" id="workflowTabs" role="tablist">
+              <button class="nav-link active" id="lesson-plan-tab" data-bs-toggle="pill" data-bs-target="#lesson-plan"
+                type="button" role="tab">
+                📋 Lesson Plan
+              </button>
+              <button class="nav-link" id="preparation-tab" data-bs-toggle="pill" data-bs-target="#preparation"
+                type="button" role="tab">
+                ✅ Preparation
+              </button>
+              <button class="nav-link" id="conduct-tab" data-bs-toggle="pill" data-bs-target="#conduct" type="button"
+                role="tab">
+                📝 Conduct
+              </button>
+              <button class="nav-link" id="facilitator-task-tab" data-bs-toggle="pill"
+                data-bs-target="#facilitator-task" type="button" role="tab">
+                📸 Task
+              </button>
+              <button class="nav-link" id="feedback-tab" data-bs-toggle="pill" data-bs-target="#feedback" type="button"
+                role="tab">
+                💭 Feedback
+              </button>
+              <button class="nav-link" id="rewards-tab" data-bs-toggle="pill" data-bs-target="#rewards" type="button"
+                role="tab">
+                🎁 Rewards
+              </button>
+            </div>
+          </div>
+
+          <script>
+            // Initialize workflow
+            let currentStep = 1;
+            const totalSteps = 7;
+
+            // Global variables for curriculum content loading
+            let currentLanguage = 'english';
+            let currentDay = parseInt('{{ current_day|default:"1" }}') || 1;
+            const classSectionId = '{{ class_section.id }}';
+            const curriculumUrl = "{% url 'curriculum_content_api' %}";
+            let contentDiv = null;
+
+            const stepMap = {
+              1: 'lesson-plan',
+              2: 'preparation',
+              3: 'conduct',
+              4: 'attendance',  // ✅ This should match the tab-pane ID
+              5: 'facilitator-task',
+              6: 'feedback',
+              7: 'rewards'
+            };
+
+            // Initialize step buttons based on DATABASE state
+            async function initializeStepButtons() {
+              console.log('🔧 Initializing step buttons from database...');
+
+              // FORCE CLEAR OLD localStorage to remove old data from all users
+              // Smart localStorage cleanup is handled at the top of the file based on lastSessionDate.
+              // Unconditional clearing here was defeating persistence on refresh.
+
+
+              // Determine completed steps from database
+              const completedSteps = await determineCompletedStepsFromDatabase();
+              console.log('Completed steps from database:', completedSteps);
+
+              // Initialize all step buttons
+              for (let step = 1; step <= totalSteps; step++) {
+                const stepBtn = document.querySelector(`.step-btn[data-step="${step}"]`);
+                if (stepBtn) {
+                  // Remove all state classes - ALWAYS reset on page load
+                  stepBtn.classList.remove('completed-step', 'current-step', 'disabled');
+
+                  // If step is completed, mark it
+                  if (completedSteps.includes(step)) {
+                    stepBtn.classList.add('completed-step');
+                    const checkmark = stepBtn.querySelector('.step-check');
+                    if (checkmark) {
+                      checkmark.style.display = 'flex';
+                    }
+                    console.log(`✅ Step ${step} initialized as completed`);
+                  } else {
+                    // Hide checkmark for incomplete steps
+                    const checkmark = stepBtn.querySelector('.step-check');
+                    if (checkmark) {
+                      checkmark.style.display = 'none';
+                    }
+                    console.log(`⚪ Step ${step} initialized as incomplete (gray)`);
+                  }
+                }
+              }
+
+              // Enforce workflow state
+              enforceWorkflowState();
+            }
+
+            // Determine which steps are completed based on DATABASE
+            async function determineCompletedStepsFromDatabase() {
+              // ALWAYS start with backend-detected steps (Step 3, 4, etc.)
+              let completedSteps = determineCompletedStepsFromBackend();
+              const today = new Date().toISOString().split('T')[0];
+              const plannedSessionId = '{{ planned_session.id|default:"" }}';
+
+              console.log('🔍 determineCompletedStepsFromDatabase - starting with backend steps:', completedSteps);
+
+              if (!plannedSessionId || !stepStatusAPI) {
+                console.warn('⚠️ Cannot load more from database - missing plannedSessionId or stepStatusAPI');
+                return completedSteps;
+              }
+
+              try {
+                // Load all persistent step statuses from database
+                const stepsFromServer = await stepStatusAPI.getStepStatuses(plannedSessionId, today);
+                
+                if (stepsFromServer) {
+                  // Check each step 1-7
+                  for (let stepNum = 1; stepNum <= 7; stepNum++) {
+                    if (stepsFromServer[stepNum] && stepsFromServer[stepNum].is_completed) {
+                      // Add if not already in list (from backend)
+                      if (!completedSteps.includes(stepNum)) {
+                        completedSteps.push(stepNum);
+                        console.log(`✅ Step ${stepNum} - completed (from database)`);
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('❌ Error loading step statuses from database:', error);
+                // Already has backend steps, so just return what we have
+              }
+
+              console.log('🏁 Final determined completed steps:', completedSteps);
+              return completedSteps;
+            }
+
+            // Determine which steps are completed based on backend data (FALLBACK)
+            function determineCompletedStepsFromBackend() {
+              const completedSteps = [];
+              const today = new Date().toISOString().split('T')[0];
+              const classId = '{{ class_section.id }}'; // Get current class ID
+
+              console.log('🔍 determineCompletedStepsFromBackend - classId:', classId, 'today:', today);
+
+              // Find the parent container with session/class/date identifiers
+              // This ensures we're reading data for the CURRENT class/day, not old data
+              let dataContainer = document.querySelector('[data-session-id][data-class-id][data-date]');
+
+              // Fallback: try to find by just data-session-id
+              if (!dataContainer) {
+                dataContainer = document.querySelector('[data-session-id]');
+              }
+
+              if (!dataContainer) {
+                console.warn('⚠️ Data container not found - checking localStorage only');
+                // Still check localStorage as fallback
+                const step2_date = localStorage.getItem(`step2_completed_date_${classId}`);
+                const step2_completed = localStorage.getItem(`step2_completed_${classId}`);
+                if (step2_date === today && step2_completed === 'true') {
+                  completedSteps.push(2);
+                  console.log('✅ Step 2 (Preparation) - from localStorage');
+                }
+
+                const step5_date = localStorage.getItem(`step5_completed_date_${classId}`);
+                const step5_completed = localStorage.getItem(`step5_completed_${classId}`);
+                if (step5_date === today && step5_completed === 'true') {
+                  completedSteps.push(5);
+                  console.log('✅ Step 5 (Upload) - from localStorage');
+                }
+
+                return completedSteps;
+              }
+
+              console.log('✅ Data container found - reading backend state');
+
+              // Step 1: Lesson Plan - check if lesson plan was uploaded
+              const lessonPlanUploaded = dataContainer.querySelector('[data-lesson-plan-uploaded]');
+              if (lessonPlanUploaded && lessonPlanUploaded.getAttribute('data-lesson-plan-uploaded') === 'true') {
+                completedSteps.push(1);
+                console.log('✅ Step 1 (Lesson Plan) - uploaded');
+              }
+
+              // Step 2: Preparation - check if preparation checklist was saved (from backend)
+              const preparationSaved = dataContainer.querySelector('[data-preparation-saved]');
+              if (preparationSaved && preparationSaved.getAttribute('data-preparation-saved') === 'true') {
+                completedSteps.push(2);
+                console.log('✅ Step 2 (Preparation) - saved (from backend)');
+              } else {
+                // Check localStorage for same-day persistence (class-specific) - only if backend doesn't have it
+                const step2_date = localStorage.getItem(`step2_completed_date_${classId}`);
+                const step2_completed = localStorage.getItem(`step2_completed_${classId}`);
+                if (step2_date === today && step2_completed === 'true') {
+                  completedSteps.push(2);
+                  console.log('✅ Step 2 (Preparation) - from localStorage (same-day persistence)');
+                }
+              }
+
+              // Step 3: Conduct - check if actual session exists TODAY
+              const conductSaved = dataContainer.querySelector('[data-conduct-saved]');
+              if (conductSaved && conductSaved.getAttribute('data-conduct-saved') === 'true') {
+                completedSteps.push(3);
+                console.log('✅ Step 3 (Conduct) - session created today');
+              }
+
+              // Step 4: Attendance - check if attendance was marked
+              const attendanceMarked = dataContainer.querySelector('[data-attendance-marked]');
+              if (attendanceMarked && attendanceMarked.getAttribute('data-attendance-marked') === 'true') {
+                completedSteps.push(4);
+                console.log('✅ Step 4 (Attendance) - marked');
+              }
+
+              // Step 5: Upload - check if facilitator task was completed (from backend)
+              const taskCompleted = dataContainer.querySelector('[data-task-completed]');
+              if (taskCompleted && taskCompleted.getAttribute('data-task-completed') === 'true') {
+                completedSteps.push(5);
+                console.log('✅ Step 5 (Upload) - completed (from backend)');
+              } else {
+                // Check localStorage for same-day persistence (class-specific) - only if backend doesn't have it
+                const step5_date = localStorage.getItem(`step5_completed_date_${classId}`);
+                const step5_completed = localStorage.getItem(`step5_completed_${classId}`);
+                if (step5_date === today && step5_completed === 'true') {
+                  completedSteps.push(5);
+                  console.log('✅ Step 5 (Upload) - from localStorage (same-day persistence)');
+                }
+              }
+
+              // Step 6: Feedback - check if feedback was saved
+              const feedbackSaved = dataContainer.querySelector('[data-feedback-saved]');
+              if (feedbackSaved && feedbackSaved.getAttribute('data-feedback-saved') === 'true') {
+                completedSteps.push(6);
+                console.log('✅ Step 6 (Feedback) - saved');
+              }
+
+              // Step 7: Reward - check if reward was given
+              const rewardGiven = dataContainer.querySelector('[data-reward-given]');
+              if (rewardGiven && rewardGiven.getAttribute('data-reward-given') === 'true') {
+                completedSteps.push(7);
+                console.log('✅ Step 7 (Reward) - given');
+              }
+
+              // Save to localStorage for fallback
+              localStorage.setItem('completedSteps', JSON.stringify(completedSteps));
+
+              // ✅ AUTO-SYNC: If we found backend steps but they weren't in SessionStepStatus, save them now
+              // This is critical for Step 3, 4, 5 which are often updated via other views
+              if (typeof markStepCompleted === 'function' && completedSteps.length > 0) {
+                const plannedSessionId = '{{ planned_session.id|default:"" }}';
+                completedSteps.forEach(step => {
+                  // Only sync steps 1-5 to avoid loops with step 6/7
+                  if (step <= 5 && plannedSessionId) {
+                    // Check if already synced this page load to prevent loops
+                    if (!window.syncedSteps) window.syncedSteps = [];
+                    if (!window.syncedSteps.includes(step)) {
+                      console.log(`📡 Auto-syncing detected Step ${step} with database...`);
+                      window.syncedSteps.push(step);
+                      markStepCompleted(step);
+                    }
+                  }
+                });
+              }
+
+              return completedSteps;
+            }
+
+            // Call initialization when DOM is ready
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', initializeStepButtons);
+            } else {
+              initializeStepButtons();
+            }
+
+            // ============================================
+            // CURRICULUM CONTENT LOADING - GLOBAL SCOPE
+            // ============================================
+            async function loadCurriculumContent(day, language) {
+              // Initialize contentDiv if not already done
+              if (!contentDiv) {
+                contentDiv = document.getElementById('curriculumContent');
+              }
+
+              if (!contentDiv) {
+                console.warn('curriculumContent div not found');
+                return;
+              }
+
+              contentDiv.innerHTML = `
+        <div class="curriculum-content-loading">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 mb-0">Loading Day ${day} ${language === 'hindi' ? 'Hindi' : 'English'} content...</p>
+            </div>
+        </div>
+    `;
+
+              try {
+                const response = await fetch(`${curriculumUrl}?day=${day}&language=${language}&class_section_id=${classSectionId}`);
+                if (!response.ok) throw new Error('Failed to load content');
+
+                const content = await response.text();
+                contentDiv.innerHTML = content;
+
+                // Update day navigation if it exists
+                updateDayNavigation(day);
+
+                // Show success notification
+                showMobileNotification(`Loaded Day ${day} ${language === 'hindi' ? 'Hindi' : 'English'} content`, 'success');
+
+              } catch (error) {
+                console.error('Error loading curriculum content:', error);
+                contentDiv.innerHTML = `
+            <div class="curriculum-error">
+                <h6><i class="fas fa-exclamation-triangle me-2"></i>Error Loading Content</h6>
+                <p>Failed to load Day ${day} ${language === 'hindi' ? 'Hindi' : 'English'} curriculum content.</p>
+                <div class="mt-3">
+                    <button class="btn btn-outline-danger btn-sm" onclick="loadCurriculumContent(${day}, '${language}')">
+                        <i class="fas fa-redo me-1"></i>Retry
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="loadCurriculumContent(1, '${language}')">
+                        <i class="fas fa-home me-1"></i>Go to Day 1
+                    </button>
+                </div>
+            </div>
+        `;
+              }
+            }
+
+            function updateDayNavigation(day) {
+              // Update day selector if it exists
+              const daySelector = document.querySelector('.day-navigation-bar select');
+              if (daySelector) {
+                daySelector.value = day;
+              }
+
+              // Update navigation buttons in the main navigation bar
+              const navBar = document.querySelector('.day-navigation-bar');
+              if (navBar) {
+                const prevBtn = navBar.querySelector('button:first-child');
+                const nextBtn = navBar.querySelector('button:last-child');
+
+                if (prevBtn) {
+                  prevBtn.disabled = day <= 1;
+                  prevBtn.innerHTML = `<i class="fas fa-chevron-left me-1"></i>Day ${Math.max(1, day - 1)}`;
+                  prevBtn.onclick = () => loadCurriculumContent(Math.max(1, day - 1), currentLanguage);
+                }
+
+                if (nextBtn) {
+                  nextBtn.disabled = day >= 150;
+                  nextBtn.innerHTML = `Day ${Math.min(150, day + 1)} <i class="fas fa-chevron-right ms-1"></i>`;
+                  nextBtn.onclick = () => loadCurriculumContent(Math.min(150, day + 1), currentLanguage);
+                }
+              }
+
+              // Update current day display
+              currentDay = day;
+            }
+
+            function goToStep(step) {
+              console.log('Going to step:', step, 'Tab pane ID:', stepMap[step]);
+
+              if (step >= 1 && step <= totalSteps) {
+                // ✅ PREREQUISITE CHECK
+                if (!canAccessStep(step)) {
+                  if (step === 6) {
+                    showMobileNotification(`⚠️ Please complete Attendance (Step 4) before Feedback.`, 'warning');
+                  } else {
+                    const prevStepNum = step - 1;
+                    const prevLabel = stepMap[prevStepNum] || `Step ${prevStepNum}`;
+                    showMobileNotification(`⚠️ Please complete ${prevLabel} (Step ${prevStepNum}) before proceeding.`, 'warning');
+                  }
+                  return;
+                }
+
+                currentStep = step;
+
+                // Save current step
+                localStorage.setItem('currentWorkflowStep', step);
+
+                // Show the corresponding tab pane
+                const tabPaneId = stepMap[step];
+                const tabPane = document.getElementById(tabPaneId);
+
+                if (tabPane) {
+                  console.log('Found tab pane:', tabPaneId);
+
+                  // Hide all tab panes - use CSS classes only, no inline styles
+                  document.querySelectorAll('.tab-pane').forEach(pane => {
+                    pane.classList.remove('show', 'active');
+                  });
+
+                  // Show the selected tab pane - use CSS classes only
+                  tabPane.classList.add('show', 'active');
+
+                  // Load curriculum content when conduct tab is activated
+                  if (step === 3) {
+                    console.log('Loading curriculum content for conduct tab');
+                    loadCurriculumContent(currentDay, currentLanguage);
+                  }
+
+                  // Also activate the corresponding nav link if it exists
+                  document.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('data-bs-target') === `#${tabPaneId}`) {
+                      link.classList.add('active');
+                    }
+                  });
+
+                  // Scroll to top of content
+                  setTimeout(() => {
+                    tabPane.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 100);
+
+                } else {
+                  console.error('Tab pane not found:', tabPaneId);
+                  showMobileNotification('❌ Error: Tab content not found', 'danger');
+                }
+
+                // Highlight the current step in the flow bar
+                highlightCurrentStep(step);
+
+                // Update Previous/Next button visibility
+                updateNavigationButtons(step);
+
+                // Update URL without reloading
+                const url = new URL(window.location);
+                url.searchParams.set('step', step);
+                window.history.pushState({}, '', url);
+              }
+            }
+
+            function updateNavigationButtons(step) {
+              const prevBtn = document.getElementById('prevBtn');
+              const nextBtn = document.getElementById('nextBtn');
+
+              // Show/hide previous button - visible for steps 2-7
+              if (prevBtn) {
+                if (step === 1) {
+                  prevBtn.style.display = 'none';
+                } else {
+                  prevBtn.style.display = 'block';
+                }
+              }
+
+              // Show/hide next button - visible for steps 1-6
+              if (nextBtn) {
+                if (step === totalSteps) {
+                  nextBtn.style.display = 'none';
+                } else {
+                  nextBtn.style.display = 'block';
+                }
+              }
+
+              console.log(`Navigation buttons updated for step ${step}: prev=${prevBtn ? prevBtn.style.display : 'N/A'}, next=${nextBtn ? nextBtn.style.display : 'N/A'}`);
+            }
+
+            // Check if a step can be accessed based on prerequisites
+            function canAccessStep(step) {
+              if (step <= 1) return true;
+              
+              // ✅ FLEXIBLE WORKFLOW: Step 5 is NOT a prerequisite for Step 6
+              if (step === 6) {
+                // To access Feedback (6), only Attendance (4) must be completed
+                const step4Btn = document.querySelector(`.step-btn[data-step="4"]`);
+                return step4Btn && step4Btn.classList.contains('completed-step');
+              }
+              
+              // Standard logic: A step is accessible only if the IMMEDIATE PREVIOUS step is completed
+              const prevStepNum = step - 1;
+              const prevStepBtn = document.querySelector(`.step-btn[data-step="${prevStepNum}"]`);
+              
+              if (prevStepBtn && prevStepBtn.classList.contains('completed-step')) {
+                return true;
+              }
+              
+              return false;
+            }
+
+            // Enforce workflow state - visually disable buttons based on prerequisites
+            function enforceWorkflowState() {
+              console.log('🔄 Enforcing strict sequential workflow state...');
+              
+              for (let i = 1; i <= totalSteps; i++) {
+                const btn = document.querySelector(`.step-btn[data-step="${i}"]`);
+                if (btn) {
+                  const accessible = canAccessStep(i);
+                  
+                  if (accessible) {
+                    btn.classList.remove('disabled-step-nav');
+                    btn.style.opacity = '1';
+                    btn.style.pointerEvents = 'auto';
+                    btn.title = "";
+                  } else {
+                    btn.classList.add('disabled-step-nav');
+                    btn.style.opacity = '0.5';
+                    btn.style.pointerEvents = 'none';
+                    
+                    if (i === 6) {
+                      btn.title = "Complete Step 4 (Attendance) first";
+                    } else {
+                      btn.title = `Complete Step ${i-1} first`;
+                    }
+                  }
+                }
+              }
+            }
+
+            function highlightCurrentStep(step) {
+              // Remove highlight from all steps
+              document.querySelectorAll('.step-btn').forEach(btn => {
+                btn.classList.remove('current-step');
+                
+                // Remove existing current text if any
+                const statusText = btn.querySelector('.step-status-text');
+                if (statusText) statusText.remove();
+              });
+
+              // Add highlight to current step
+              const currentStepBtn = document.querySelector(`.step-btn[data-step="${step}"]`);
+              if (currentStepBtn) {
+                currentStepBtn.classList.add('current-step');
+                
+                // Add "Current" text
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'step-status-text';
+                statusSpan.textContent = '(Current)';
+                statusSpan.style.cssText = 'font-size: 0.6rem; margin-top: 1px; color: #212529; font-weight: bold; font-style: italic;';
+                currentStepBtn.appendChild(statusSpan);
+              }
+            }
+
+            // Mark step as completed - Save to database AND update UI
+            async function markStepCompleted(step) {
+              const stepBtn = document.querySelector(`.step-btn[data-step="${step}"]`);
+              const plannedSessionId = '{{ planned_session.id|default:"" }}';
+              
+              // ✅ FIXED: Use the actual session date from database instead of client clock
+              const sessionDate = '{{ actual_session.date|date:"Y-m-d"|default:"" }}' || new Date().toISOString().split('T')[0];
+              
+              console.log(`markStepCompleted(${step}):`, {
+                found: !!stepBtn,
+                selector: `.step-btn[data-step="${step}"]`,
+                currentClasses: stepBtn ? stepBtn.className : 'N/A',
+                plannedSessionId: plannedSessionId,
+                sessionDate: today
+              });
+
+              if (stepBtn) {
+                stepBtn.classList.add('completed-step');
+                stepBtn.classList.remove('current-step');
+
+                console.log(`After adding class:`, stepBtn.className);
+
+                // Show the checkmark
+                const checkmark = stepBtn.querySelector('.step-check');
+                if (checkmark) {
+                  checkmark.style.display = 'flex';
+                  console.log('✅ Checkmark shown');
+                } else {
+                  console.warn('⚠️ Checkmark element not found');
+                }
+
+                // Save to database
+                if (plannedSessionId && stepStatusAPI) {
+                  try {
+                    await stepStatusAPI.markStepCompleted(plannedSessionId, sessionDate, step);
+                    console.log(`✅ Step ${step} saved to database for date ${sessionDate}`);
+                  } catch (error) {
+                    console.error(`❌ Error saving step ${step} to database:`, error);
+                  }
+                }
+
+                // Enforce workflow state after marking step complete
+                enforceWorkflowState();
+
+                console.log('✅ Step', step, 'marked as completed. Classes:', stepBtn.className);
+              } else {
+                console.error(`❌ Step button not found for step ${step}`);
+              }
+            }
+
+            // Navigation functions
+            function nextStep() {
+              if (currentStep < totalSteps) {
+                goToStep(currentStep + 1);
+              }
+            }
+
+            function previousStep() {
+              if (currentStep > 1) {
+                goToStep(currentStep - 1);
+              }
+            }
+
+            function completeAllSteps() {
+              // Mark step 7 (Rewards) as completed
+              markStepCompleted(7);
+              console.log('✅ All steps completed!');
+
+              // Show completion message
+              showMobileNotification('🎉 Session workflow complete!', 'success');
+
+              // Optional: Redirect or show completion screen
+              setTimeout(() => {
+                alert('✅ All steps completed! Your session workflow is now complete.');
+              }, 500);
+            }
+
+            // ============================================
+            // SESSION STATE RESTORATION - PERSISTENT DATA
+            // ============================================
+            async function loadSessionState() {
+              const plannedSessionId = '{{ planned_session.id|default:"" }}';
+              if (!plannedSessionId) return;
+
+              try {
+                const response = await fetch(`/api/session-state/?planned_session_id=${plannedSessionId}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                  console.warn('Failed to load session state:', data.error);
+                  return;
+                }
+
+                console.log('✅ Session state loaded:', data);
+
+                // IMPORTANT: Do NOT mark steps as completed here!
+                // Step completion is now determined ONLY from backend data attributes
+                // which are rendered fresh on each page load and scoped to class/day
+                // Calling markStepCompleted() here causes old data to persist across classes/days
+
+                // Only restore UI data (uploads, feedback, tasks, attendance) if needed
+                if (data.steps_completed) {
+                  // Restore uploads if they exist
+                  if (data.steps_completed.lesson_plan && data.uploads) {
+                    restoreLessonPlanUploads(data.uploads);
+                  }
+                  // Restore feedback if it exists
+                  if (data.steps_completed.feedback && data.feedback) {
+                    restoreFeedback(data.feedback);
+                  }
+                  // Restore tasks if they exist
+                  if (data.steps_completed.tasks && data.tasks) {
+                    restoreFacilitatorTasks(data.tasks);
+                  }
+                  // Restore attendance if it exists
+                  if (data.steps_completed.attendance && data.attendance) {
+                    restoreAttendanceStatus(data.attendance);
+                  }
+                }
+
+                // Update progress indicator if visible
+                updateProgressIndicator(data.steps_completed);
+
+              } catch (error) {
+                console.error('Error loading session state:', error);
+              }
+            }
+
+            function restoreLessonPlanUploads(uploads) {
+              if (!uploads || uploads.length === 0) {
+                console.log('No uploads to restore');
+                return;
+              }
+
+              const uploadResultDiv = document.getElementById('uploadResult');
+              if (!uploadResultDiv) {
+                console.warn('uploadResult div not found');
+                return;
+              }
+
+              let html = '<div class="alert alert-success"><strong>✅ Lesson Plans Uploaded:</strong><ul class="mb-0 mt-2">';
+              uploads.forEach(upload => {
+                html += `<li><a href="${upload.file_url}" target="_blank">${upload.filename}</a> - ${upload.upload_date}</li>`;
+              });
+              html += '</ul></div>';
+
+              uploadResultDiv.innerHTML = html;
+              console.log('✅ Restored lesson plan uploads:', uploads.length);
+            }
+
+            function restoreFeedback(feedback) {
+              if (!feedback) return;
+
+              // Update teacher feedback status display
+              const teacherStatus = document.getElementById('teacherFeedbackStatus');
+              if (teacherStatus) {
+                teacherStatus.innerHTML = `<span class="badge bg-success">✅ Completed</span>`;
+              }
+
+              // Mark feedback form as complete
+              const feedbackSection = document.getElementById('feedback');
+              if (feedbackSection) {
+                const statusDiv = feedbackSection.querySelector('.feedback-status') ||
+                  document.createElement('div');
+                statusDiv.className = 'alert alert-success mb-3';
+                statusDiv.innerHTML = `
+            <i class="fas fa-check-circle me-2"></i>
+            <strong>✅ Teacher Reflection Saved</strong><br>
+            <small>Completion: ${feedback.session_completion_percentage || 'N/A'}% | 
+                   Satisfaction: ${feedback.facilitator_satisfaction || 'N/A'}/5 | 
+                   Saved: ${feedback.feedback_date || new Date().toLocaleString()}</small>
+        `;
+
+                if (!feedbackSection.querySelector('.feedback-status')) {
+                  feedbackSection.insertBefore(statusDiv, feedbackSection.firstChild);
+                }
+              }
+
+              console.log('✅ Restored feedback data');
+            }
+
+            function restoreFacilitatorTasks(tasks) {
+              if (!tasks || tasks.length === 0) return;
+
+              const taskSection = document.getElementById('facilitator-task');
+              if (!taskSection) return;
+
+              // Separate tasks by type
+              const photoTasks = tasks.filter(t => t.media_type === 'photo');
+              const videoTasks = tasks.filter(t => t.media_type === 'video');
+              const facebookTasks = tasks.filter(t => t.media_type === 'facebook_link');
+
+              let html = '<div class="alert alert-success"><strong>✅ Tasks Uploaded:</strong>';
+
+              // Show photos
+              if (photoTasks.length > 0) {
+                html += '<div class="mt-2"><strong>📷 Photos:</strong><ul class="mb-0">';
+                photoTasks.forEach(task => {
+                  html += `<li><a href="${task.media_file_url}" target="_blank">Photo - ${task.created_at}</a></li>`;
+                });
+                html += '</ul></div>';
+              }
+
+              // Show videos
+              if (videoTasks.length > 0) {
+                html += '<div class="mt-2"><strong>🎥 Videos:</strong><ul class="mb-0">';
+                videoTasks.forEach(task => {
+                  html += `<li><a href="${task.media_file_url}" target="_blank">Video - ${task.created_at}</a></li>`;
+                });
+                html += '</ul></div>';
+              }
+
+              // Show Facebook links
+              if (facebookTasks.length > 0) {
+                html += '<div class="mt-2"><strong>📱 Facebook Links:</strong><ul class="mb-0">';
+                facebookTasks.forEach(task => {
+                  html += `<li><a href="${task.facebook_link}" target="_blank">${task.facebook_link}</a></li>`;
+                });
+                html += '</ul></div>';
+              }
+
+              html += '</div>';
+
+              const existingAlert = taskSection.querySelector('.alert-success');
+              if (existingAlert) {
+                existingAlert.innerHTML = html;
+              } else {
+                taskSection.insertAdjacentHTML('afterbegin', html);
+              }
+
+              console.log('✅ Restored facilitator tasks:', tasks.length);
+            }
+
+            function restoreAttendanceStatus(attendance) {
+              if (!attendance) return;
+
+              const attendanceSection = document.getElementById('attendance');
+              const statusContainer = document.getElementById('attendanceStatusAlert');
+              if (!attendanceSection) return;
+
+              let html = `<div class="alert alert-success mb-3">
+                  <i class="fas fa-check-circle me-2"></i>
+                  <strong>✅ Attendance Recorded</strong><br>
+                  <small class="text-muted">
+                    Present: ${attendance.present}/${attendance.total} students marked for today.
+                  </small>
+                </div>`;
+
+              if (statusContainer) {
+                statusContainer.innerHTML = html;
+              } else {
+                // Prepend if container not found
+                attendanceSection.insertAdjacentHTML('afterbegin', `<div id="attendanceStatusAlert">${html}</div>`);
+              }
+
+              // Also update card body if present
+              const cardTitle = attendanceSection.querySelector('h5');
+              if (cardTitle && cardTitle.textContent.includes('Attendance')) {
+                cardTitle.innerHTML = `Attendance: ${attendance.present} Present / ${attendance.total} Total`;
+              }
+
+              console.log('✅ Restored attendance status');
+            }
+
+            function updateProgressIndicator(stepsCompleted) {
+              if (!stepsCompleted) return;
+
+              const completedCount = Object.values(stepsCompleted).filter(v => v).length;
+              const totalSteps = Object.keys(stepsCompleted).length;
+              const percentage = (completedCount / totalSteps) * 100;
+
+              const progressBar = document.querySelector('.progress-bar');
+              if (progressBar) {
+                progressBar.style.width = percentage + '%';
+                progressBar.setAttribute('data-width', percentage);
+              }
+
+              console.log(`📊 Progress: ${completedCount}/${totalSteps} steps (${percentage.toFixed(1)}%)`);
+            }
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function () {
+              // ✅ INITIALIZE: Hide ALL tab panes on init before goToStep runs
+              document.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.classList.remove('show', 'active');
+              });
+
+              // ✅ CHECK IF SESSION IS COMPLETED - Show completion message if so
+              const plannedSessionId = '{{ planned_session.id|default:"" }}';
+              const sessionStatus = '{{ session_status|default:"" }}';
+              const sessionCompletedKey = `sessionCompleted_${plannedSessionId}`; // ✅ UNIQUE KEY PER SESSION
+              const sessionCompleted = localStorage.getItem(sessionCompletedKey);
+
+              // Only show completion if BOTH localStorage says completed AND backend confirms session is conducted
+              if (sessionCompleted === 'true' && sessionStatus === 'conducted' && plannedSessionId) {
+                console.log(`✅ Session ${plannedSessionId} already completed - showing completion message`);
+                // Hide all tabs
+                document.querySelectorAll('.tab-pane').forEach(pane => {
+                  pane.classList.remove('show', 'active');
+                });
+                // Hide step flow bar
+                const stepFlowBar = document.querySelector('.step-flow-bar');
+                if (stepFlowBar) {
+                  stepFlowBar.style.display = 'none';
+                }
+                // Hide "Session in progress" alert
+                const sessionAlerts = document.querySelectorAll('.alert-info');
+                sessionAlerts.forEach(alert => {
+                  if (alert.textContent.includes('Session in progress') ||
+                    alert.textContent.includes('Complete the workflow steps')) {
+                    alert.style.display = 'none';
+                  }
+                });
+                // Hide workflow card
+                const allCards = document.querySelectorAll('.card');
+                allCards.forEach(card => {
+                  const h6 = card.querySelector('h6');
+                  if (h6 && h6.textContent.includes('Session Workflow')) {
+                    card.style.display = 'none';
+                  }
+                });
+                // Show completion message
+                setTimeout(() => {
+                  const completionDiv = document.getElementById('completionMessage');
+                  if (completionDiv) {
+                    completionDiv.style.display = 'block';
+                    console.log('✅ Completion message displayed on page load');
+                  }
+                }, 100);
+                return; // Stop further initialization
+              } else if (sessionCompleted === 'true' && sessionStatus !== 'conducted') {
+                // Session was marked as completed in localStorage but backend says it's not conducted
+                // Clear the localStorage flag
+                localStorage.removeItem(sessionCompletedKey);
+                console.warn(`⚠️ Clearing stale completion flag. Session status: ${sessionStatus}`);
+              }
+
+              // FIRST: Load persistent session state from database
+              // Add small delay to ensure data is saved
+              setTimeout(() => {
+                loadSessionState();
+              }, 300);
+
+              // Check URL for step parameter
+              const urlParams = new URLSearchParams(window.location.search);
+              const urlStep = urlParams.get('step');
+
+              // ✅ FIX: Handle attendance_saved WITHOUT setTimeout race condition
+              if (urlParams.get('attendance_saved') === 'true') {
+                console.log('🔄 Attendance saved detected. Refreshing state...');
+                markStepCompleted(4);
+                localStorage.removeItem('currentWorkflowStep');
+
+                // Refresh session state from backend
+                loadSessionState().then(() => {
+                  enforceWorkflowState();
+                  showMobileNotification('✅ Attendance saved successfully!', 'success');
+                  // Go to step 5 or the provided step
+                  goToStep(urlStep ? parseInt(urlStep) : 5);
+                }).catch(err => {
+                  console.error('Error refreshing session state:', err);
+                  // Still proceed to step 5 even if refresh fails
+                  goToStep(urlStep ? parseInt(urlStep) : 5);
+                });
+                return; // ✅ CRITICAL: Stop here - don't fall through to the else below
+              }
+
+              // Don't load from old localStorage - use backend data only
+              // The initializeStepButtons() function already reads from backend data attributes
+
+              // Enforce workflow state based on completed steps
+              enforceWorkflowState();
+
+              // Determine which step to show
+              if (urlStep) {
+                goToStep(parseInt(urlStep));
+              } else {
+                const savedStep = localStorage.getItem('currentWorkflowStep');
+                if (savedStep) {
+                  const stepNum = parseInt(savedStep);
+                  // Only go to step if it's valid
+                  if (stepNum >= 1 && stepNum <= totalSteps) {
+                    goToStep(stepNum);
+                  } else {
+                    goToStep(1);
+                  }
+                } else {
+                  goToStep(1); // Default to step 1
+                }
+              }
+
+              // Make step buttons in flow bar clickable
+              document.querySelectorAll('.step-btn:not(.disabled)').forEach(btn => {
+                const step = btn.getAttribute('data-step');
+                if (step && !btn.hasAttribute('href')) {
+                  btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    goToStep(parseInt(step));
+                  });
+                }
+              });
+            });
+          </script>
+
+          <!-- SESSION ACTION BUTTONS -->
+          <!-- DEBUG: session_status={{ session_status }}, is_today={{ is_today }}, actual_session={{ actual_session.id|default:"none" }} -->
+          <div class="session-action-buttons mt-3 mb-3" id="sessionActionButtons">
+            {% if session_status == "conducted" and is_today %}
+            <!-- SESSION COMPLETED TODAY - SHOW COMPLETION MESSAGE ONLY -->
+
+
+            {% elif session_status == "pending" and is_today %}
+            <!-- PENDING SESSION TODAY - SHOW CONDUCT BUTTON -->
+            <!-- [REMOVED] Manual Conduct Button - Session starts automatically on view -->
+
+
+
+            {% comment %}
+            <form method="post" action="{% if planned_session %}{% url 'start_session' planned_session.id %}{% endif %}">
+              {% csrf_token %}
+              <input type="hidden" name="status" value="holiday">
+              <button class="btn btn-outline-warning btn-sm w-100 mb-2">
+                🌤️ Holiday
+              </button>
+            </form>
+            {% endcomment %}
+
+
+
+            {% elif session_status == "holiday" and is_today %}
+            <!-- MARKED AS HOLIDAY TODAY - NO CONDUCT BUTTON -->
+            <div class="alert alert-warning mt-2 w-100">
+              🌤️ <strong>Session marked as holiday today.</strong><br>
+              <small>This session is marked as holiday.</small>
+            </div>
+
+            {% elif session_status == "conducted" %}
+            <!-- SESSION COMPLETED (PREVIOUS DAY) -->
+            {% if actual_session %}
+            <a href="{% url 'mark_attendance' actual_session.id %}" class="btn btn-primary btn-sm w-100">
+              <i class="fas fa-users"></i> View/Edit Attendance
+            </a>
+            {% endif %}
+
+            {% elif session_status == "cancelled" %}
+            <!-- SESSION CANCELLED -->
+            <div class="alert alert-danger mt-2 w-100">
+              ❌ <strong>Session cancelled.</strong><br>
+              <small>This session was permanently cancelled.</small>
+            </div>
+
+            {% endif %}
+          </div>
+
+          <!-- FINAL ACTIONS - Removed Redundant Button -->
+          <div class="final-actions mt-3" id="finalActions" style="display: none;">
+            <!-- Button removed as session completion is handled by teacher reflection form -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Workflow Content Area -->
+    <div class="session-content-full-width">
+
+
+
+
+
+      <!-- WORKFLOW CARD - ALWAYS SHOW FOR WORKFLOW COMPLETION -->
+      <div class="card shadow-sm">
+        <div class="card-header">
+          <h6 class="mb-0">
+            <i class="fas fa-tasks"></i> Session Workflow - Day {{ current_day }}
+          </h6>
+        </div>
+        <div class="card-body">
+          <div class="tab-content" id="workflowTabContent">
+
+            <!-- LESSON PLAN TAB -->
+            <div class="tab-pane fade show active" id="lesson-plan" role="tabpanel">
+              <h6><i class="fas fa-file-pdf me-2"></i>Lesson Plan Management</h6>
+
+              <!-- Download Template -->
+              <div class="mb-3">
+                <a href="/static/pdf/lesson_plan_template.pdf" class="btn btn-outline-primary btn-sm" target="_blank">
+                  <i class="fas fa-download me-1"></i>Download lesson plan Template day {{ current_day }}
+                </a>
+               
+              </div>
+
+              <!-- Upload Completed Plan - Direct Camera -->
+              <div class="mb-3">
+                <h6 class="text-success">📤 Upload Completed Lesson Plan
+                  {% if is_grouped_session %}
+                  <span class="badge bg-success ms-2">For All Grouped Classes</span>
+                  {% endif %}
+                </h6>
+                <form id="lessonPlanUploadForm" enctype="multipart/form-data">
+                  {% csrf_token %}
+                  <input type="hidden" name="planned_session_id" value="{{ planned_session.id }}">
+
+                  <!-- Direct Camera Button Only -->
+                  <button type="button" class="btn btn-primary btn-lg w-100" id="lessonPlanCameraBtn">
+                    <i class="bi bi-camera-fill me-2"></i>Open Camera
+                  </button>
+                  <input type="file" id="lessonPlanCameraInput" name="lesson_plan_file" accept="image/*"
+                    capture="environment" style="display: none;">
+                </form>
+
+                <div id="uploadResult" class="mt-2"></div>
+
+                <script>
+                  (function () {
+                    console.log('📷 Camera upload inline script loaded');
+
+                    function init() {
+                      const btn = document.getElementById('lessonPlanCameraBtn');
+                      const input = document.getElementById('lessonPlanCameraInput');
+
+                      console.log('Elements:', { btn: !!btn, input: !!input });
+
+                      if (!btn || !input) return;
+
+                      btn.onclick = function (e) {
+                        e.preventDefault();
+                        console.log('Button clicked');
+                        input.click();
+                      };
+
+                      input.onchange = function () {
+                        if (!this.files[0]) return;
+                        const file = this.files[0];
+                        console.log('File selected:', file.name);
+
+                        const resultDiv = document.getElementById('uploadResult');
+                        const sessionIdInput = document.querySelector('input[name="planned_session_id"]');
+
+                        if (!sessionIdInput) {
+                          console.error('❌ planned_session_id input not found');
+                          resultDiv.innerHTML = '<div class="alert alert-danger">Error: Session ID not found</div>';
+                          return;
+                        }
+
+                        const sessionId = sessionIdInput.value;
+                        console.log('Session ID:', sessionId);
+
+                        if (!sessionId) {
+                          console.error('❌ Session ID is empty');
+                          resultDiv.innerHTML = '<div class="alert alert-danger">Error: Session ID is empty</div>';
+                          return;
+                        }
+
+                        resultDiv.innerHTML = '<div class="alert alert-info">Uploading...</div>';
+
+                        const formData = new FormData();
+                        formData.append('lesson_plan_file', file);
+                        formData.append('planned_session_id', sessionId);
+
+                        const csrfTokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+                        if (!csrfTokenInput) {
+                          console.error('❌ CSRF token not found');
+                          resultDiv.innerHTML = '<div class="alert alert-danger">Error: CSRF token not found</div>';
+                          return;
+                        }
+
+                        const csrfToken = csrfTokenInput.value;
+                        console.log('CSRF Token found:', csrfToken ? 'Yes' : 'No');
+
+                        fetch('/api/upload-lesson-plan/', {
+                          method: 'POST',
+                          body: formData,
+                          headers: { 'X-CSRFToken': csrfToken }
+                        })
+                          .then(r => {
+                            console.log('Response status:', r.status);
+                            if (!r.ok) {
+                              return r.json().then(data => {
+                                throw new Error(`HTTP ${r.status}: ${data.error || r.statusText}`);
+                              }).catch(err => {
+                                throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+                              });
+                            }
+                            return r.json();
+                          })
+                          .then(data => {
+                            console.log('Response:', data);
+                            if (data.success) {
+                              // Mark step 1 (Lesson Plan) as completed
+                              markStepCompleted(1);
+
+                              const uploadTime = new Date().toLocaleString();
+
+                              // Clear localStorage cache for this session to force fresh data
+                              const cacheKey = `lesson_plan_${sessionId}`;
+                              localStorage.removeItem(cacheKey);
+
+                              // Clear all lesson plan related cache
+                              Object.keys(localStorage).forEach(key => {
+                                if (key.startsWith('lesson_plan_')) {
+                                  localStorage.removeItem(key);
+                                }
+                              });
+
+                              // Fetch latest upload to display (with cache busting)
+                              const timestamp = new Date().getTime();
+                              fetch(`/api/get-lesson-plan-uploads/?planned_session_id=${sessionId}&t=${timestamp}`)
+                                .then(r => {
+                                  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                                  return r.json();
+                                })
+                                .then(uploadData => {
+                                  if (uploadData.success && uploadData.upload) {
+                                    const upload = uploadData.upload;
+                                    resultDiv.innerHTML = `
+                                                  <div class="alert alert-success">
+                                                      <strong>✅ Lesson Plan Uploaded!</strong>
+                                                      <ul class="mb-0 mt-2">
+                                                          <li><a href="${upload.file_url}" target="_blank">${upload.filename}</a> - ${upload.upload_date}</li>
+                                                      </ul>
+                                                  </div>
+                                              `;
+                                    console.log('✅ Displayed latest lesson plan upload');
+                                  } else {
+                                    throw new Error('No upload data returned');
+                                  }
+                                })
+                                .catch(err => {
+                                  console.error('Error fetching upload:', err);
+                                  // Fallback to showing just the current upload
+                                  resultDiv.innerHTML = `
+                                              <div class="alert alert-success">
+                                                  <strong>✅ Lesson Plan Uploaded!</strong>
+                                                  <ul class="mb-0 mt-2">
+                                                      <li><a href="/media/${data.file_name}" target="_blank">${data.file_name}</a> - ${uploadTime}</li>
+                                                  </ul>
+                                              </div>
+                                          `;
+                                });
+
+                              document.getElementById('uploadCompletedSection').style.display = 'block';
+                              document.getElementById('lessonPlanUploadForm').style.display = 'none';
+
+                              // Refresh progress metrics immediately
+                              if (typeof updatePreparationProgress === 'function') {
+                                updatePreparationProgress();
+                              }
+
+                              // Refresh uploaded files list
+                              if (typeof refreshUploadedFilesList === 'function') {
+                                refreshUploadedFilesList();
+                              }
+
+                              // Reload session state after a short delay to get updated data
+                              setTimeout(() => {
+                                loadSessionState();
+                              }, 1000);
+                            } else {
+                              resultDiv.innerHTML = '<div class="alert alert-danger">Error: ' + (data.error || 'Unknown error') + '</div>';
+                            }
+                          })
+                          .catch(err => {
+                            console.error('Upload error:', err);
+                            resultDiv.innerHTML = '<div class="alert alert-danger"><strong>Upload failed:</strong><br>' + err.message + '</div>';
+                          });
+                      };
+                    }
+
+                    if (document.readyState === 'loading') {
+                      document.addEventListener('DOMContentLoaded', init);
+                    } else {
+                      init();
+                    }
+                  })();
+                </script>
+              </div>
+
+              <!-- Upload Completed Plan - Direct Camera -->
+              <div class="mb-3" id="uploadCompletedSection" style="display: none;">
+                <h6 class="text-success">
+                  <i class="bi bi-check-circle me-2"></i>📤 Upload Completed Lesson Plan
+                  {% if is_grouped_session %}
+                  <span class="badge bg-success ms-2">For All Grouped Classes</span>
+                  {% endif %}
+                </h6>
+                <div class="alert alert-success border-2">
+                  <div class="d-flex align-items-center">
+                    <i class="bi bi-check-circle-fill me-2" style="font-size: 1.5rem;"></i>
+                    <div>
+                      <strong>Lesson plan uploaded successfully!</strong><br>
+                      <small class="text-muted">Your lesson plan is ready for today's session.</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="text-center mt-2 d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()" style="display: none;"
+                  id="prevBtn">
+                  <i class="fas fa-arrow-left me-1"></i>Previous
+                </button>
+                <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()" id="nextBtn">
+                  Next: Preparation <i class="fas fa-arrow-right ms-1"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- PREPARATION TAB -->
+            <div class="tab-pane fade" id="preparation" role="tabpanel">
+              <h6><i class="fas fa-check-circle me-2"></i>Session Preparation Checklist</h6>
+
+              <form id="preparationForm">
+                {% csrf_token %}
+                <input type="hidden" name="planned_session_id" value="{{ planned_session.id }}">
+
+                <div class="checklist-container">
+                  <div class="form-check mb-3">
+                    <input class="form-check-input checkpoint-item" type="checkbox" name="lesson_plan_reviewed"
+                      id="checkpoint1" {% if preparation_checklist.lesson_plan_reviewed %}checked{% endif %}>
+                    <label class="form-check-label" for="checkpoint1">
+                      <strong>📖 Lesson plan reviewed</strong><br>
+                      <small class="text-muted">I have reviewed the lesson plan and understand today's
+                        objectives</small>
+                    </label>
+                  </div>
+
+                  <div class="form-check mb-3">
+                    <input class="form-check-input checkpoint-item" type="checkbox" name="materials_prepared"
+                      id="checkpoint2" {% if preparation_checklist.materials_prepared %}checked{% endif %}>
+                    <label class="form-check-label" for="checkpoint2">
+                      <strong>📦 Materials prepared</strong><br>
+                      <small class="text-muted">All required materials and resources are ready</small>
+                    </label>
+                  </div>
+
+                  <div class="form-check mb-3">
+                    <input class="form-check-input checkpoint-item" type="checkbox" name="technology_tested"
+                      id="checkpoint3" {% if preparation_checklist.technology_tested %}checked{% endif %}>
+                    <label class="form-check-label" for="checkpoint3">
+                      <strong>💻 Technology tested</strong><br>
+                      <small class="text-muted">Computer, projector, and internet connection are working</small>
+                    </label>
+                  </div>
+
+                  <div class="form-check mb-3">
+                    <input class="form-check-input checkpoint-item" type="checkbox" name="classroom_setup_ready"
+                      id="checkpoint4" {% if preparation_checklist.classroom_setup_ready %}checked{% endif %}>
+                    <label class="form-check-label" for="checkpoint4">
+                      <strong>🏫 Classroom setup ready</strong><br>
+                      <small class="text-muted">Classroom is arranged and ready for the session</small>
+                    </label>
+                  </div>
+
+                  <div class="form-check mb-3">
+                    <input class="form-check-input checkpoint-item" type="checkbox" name="student_list_reviewed"
+                      id="checkpoint5" {% if preparation_checklist.student_list_reviewed %}checked{% endif %}>
+                    <label class="form-check-label" for="checkpoint5">
+                      <strong>👥 Student list reviewed</strong><br>
+                      <small class="text-muted">I know which students are enrolled and their attendance patterns</small>
+                    </label>
+                  </div>
+
+                  <div class="form-check mb-3">
+                    <input class="form-check-input checkpoint-item" type="checkbox"
+                      name="previous_session_feedback_reviewed" id="checkpoint6" {% if
+                      preparation_checklist.previous_session_feedback_reviewed %}checked{% endif %}>
+                    <label class="form-check-label" for="checkpoint6">
+                      <strong>📝 Previous feedback reviewed</strong><br>
+                      <small class="text-muted">I have reviewed feedback from the last session</small>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="preparation-progress mb-3">
+                  <div class="progress">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: 0%"
+                      id="preparationProgressBar"></div>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">Preparation Progress: <span id="preparationProgressText">0%</span></small>
+                    <small id="prepSavingSatus" class="text-info" style="display: none;">
+                      <i class="fas fa-spinner fa-spin me-1"></i>Saving...
+                    </small>
+                  </div>
+                </div>
+
+                <!-- Mark Preparation as Complete (shown when all checkpoints done) -->
+                <div class="alert alert-success mt-3" id="preparationCompleteAlert" style="display: none;">
+                  <i class="fas fa-check-circle me-2"></i>
+                  <strong>✅ All preparation items complete!</strong> Click the button below to proceed.
+                </div>
+
+              </form>
+
+              <div class="text-center mt-2 d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
+                  <i class="fas fa-arrow-left me-1"></i>Previous
+                </button>
+                <button class="btn btn-success btn-lg flex-grow-1" onclick="markPreparationComplete()"
+                  id="preparationCompleteBtn" style="display: none;">
+                  <i class="fas fa-check-circle me-1"></i>Mark Preparation Complete
+                </button>
+                <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()" id="preparationNextBtn"
+                  disabled>
+                  Next: Conduct <i class="fas fa-arrow-right ms-1"></i>
+                </button>
+              </div>
+
+              <script>
+                function markPreparationComplete() {
+                  // Mark step 2 (Preparation) as completed
+                  markStepCompleted(2);
+                  console.log('✅ Step 2 (Preparation) marked as complete');
+
+                  // Move to next step
+                  setTimeout(() => {
+                    goToStep(3);
+                  }, 300);
+                }
+              </script>
+            </div>
+
+
+
+            <div class="tab-pane fade" id="conduct" role="tabpanel">
+              <h6><i class="fas fa-play me-2"></i>Conduct Session</h6>
+
+              <!-- Curriculum Content -->
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="text-primary mb-0">📚 Day {{ current_day }} Curriculum Content</h6>
+                  <div>
+                    {% if has_admin_content %}
+                    <span class="badge bg-success me-1" title="Content managed by admin">
+                      <i class="fas fa-user-cog me-1"></i>Admin Managed
+                    </span>
+                    {% else %}
+                    <span class="badge bg-warning me-1" title="Static curriculum file">
+                      <i class="fas fa-file-alt me-1"></i>Static Content
+                    </span>
+                    {% endif %}
+                    <span class="badge bg-info" id="curriculumLanguageLabel">English</span>
+                  </div>
+                </div>
+
+                {% if content_metadata %}
+                <div class="content-metadata mb-2">
+                  <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Source: {{ content_source|title }}
+                    {% if content_metadata.last_updated %}
+                    • Last updated: {{ content_metadata.last_updated|date:"M d, Y H:i" }}
+                    {% endif %}
+                    {% if content_metadata.usage_count > 0 %}
+                    • Accessed {{ content_metadata.usage_count }} time{{ content_metadata.usage_count|pluralize }}
+                    {% endif %}
+                  </small>
+                </div>
+                {% endif %}
+
+                <div id="curriculumContent" class="curriculum-content-mobile">
+                  <!-- Content will be loaded here dynamically -->
+                  <div class="text-center p-4">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Loading curriculum content...</span>
+                    </div>
+                    <p class="mt-2">Loading Day {{ current_day }} content...</p>
+                  </div>
+                </div>
+
+                <!-- Mobile Content Controls -->
+                <div class="mt-3 d-flex justify-content-between align-items-center d-md-none">
+                  <button class="btn btn-outline-secondary btn-sm" onclick="toggleContentExpansion()"
+                    id="expandToggleBtn">
+                    <i class="fas fa-expand-arrows-alt me-1"></i>
+                    <span id="expandToggleText">Expand</span>
+                  </button>
+                  <button class="btn btn-outline-primary btn-sm" onclick="refreshContent()">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              <!-- Mark Conduct as Complete -->
+              <div class="alert alert-info mt-4 mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Ready to proceed?</strong> Click the button below after you've reviewed the curriculum content.
+              </div>
+
+              <div class="text-center mt-2 d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
+                  <i class="fas fa-arrow-left me-1"></i>Previous
+                </button>
+                <button class="btn btn-success btn-lg flex-grow-1" onclick="markConductComplete()" {% if actual_session and actual_session.is_conduct_completed %}disabled{% endif %}>
+                  {% if actual_session and actual_session.is_conduct_completed %}
+                  <i class="fas fa-check-circle me-1"></i>✓ Conduct Complete
+                  {% else %}
+                  <i class="fas fa-check-circle me-1"></i>Mark Conduct Complete
+                  {% endif %}
+                </button>
+              </div>
+
+              <script>
+                function markConductComplete() {
+                  const completeBtn = document.querySelector('button[onclick="markConductComplete()"]');
+                  const originalHtml = completeBtn ? completeBtn.innerHTML : '';
+                  
+                  if (completeBtn) {
+                    completeBtn.disabled = true;
+                    completeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+                  }
+
+                  // Get actual_session_id from data attributes
+                  const sessionId = document.querySelector('[data-session-id]').getAttribute('data-session-id');
+                  
+                  if (!sessionId || sessionId === 'none') {
+                    console.error('❌ Cannot mark conduct complete: No actual session ID found');
+                    alert('Please start the session first by clicking "Conduct (Step 2)"');
+                    if (completeBtn) {
+                      completeBtn.disabled = false;
+                      completeBtn.innerHTML = originalHtml;
+                    }
+                    return;
+                  }
+
+                  // Call API to mark conduct complete in backend
+                  fetch('/api/mark-conduct-complete/', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({
+                      actual_session_id: sessionId
+                    })
+                  })
+                  .then(response => response.json())
+                  .then(data => {
+                    if (data.success) {
+                      console.log('✅ Step 3 (Conduct) - marked as complete in backend');
+                      
+                      // Mark step 3 as completed in the UI
+                      const stepBtn = document.querySelector('.step-btn[data-step="3"]');
+                      if (stepBtn) {
+                        stepBtn.classList.add('completed-step');
+                        const checkmark = stepBtn.querySelector('.step-check');
+                        if (checkmark) {
+                          checkmark.style.display = 'flex';
+                        }
+                      }
+
+                      // Change button to green and disable it
+                      const completeBtn = document.querySelector('button[onclick="markConductComplete()"]');
+                      if (completeBtn) {
+                        completeBtn.classList.remove('btn-success');
+                        completeBtn.classList.add('btn-success');
+                        completeBtn.disabled = true;
+                        completeBtn.innerHTML = '<i class="fas fa-check-circle me-1"></i>✓ Conduct Complete';
+                      }
+
+                      // Move to next step
+                      setTimeout(() => {
+                        goToStep(4);
+                      }, 300);
+                    } else {
+                      console.error('❌ Error marking conduct complete:', data.error);
+                      alert('Error saving progress: ' + data.error);
+                    }
+                  })
+                  .catch(error => {
+                    console.error('❌ Fetch error:', error);
+                    alert('Network error. Please try again.');
+                  });
+                }
+              </script>
+
+              <!-- Video Section -->
+              {% if video_id %}
+              <div class="mb-3">
+                <h6 class="text-info">🎥 Session Video</h6>
+                <div class="ratio ratio-16x9">
+                  <iframe src="https://www.youtube.com/embed/{{ video_id }}"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen>
+                  </iframe>
+                </div>
+              </div>
+              {% endif %}
+
+            
+
+              <div class="text-center mt-2">
+                <button class="btn btn-primary btn-lg" onclick="nextStep()">
+                  Next: Attendance <i class="fas fa-arrow-right ms-1"></i>
+                </button>
+              </div>
+
+              <script>
+
+                function conductSessionSubmit(event) {
+                  // Don't mark step 3 as completed here
+                  // Let the backend determine completion based on actual_session
+                  disableButton(event.target);
+
+                  // CRITICAL FIX: Refresh page after form submission to get updated actual_session
+                  // This ensures Step 3 completion check will find the newly created actual_session
+                  setTimeout(() => {
+                    location.reload();
+                  }, 500);
+                }
+              </script>
+            </div>
+
+            <!-- ATTENDANCE TAB - Shows button to redirect to attendance page -->
+            <div class="tab-pane fade" id="attendance" role="tabpanel" aria-labelledby="attendance-tab">
+              <h6><i class="fas fa-users me-2"></i>Mark Student Attendance</h6>
+
+              <!-- Check if session has been conducted -->
+
+              <!-- Session conducted - show attendance UI -->
+              {% if attendance_saved %}
+              <!-- ATTENDANCE ALREADY MARKED -->
+              <div id="attendanceStatusAlert">
+                <div class="alert alert-success mb-3">
+                  <i class="fas fa-check-circle me-2"></i>
+                  <strong>✅ Attendance Recorded</strong><br>
+                  <small class="text-muted">
+                    Present: {{ attendance_stats.present }}/{{ attendance_stats.total }} students marked for Day {{ current_day }}.
+                  </small>
+                </div>
+              </div>
+
+              <div class="card border-success">
+                <div class="card-header bg-success text-white py-3">
+                  <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Attendance Status</h6>
+                </div>
+                <div class="card-body text-center p-4">
+                  <div class="mb-4">
+                    <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                    <h5>Attendance: {{ attendance_stats.present }} Present / {{ attendance_stats.total }} Total</h5>
+                    <p class="text-muted">Attendance has been recorded successfully for today.</p>
+                  </div>
+
+                  <div class="mt-3">
+                    {% if actual_session %}
+                    <a href="{% url 'mark_attendance' actual_session.id %}"
+                      class="btn btn-outline-success btn-sm me-2">
+                      <i class="fas fa-edit me-1"></i>Edit Attendance
+                    </a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <div class="text-center mt-2 d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
+                  <i class="fas fa-arrow-left me-1"></i>Previous
+                </button>
+                <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()">
+                  Next: Upload <i class="fas fa-arrow-right ms-1"></i>
+                </button>
+              </div>
+              {% elif actual_session %}
+              <!-- ATTENDANCE NOT YET MARKED - SESSION HAS BEEN STARTED -->
+              <div class="alert alert-warning mb-3">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                <strong>⚠️ Attendance Pending</strong><br>
+                <small class="text-muted">
+                  Click the button below to mark attendance for Day {{ current_day }}.
+                </small>
+              </div>
+
+              <div class="card border-primary">
+                <div class="card-header bg-primary text-white py-3">
+                  <h6 class="mb-0"><i class="fas fa-users me-2"></i>Mark Attendance for Day {{ current_day }}</h6>
+                </div>
+                <div class="card-body text-center p-4">
+                  <div class="mb-4">
+                    <i class="fas fa-users fa-4x text-primary mb-3"></i>
+                    <h5>Ready to Mark Attendance?</h5>
+                    <p class="text-muted">Click below to open the attendance marking page for all students.</p>
+                  </div>
+
+                  <div class="text-center mt-3 mb-3">
+
+                    <a href="{% url 'mark_attendance' actual_session.id %}" class="btn btn-primary btn-lg">
+                      <i class="fas fa-users me-1"></i>Mark Attendance
+                    </a>
+
+                  </div>
+
+                  <p class="text-muted small mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    You'll be redirected to a separate page to mark attendance.
+                  </p>
+                </div>
+              </div>
+
+              <div class="text-center mt-2 d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
+                  <i class="fas fa-arrow-left me-1"></i>Previous
+                </button>
+                <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()">
+                  Next: Upload <i class="fas fa-arrow-right ms-1"></i>
+                </button>
+              </div>
+
+              {% else %}
+              <!-- SESSION NOT YET STARTED -->
+              <div class="alert alert-info mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>ℹ️ Session Not Started</strong><br>
+                <small class="text-muted">
+                  Please start the session first (Step 3) before marking attendance.
+                </small>
+              </div>
+
+              <div class="card border-info">
+                <div class="card-header bg-info text-white py-3">
+                  <h6 class="mb-0"><i class="fas fa-clock me-2"></i>Waiting for Session Start</h6>
+                </div>
+                <div class="card-body text-center p-4">
+                  <div class="mb-4">
+                    <i class="fas fa-hourglass-start fa-4x text-info mb-3"></i>
+                    <h5>Session Not Started Yet</h5>
+                    <p class="text-muted">Go back to Step 3 and click "Start Session" to begin.</p>
+                  </div>
+
+                  <div class="text-center mt-3 mb-3">
+                    <button class="btn btn-info btn-lg" onclick="goToStep(3)">
+                      <i class="fas fa-play me-1"></i>Go to Step 3: Start Session
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="text-center mt-2 d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
+                  <i class="fas fa-arrow-left me-1"></i>Previous
+                </button>
+                <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()">
+                  Next: Upload <i class="fas fa-arrow-right ms-1"></i>
+                </button>
+              </div>
+              {% endif %}
+
+            </div>
+
+            <!-- FACILITATOR TASK TAB -->
+            <div class="tab-pane fade" id="facilitator-task" role="tabpanel">
+              <h6><i class="fas fa-link me-2"></i>Add Facebook Link</h6>
+
+              <!-- Task Completion Status -->
+              <div id="taskCompletionStatus" class="alert alert-success mb-2" style="display: none;">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>✅ Task Completed!</strong> Facebook link has been saved successfully.
+              </div>
+
+              <!-- Simple Facebook Link Form -->
+              <div class="card border-info mb-2" id="fbLinkFormCard">
+                <div class="card-header bg-info text-white py-2">
+                  <h6 class="mb-0 fs-6">👍 Facebook Link</h6>
+                </div>
+                <div class="card-body p-3">
+                  <form id="fbLinkForm" method="POST">
+                    {% csrf_token %}
+
+                    <!-- Facebook Link Input -->
+                    <div class="mb-2">
+                      <label for="facebook_link" class="form-label">Facebook Link</label>
+                      <input type="url" class="form-control" id="facebook_link" name="facebook_link"
+                        placeholder="https://www.facebook.com/..." required>
+                      <small class="text-muted">Enter a valid Facebook link (facebook.com or fb.watch)</small>
+                    </div>
+
+                    <!-- Description (Optional) -->
+                    <div class="mb-2">
+                      <label for="description" class="form-label">how was day (optional)</label>
+                      <textarea class="form-control" id="description" name="description" rows="2"
+                        placeholder="Add notes about this link..."></textarea>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn btn-info w-100" id="saveFbBtn">
+                      <i class="fas fa-save me-2"></i>Save Link
+                    </button>
+                  </form>
+
+                  <!-- Status Message -->
+                  <div id="fbStatusMessage" class="alert mt-2" style="display: none;"></div>
+                </div>
+              </div>
+
+              <!-- Facebook Link Form Handler Script -->
+              <script>
+                function initFacebookFormHandler() {
+                  console.log('Facebook form handler initializing...');
+
+                  const form = document.getElementById('fbLinkForm');
+                  const statusMsg = document.getElementById('fbStatusMessage');
+                  const savedLinksList = document.getElementById('savedLinksList');
+
+                  if (!form) {
+                    console.error('Form not found!');
+                    return;
+                  }
+
+                  console.log('Form found, attaching submit handler');
+
+                  form.addEventListener('submit', function (e) {
+                    console.log('Form submit event triggered');
+                    e.preventDefault();
+
+                    const link = document.getElementById('facebook_link').value.trim();
+                    const description = document.getElementById('description').value.trim();
+
+                    console.log('Link value:', link);
+
+                    // Validation
+                    if (!link) {
+                      showStatus('Please enter a Facebook link', 'danger');
+                      return;
+                    }
+
+                    if (!link.includes('facebook.com') && !link.includes('fb.watch')) {
+                      showStatus('Invalid Facebook link. Must contain facebook.com or fb.watch', 'danger');
+                      return;
+                    }
+
+                    // Disable button
+                    const btn = form.querySelector('button[type="submit"]');
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+                    // Send form data
+                    const formData = new FormData(form);
+                    const actualSessionId = '{{ actual_session.id|default:"" }}';
+
+                    // Add actual_session_id to form data if available
+                    if (actualSessionId) {
+                      formData.append('actual_session_id', actualSessionId);
+                    }
+
+                    console.log('Sending fetch request to /facilitator/task/facebook-link/');
+
+                    fetch('/facilitator/task/facebook-link/', {
+                      method: 'POST',
+                      body: formData,
+                      headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                      }
+                    })
+                      .then(response => {
+                        console.log('Response received:', response.status);
+                        if (!response.ok) {
+                          throw new Error('HTTP ' + response.status);
+                        }
+                        return response.json();
+                      })
+                      .then(data => {
+                        console.log('Response data:', data);
+                        if (data.success) {
+                          // Mark step 5 (Task) as completed
+                          markStepCompleted(5);
+
+                          // Save to localStorage for same-day persistence (class-specific)
+                          const today = new Date().toISOString().split('T')[0];
+                          const classId = '{{ class_section.id }}'; // Get current class ID
+                          localStorage.setItem(`step5_completed_date_${classId}`, today);
+                          localStorage.setItem(`step5_completed_${classId}`, 'true');
+
+                          // Also save the link to localStorage as backup
+                          const facebookLink = document.getElementById('facebook_link').value;
+                          const savedLinksKey = `saved_facebook_links_${classId}`;
+                          const newLink = {
+                            facebook_link: facebookLink,
+                            created_at: new Date().toLocaleString(),
+                            task_id: data.task_id
+                          };
+
+                          // Get existing links from localStorage
+                          let savedLinks = [];
+                          const savedLinksJson = localStorage.getItem(savedLinksKey);
+                          if (savedLinksJson) {
+                            try {
+                              savedLinks = JSON.parse(savedLinksJson);
+                            } catch (e) {
+                              console.error('Error parsing saved links:', e);
+                              savedLinks = [];
+                            }
+                          }
+
+                          // Add new link to the beginning
+                          savedLinks.unshift(newLink);
+                          // Keep only last 10 links
+                          savedLinks = savedLinks.slice(0, 10);
+                          localStorage.setItem(savedLinksKey, JSON.stringify(savedLinks));
+                          console.log('✅ Link saved to localStorage:', newLink);
+
+                          showStatus('✅ Link saved successfully!', 'success');
+                          form.reset();
+
+                          loadSavedLinksAsync();
+
+                          // Show task completion status
+                          const completionStatus = document.getElementById('taskCompletionStatus');
+                          if (completionStatus) {
+                            completionStatus.style.display = 'block';
+                            completionStatus.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }
+
+                          // Hide form after 2 seconds
+                          setTimeout(() => {
+                            const formCard = document.getElementById('fbLinkFormCard');
+                            if (formCard) {
+                              formCard.style.display = 'none';
+                            }
+                          }, 1500);
+                        } else {
+                          showStatus('❌ Error: ' + (data.error || 'Failed to save'), 'danger');
+                        }
+                      })
+                      .catch(error => {
+                        console.error('Fetch error:', error);
+                        showStatus('❌ Error: ' + error.message, 'danger');
+                      })
+                      .finally(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-save me-2"></i>Save Link';
+                      });
+                  });
+
+                  function showStatus(message, type) {
+                    statusMsg.className = 'alert alert-' + type;
+                    statusMsg.innerHTML = message;
+                    statusMsg.style.display = 'block';
+                    setTimeout(() => {
+                      statusMsg.style.display = 'none';
+                    }, 5000);
+                  }
+
+                  function loadSavedLinksAsync() {
+                    console.log('Loading saved links asynchronously...');
+                    if ('requestIdleCallback' in window) {
+                      requestIdleCallback(() => {
+                        loadSavedLinks();
+                      }, { timeout: 2000 });
+                    } else {
+                      setTimeout(loadSavedLinks, 100);
+                    }
+                  }
+
+                  function loadSavedLinks() {
+                    console.log('Loading saved links...');
+                    const savedLinksList = document.getElementById('savedLinksList');
+                    const actualSessionId = '{{ actual_session.id|default:"" }}';
+                    let classId = '{{ class_section.id }}';
+
+                    console.log('DEBUG: actualSessionId=', actualSessionId, 'classId=', classId);
+
+                    if (!savedLinksList) {
+                      console.warn('savedLinksList container not found');
+                      return;
+                    }
+
+                    // If classId is empty, try to get it from the data container
+                    if (!classId) {
+                      const dataContainer = document.querySelector('[data-class-id]');
+                      if (dataContainer) {
+                        classId = dataContainer.getAttribute('data-class-id');
+                        console.log('DEBUG: Got classId from data container:', classId);
+                      }
+                    }
+
+                    // If no actual session ID, check localStorage for saved links
+                    if (!actualSessionId) {
+                      console.log('No actual session ID - checking localStorage for saved links');
+                      const savedLinksKey = `saved_facebook_links_${classId}`;
+                      console.log('DEBUG: Looking for localStorage key:', savedLinksKey);
+                      const savedLinksJson = localStorage.getItem(savedLinksKey);
+                      console.log('DEBUG: localStorage value:', savedLinksJson);
+
+                      if (savedLinksJson) {
+                        try {
+                          const savedLinks = JSON.parse(savedLinksJson);
+                          if (savedLinks && savedLinks.length > 0) {
+                            const latestLink = savedLinks[0];
+                            let html = `
+                                        <div class="mb-3 p-3 border rounded bg-light">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="flex-grow-1">
+                                                    <a href="${latestLink.facebook_link}" target="_blank" class="text-primary fw-bold">
+                                                        <i class="fab fa-facebook me-2"></i>${latestLink.facebook_link}
+                                                    </a>
+                                                    <br>
+                                                    <small class="text-muted d-block mt-1">
+                                                        <i class="fas fa-calendar me-1"></i>${latestLink.created_at}
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                            savedLinksList.innerHTML = html;
+                            console.log('✅ Displayed saved link from localStorage');
+                            return;
+                          }
+                        } catch (e) {
+                          console.error('Error parsing saved links from localStorage:', e);
+                        }
+                      }
+
+                      // No saved links in localStorage either
+                      savedLinksList.innerHTML = '<p class="text-muted text-center">No links saved yet</p>';
+                      return;
+                    }
+
+                    fetch(`/facilitator/task/facebook-links/?actual_session_id=${actualSessionId}`, {
+                      headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                      }
+                    })
+                      .then(response => response.json())
+                      .then(data => {
+                        console.log('Saved links data:', data);
+                        if (data.links && data.links.length > 0) {
+                          // Show only the latest link
+                          const latestLink = data.links[0];
+                          let html = `
+                                <div class="mb-3 p-3 border rounded bg-light">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <a href="${latestLink.facebook_link}" target="_blank" class="text-primary fw-bold">
+                                                <i class="fab fa-facebook me-2"></i>${latestLink.facebook_link}
+                                            </a>
+                                            <br>
+                                            <small class="text-muted d-block mt-1">
+                                                <i class="fas fa-calendar me-1"></i>${latestLink.created_at}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                          savedLinksList.innerHTML = html;
+                          console.log('✅ Displayed latest saved link for current session');
+                        } else {
+                          savedLinksList.innerHTML = '<p class="text-muted text-center">No links saved yet</p>';
+                        }
+                      })
+                      .catch(err => {
+                        console.error('Error loading links:', err);
+                        savedLinksList.innerHTML = '<p class="text-danger text-center">Error loading links</p>';
+                      });
+                  }
+
+                  loadSavedLinksAsync();
+
+                  // Check if link already exists and hide form if it does
+                  setTimeout(() => {
+                    const actualSessionId = '{{ actual_session.id|default:"" }}';
+
+                    // Only check if we have an actual session ID
+                    if (!actualSessionId) {
+                      console.log('No actual session ID - skipping link check');
+                      return;
+                    }
+
+                    fetch(`/facilitator/task/facebook-links/?actual_session_id=${actualSessionId}`, {
+                      headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                      }
+                    })
+                      .then(response => response.json())
+                      .then(data => {
+                        if (data.links && data.links.length > 0) {
+                          // Link exists, hide the form
+                          const formCard = document.getElementById('fbLinkFormCard');
+                          if (formCard) {
+                            formCard.style.display = 'none';
+                          }
+                          // Show completion status
+                          const completionStatus = document.getElementById('taskCompletionStatus');
+                          if (completionStatus) {
+                            completionStatus.style.display = 'block';
+                          }
+                        }
+                      })
+                      .catch(err => console.error('Error checking links:', err));
+                  }, 500);
+
+                  console.log('Facebook form handler ready');
+                }
+
+                // Wait for DOM to be ready before initializing
+                if (document.readyState === 'loading') {
+                  document.addEventListener('DOMContentLoaded', initFacebookFormHandler);
+                } else {
+                  initFacebookFormHandler();
+                }
+              </script>
+
+              <!-- Saved Links List -->
+              <div class="card mb-2">
+                <div class="card-header bg-light py-2">
+                  <h6 class="mb-0 fs-6">📋 Saved Links</h6>
+                </div>
+                <div class="card-body" id="savedLinksList">
+                  <p class="text-muted text-center">No links saved yet</p>
+                </div>
+              </div>
+
+              <div class="text-center mt-2 d-flex justify-content-between gap-2">
+                <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
+                  <i class="fas fa-arrow-left me-1"></i>Previous
+                </button>
+                <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()">
+                  Next: Feedback <i class="fas fa-arrow-right ms-1"></i>
+                </button>
+              </div>
+              </button>
+              <button class="btn btn-outline-secondary btn-lg ms-2" onclick="nextStep()">
+                Skip <i class="fas fa-forward ms-1"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- FEEDBACK TAB - FIXED VERSION -->
+          <div class="tab-pane fade" id="feedback" role="tabpanel" aria-labelledby="feedback-tab">
+            <h6><i class="fas fa-comment me-2"></i>Session Feedback & Completion</h6>
+
+
+            <!-- Feedback Collection Status -->
+            <div class="row mb-3">
+              <div class="col-md-6 mb-3">
+                <div class="card border-primary h-100">
+                  <div class="card-body text-center py-2">
+                    <h6 class="text-primary mb-2">🧑‍🎓 Student Feedback Collection</h6>
+                    <div class="feedback-status" id="studentFeedbackStatus">
+                      <span class="badge bg-secondary">Not started</span>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm mt-2" onclick="toggleStudentFeedbackForm()">
+                      <i class="fas fa-comments me-1"></i>Collect Student Feedback
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6 mb-3">
+                <div class="card border-success h-100">
+                  <div class="card-body text-center py-2">
+                    <h6 class="text-success mb-2">👩‍🏫 Teacher Reflection</h6>
+                    <div class="feedback-status" id="teacherFeedbackStatus">
+                      <span class="badge bg-secondary">Not completed</span>
+                    </div>
+                    <button class="btn btn-outline-success btn-sm mt-2" onclick="showTeacherFeedbackForm()">
+                      <i class="fas fa-edit me-1"></i>Complete Reflection
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Student Feedback Inline Form (INSIDE the feedback tab) -->
+            <div id="studentFeedbackFormContainer" style="display: none;" class="card border-primary mb-3">
+              <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0">🧑‍🎓 Student Feedback</h6>
+                  <button type="button" class="btn-close btn-close-white"
+                    onclick="toggleStudentFeedbackForm()"></button>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="alert alert-info mb-3">
+                  <i class="fas fa-info-circle me-2"></i>
+                  <strong>Instructions:</strong> Select a student and add feedback notes.
+                </div>
+
+                <form id="studentFeedbackForm" method="POST" action="javascript:void(0);" novalidate>
+                  {% csrf_token %}
+                  <input type="hidden" name="actual_session_id" value="{{ actual_session.id|default:'' }}">
+
+                  <!-- Option 1: Student Selector -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">Select Student <span class="text-danger">*</span></label>
+                    <select name="student_id" id="feedbackStudentSelect" class="form-select form-select-lg" required>
+                      <option value="">Choose a student...</option>
+                      {% for enrollment in enrollments %}
+                      <option value="{{ enrollment.student.id }}">{{ enrollment.student.full_name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <!-- Option 2: Description/Notes -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">Feedback Notes <span class="text-danger">*</span></label>
+                    <textarea name="description" id="feedbackDescription" class="form-control" rows="4" required
+                      placeholder="Add feedback notes for this student..."></textarea>
+                  </div>
+
+                  <div class="text-center">
+                    <button type="button" class="btn btn-secondary me-2" onclick="toggleStudentFeedbackForm()">
+                      Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                      <i class="fas fa-paper-plane me-1"></i>Submit Feedback
+                    </button>
+                  </div>
+                </form>
+
+                <!-- NEW: List of students who already have feedback this session -->
+                <div id="submittedFeedbackListContainer" class="mt-4 pt-3 border-top" style="display: none;">
+                  <h6 class="fs-7 text-muted mb-2"><i class="fas fa-list-ul me-1"></i>Processed Students (this session)</h6>
+                  <div id="submittedFeedbackList" class="list-group list-group-flush small">
+                    <!-- Dynamic content -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Teacher Feedback Form - Simplified -->
+            <div id="teacherFeedbackForm" style="display: none;" class="mb-3">
+              <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                  <h6 class="mb-0"><i class="fas fa-chalkboard-teacher me-2"></i>Teacher Reflection - How was the day?</h6>
+                </div>
+                <div class="card-body p-3">
+                  <form id="teacherReflectionForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="planned_session_id" value="{{ planned_session.id|default:'' }}">
+                    <input type="hidden" name="actual_session_id" value="{{ actual_session.id|default:'' }}">
+
+                    <div class="row mb-3">
+                      <div class="col-md-6 mb-3 mb-md-0">
+                        <label class="form-label fw-bold fs-6">Overall Rating <span class="text-danger">*</span></label>
+                        <input type="number" name="rating" id="dayRating" class="form-control" min="0" max="10" placeholder="Enter rating out of 10" required>
+                      </div>
+                    </div>
+
+                    <!-- Simplified: Only 1 question - Text input -->
+                    <div class="mb-3">
+                      <label class="form-label fw-bold fs-6">How was the day? <span class="text-danger">*</span></label>
+                      <textarea name="day_reflection" id="dayReflectionText" class="form-control" rows="4" required
+                        placeholder="Write your reflection about how the day went..."></textarea>
+                    </div>
+
+                    <div class="text-center">
+                      <button type="button" class="btn btn-secondary me-2" onclick="hideTeacherFeedbackForm()">
+                        Cancel
+                      </button>
+                      <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-1"></i>Save Reflection & Complete Session
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+
+            <div class="text-center mt-2 d-flex justify-content-between gap-2">
+              <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
+                <i class="fas fa-arrow-left me-1"></i>Previous
+              </button>
+              <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()">
+                Next: Rewards <i class="fas fa-arrow-right ms-1"></i>
+              </button>
+            </div>
+          </div>
+          <!-- END OF FEEDBACK TAB -->
+
+          <!-- REWARDS TAB -->
+          <div class="tab-pane fade" id="rewards" role="tabpanel">
+            <h6><i class="fas fa-gift me-2"></i>Student Rewards & Recognition</h6>
+
+            <form id="rewardsForm" enctype="multipart/form-data">
+              {% csrf_token %}
+              <input type="hidden" name="planned_session_id" value="{{ planned_session.id }}">
+              <input type="hidden" name="actual_session_id" value="{{ actual_session.id|default:'' }}">
+
+              <div class="mb-3">
+                <label class="form-label">Reward Type:</label>
+                <div class="btn-group w-100" role="group">
+                  <input type="radio" class="btn-check" name="reward_type" id="rewardPhoto" value="photo">
+                  <label class="btn btn-outline-primary" for="rewardPhoto">📸 Photo</label>
+
+                  <input type="radio" class="btn-check" name="reward_type" id="rewardText" value="text" checked>
+                  <label class="btn btn-outline-primary" for="rewardText">📝 Text</label>
+                </div>
+              </div>
+
+              <div class="mb-3" id="photoUploadSection" style="display: none;">
+                <label class="form-label">Upload Reward Photo:</label>
+                <input type="file" class="form-control" name="reward_photo" accept="image/*">
+                <small class="text-muted">Upload a photo of students receiving rewards or their work</small>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Reward Description: <span class="text-danger">*</span></label>
+                <textarea name="reward_description" class="form-control" rows="3" required
+                  placeholder="Describe the rewards given to students (stickers, certificates, praise, etc.)"></textarea>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Student Names:</label>
+                <textarea name="student_names" class="form-control" rows="2"
+                  placeholder="Names of students who received special recognition..."></textarea>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success flex-grow-1">
+                  <i class="fas fa-save me-1"></i>Save Rewards
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="skipRewards()">
+                  <i class="fas fa-forward me-1"></i>Skip
+                </button>
+              </div>
+            </form>
+
+            <!-- Previous Rewards -->
+            {% if session_rewards %}
+            <div class="mt-4">
+              <h6 class="text-info">🏆 Previous Rewards</h6>
+              {% for reward in session_rewards %}
+              <div class="alert alert-light">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <strong>{{ reward.reward_description|truncatechars:50 }}</strong><br>
+                    <small class="text-muted">{{ reward.reward_date }} | Students: {{ reward.student_names|default:"Not
+                      specified" }}</small>
+                  </div>
+                  {% if reward.reward_photo %}
+                  <img src="{{ reward.reward_photo.url }}" alt="Reward"
+                    style="width: 60px; height: 60px; object-fit: cover;" class="rounded">
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Navigation Buttons -->
+            <div class="text-center mt-2 d-flex justify-content-between gap-2">
+              <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
+                <i class="fas fa-arrow-left me-1"></i>Previous
+              </button>
+             
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLETION MESSAGE - Hidden by default, shown after rewards/skip -->
+  <div class="alert alert-success text-center" id="completionMessage" style="display: none; margin-top: 2rem;">
+    <h4>🎉 Congratulations!</h4>
+    <p class="mb-0">Today's session workflow is complete!</p>
+    <small class="text-muted d-block mt-2">
+      All steps completed successfully. You can now proceed to the next day's session.
+    </small>
+  </div>
+
+  {% if not planned_session %}
+  {% if error %}
+  <div class="alert alert-danger text-center">
+    <h4><span class="material-symbols-outlined text-4xl mb-3">error</span></h4>
+    <h4>⚠️ Session Setup Required</h4>
+    <p class="mb-3">{{ error_message|default:"This class needs session initialization." }}</p>
+    <div class="mt-3">
+      <p class="text-sm text-muted mb-3">Contact your administrator to set up the 1-150 day session sequence for this
+        class.</p>
+      <a href="{% url 'facilitator_classes' %}" class="btn btn-primary">
+        <span class="material-symbols-outlined mr-1">arrow_back</span>
+        Back to Classes
+      </a>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-success text-center">
+    <h4>🎉 Congratulations!</h4>
+    <p class="mb-0">{{ completion_message|default:"Today session are completed for this class." }}</p>
+    {% if progress_metrics %}
+    <small class="text-muted">
+      Final Stats: {{ progress_metrics.conducted_sessions }} conducted, {{ progress_metrics.cancelled_sessions }}
+      cancelled
+    </small>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+</div>
+</div><!-- Close actualContent div -->
+
+<!-- HIDDEN DATA ATTRIBUTES FOR STEP COMPLETION TRACKING -->
+<!-- These are used by JavaScript to determine which steps are completed -->
+<!-- IMPORTANT: These are class-specific and day-specific to prevent stale data -->
+<!-- MOVED OUTSIDE OF HIDDEN DIV TO ENSURE IT'S ALWAYS ACCESSIBLE -->
+<div style="display: none;" data-session-id="{{ actual_session.id|default:'none' }}"
+  data-class-id="{{ class_section.id|default:'none' }}" data-date="{{ today|date:'Y-m-d' }}">
+  <!-- Step 1: Lesson Plan - check if any lesson plan was uploaded today -->
+  {% if lesson_plan_uploads %}
+  <div data-lesson-plan-uploaded="true"></div>
+  {% else %}
+  <div data-lesson-plan-uploaded="false"></div>
+  {% endif %}
+
+  <!-- Step 2: Preparation - check if preparation checklist was saved TODAY -->
+  {% if preparation_checklist and is_today %}
+  <div data-preparation-saved="true"></div>
+  {% else %}
+  <div data-preparation-saved="false"></div>
+  {% endif %}
+
+  <!-- Step 3: Conduct - Completed if session exists today (auto-started or manual) -->
+  {% if actual_session and is_today %}
+  <div data-conduct-saved="true"></div>
+  {% else %}
+  <div data-conduct-saved="false"></div>
+  {% endif %}
+
+  <!-- Step 4: Attendance - check if attendance was marked -->
+  {% if attendance_marked %}
+  <div data-attendance-marked="true"></div>
+  {% else %}
+  <div data-attendance-marked="false"></div>
+  {% endif %}
+
+  <!-- Step 5: Upload/Task - check if facilitator task was completed -->
+  {% if facilitator_task_completed %}
+  <div data-task-completed="true"></div>
+  {% else %}
+  <div data-task-completed="false"></div>
+  {% endif %}
+
+  <!-- Step 6: Feedback - check if feedback was saved -->
+  {% if session_feedback %}
+  <div data-feedback-saved="true"></div>
+  {% else %}
+  <div data-feedback-saved="false"></div>
+  {% endif %}
+
+  <!-- Step 7: Reward - check if reward was given -->
+  {% if reward_given %}
+  <div data-reward-given="true"></div>
+  {% else %}
+  <div data-reward-given="false"></div>
+  {% endif %}
+</div>
+
+<!-- CANCEL SESSION MODAL -->
+<div class="modal fade" id="cancelSessionModal" tabindex="-1" aria-labelledby="cancelSessionModalLabel"
+  aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="cancelSessionModalLabel">
+          <i class="fas fa-times-circle me-2"></i>Cancel Session
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post" action="{% if planned_session %}{% url 'start_session' planned_session.id %}{% endif %}" id="cancelSessionForm">
+          {% csrf_token %}
+          <input type="hidden" name="status" value="cancelled">
+
+          <div class="mb-3">
+            <label class="form-label"><strong>Cancellation Reason: <span class="text-danger">*</span></strong></label>
+            <select name="cancellation_reason" class="form-select" required>
+              <option value="">Select reason...</option>
+              {% for reason_code, reason_text in cancellation_reasons %}
+              <option value="{{ reason_code }}">{{ reason_text }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Additional Notes:</label>
+            <textarea name="remarks" class="form-control" rows="3"
+              placeholder="Optional additional details..."></textarea>
+          </div>
+
+          <div class="alert alert-warning mb-0">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Warning:</strong> This session will be permanently removed from the sequence.
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>Keep Session
+        </button>
+        <button type="submit" form="cancelSessionForm" class="btn btn-danger">
+          <i class="fas fa-check me-1"></i>Confirm Cancellation
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Attendance Access Button (Floating) -->
+{% if session_status == "conducted" and actual_session %}
+<div class="quick-attendance-access">
+  <a href="{% url 'mark_attendance' actual_session.id %}" class="btn btn-primary btn-floating"
+    title="Quick Edit Attendance" data-bs-toggle="tooltip">
+    <i class="fas fa-users"></i>
+    <span class="btn-text d-none d-md-inline ms-1">Edit Attendance</span>
+  </a>
+
+</div>
+{% endif %}
+</div>
+
+<!-- JavaScript for Comprehensive Workflow -->
+<script>
+  // Mobile notification system - GLOBAL SCOPE
+  function showMobileNotification(message, type = 'success') {
+    // Remove existing notifications
+    const existingNotifications = document.querySelectorAll('.mobile-notification');
+    existingNotifications.forEach(n => n.remove());
+
+    const notification = document.createElement('div');
+    notification.className = `mobile-notification alert alert-${type} alert-dismissible fade show`;
+    notification.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    `;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.remove();
+      }
+    }, 3000);
+  }
+
+  // SIMPLE TOGGLE FOR STUDENT FEEDBACK FORM
+  function toggleStudentFeedbackForm() {
+    // ✅ PREREQUISITE CHECK
+    if (!canAccessStep(6)) {
+      showMobileNotification('⚠️ Please complete Steps 1-5 (Lesson Plan, Prep, Conduct, Attendance, Task) first.', 'warning');
+      return;
+    }
+
+    const actualSessionId = '{{ actual_session.id|default:"" }}';
+    if (!actualSessionId) {
+      alert('Please conduct the session first before collecting student feedback.');
+      return;
+    }
+
+    const container = document.getElementById('studentFeedbackFormContainer');
+    if (container) {
+      if (container.style.display === 'none') {
+        container.style.display = 'block';
+        
+        // Hide teacher feedback form if open
+        hideTeacherFeedbackForm();
+
+        // Generate anonymous ID when form opens
+        const anonIdInput = document.getElementById('anonymousStudentId');
+        if (anonIdInput && !anonIdInput.value) {
+          const anonymousId = 'student_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+          anonIdInput.value = anonymousId;
+        }
+        // Scroll to form
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        container.style.display = 'none';
+      }
+    }
+  }
+
+  // TEACHER FEEDBACK FORM FUNCTIONS
+  function showTeacherFeedbackForm() {
+    // ✅ PREREQUISITE CHECK (Steps 1-5 must be done for Step 6)
+    if (!canAccessStep(6)) {
+      showMobileNotification('⚠️ Please complete Steps 1-5 (Lesson Plan, Prep, Conduct, Attendance, Task) first.', 'warning');
+      return;
+    }
+
+    const actualSessionId = '{{ actual_session.id|default:"" }}';
+    if (!actualSessionId) {
+      alert('Please conduct the session first before providing teacher feedback.');
+      return;
+    }
+
+    const form = document.getElementById('teacherFeedbackForm');
+    if (form) {
+      form.style.display = 'block';
+      
+      // Hide student feedback form if open
+      const studentContainer = document.getElementById('studentFeedbackFormContainer');
+      if (studentContainer) {
+        studentContainer.style.display = 'none';
+      }
+
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function hideTeacherFeedbackForm() {
+    const form = document.getElementById('teacherFeedbackForm');
+    if (form) {
+      form.style.display = 'none';
+    }
+  }
+
+  // FACILITATOR STUDENT FEEDBACK FORM FUNCTIONS
+  function showFacilitatorStudentFeedbackForm() {
+    const form = document.getElementById('facilitatorStudentFeedbackForm');
+    if (form) {
+      form.style.display = 'block';
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function hideFacilitatorStudentFeedbackForm() {
+    const form = document.getElementById('facilitatorStudentFeedbackForm');
+    if (form) {
+      form.style.display = 'none';
+    }
+  }
+
+  // COMPLETE SESSION
+  function completeSession() {
+    if (confirm('Are you sure you want to complete this session?')) {
+      const btn = document.getElementById('completeSessionBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+      }
+
+      // Get the actual session ID
+      const actualSessionId = '{{ actual_session.id|default:"" }}';
+
+      if (!actualSessionId) {
+        alert('Error: Session ID not found');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Complete Session & Mark Attendance';
+        }
+        return;
+      }
+
+      // Call API to mark session as completed
+      fetch(`/api/session/${actualSessionId}/complete/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({})
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            console.log('✅ Session completed successfully');
+            // Hide all tabs and show completion message
+            hideAllTabsShowCompletion();
+            showMobileNotification('✅ Session completed successfully!', 'success');
+
+            // Update UI without hard refresh - just reload session state
+            setTimeout(() => {
+              loadSessionState();
+            }, 1000);
+          } else {
+            alert('Error: ' + (data.message || 'Failed to complete session'));
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Complete Session & Mark Attendance';
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Error completing session:', error);
+          alert('Error: ' + error.message);
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Complete Session & Mark Attendance';
+          }
+        });
+    }
+  }
+
+  // Function to check if feedback forms are complete - UI updates only
+  function checkAndEnableCompleteButton() {
+    // This function now primarily handles UI status updates
+    // as the specific 'Complete Session' button has been removed
+    const studentStatus = document.getElementById('studentFeedbackStatus');
+    const teacherStatus = document.getElementById('teacherFeedbackStatus');
+
+    if (studentStatus && teacherStatus) {
+      const studentComplete = studentStatus.textContent.includes('Completed') || studentStatus.textContent.includes('✅');
+      const teacherComplete = teacherStatus.textContent.includes('Completed') || teacherStatus.textContent.includes('✅');
+
+      if (studentComplete && teacherComplete) {
+        console.log('✅ Both feedback forms complete');
+      }
+    }
+  }
+
+  // STUDENT FEEDBACK FORM SUBMISSION HANDLER
+  function setupStudentFeedbackFormHandler() {
+    const studentFeedbackForm = document.getElementById('studentFeedbackForm');
+    if (!studentFeedbackForm) {
+      console.log('Student feedback form NOT found');
+      return;
+    }
+
+    console.log('Setting up student feedback form handler');
+
+    // Remove any existing listeners first
+    const newForm = studentFeedbackForm.cloneNode(true);
+    studentFeedbackForm.parentNode.replaceChild(newForm, studentFeedbackForm);
+
+    // Now attach to the new form
+    const form = document.getElementById('studentFeedbackForm');
+
+    form.onsubmit = async function (e) {
+      console.log('Student feedback form onsubmit triggered');
+      e.preventDefault();
+      e.stopPropagation();
+
+      console.log('Form submission prevented, proceeding with fetch');
+
+      // Manual validation
+      const studentSelect = document.getElementById('feedbackStudentSelect');
+      const descriptionField = document.getElementById('feedbackDescription');  // Use ID instead of name selector
+      
+      console.log('studentSelect:', studentSelect);
+      console.log('descriptionField:', descriptionField);
+      
+      const studentId = studentSelect ? studentSelect.value.trim() : '';
+      const description = descriptionField ? descriptionField.value.trim() : '';
+      
+      console.log('studentId:', studentId);
+      console.log('description:', description);
+      console.log('description length:', description.length);
+
+      if (!studentId) {
+        alert('Please select a student');
+        return false;
+      }
+      if (!description) {
+        alert('Please enter feedback notes');
+        return false;
+      }
+
+      // Disable submit button
+      const submitBtn = this.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Submitting...';
+      }
+
+      // Use FormData from the form itself
+      const formData = new FormData(this);
+
+      // Log what's being sent
+      console.log('Submitting form data:');
+      for (let [key, value] of formData.entries()) {
+        console.log(key + ':', value);
+      }
+
+      try {
+        console.log('Sending fetch request to /api/save-student-feedback/');
+        const response = await fetch('/api/save-student-feedback/', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          }
+        });
+
+        console.log('Response received:', response.status);
+        const result = await response.json();
+        console.log('Response:', result);
+
+        if (result.success) {
+          showMobileNotification(`✅ Feedback saved for ${result.student_name || 'student'}`, 'success');
+
+          // Keep track of processed students locally
+          if (!window.processedStudents) window.processedStudents = [];
+          window.processedStudents.push(result.student_name || 'student');
+
+          // Update feedback status badge with count
+          const statusDiv = document.getElementById('studentFeedbackStatus');
+          if (statusDiv) {
+            const count = window.processedStudents.length;
+            statusDiv.innerHTML = `<span class="badge bg-success">✅ ${count} Feedback${count > 1 ? 's' : ''} Collected</span>`;
+          }
+
+          // Update the list of processed students in the UI
+          const listContainer = document.getElementById('submittedFeedbackListContainer');
+          const listDiv = document.getElementById('submittedFeedbackList');
+          if (listContainer && listDiv) {
+            listContainer.style.display = 'block';
+            const item = document.createElement('div');
+            item.className = 'list-group-item px-0 py-1 d-flex justify-content-between align-items-center bg-transparent border-0';
+            item.innerHTML = `<span><i class="fas fa-check-circle text-success me-2"></i>${result.student_name}</span>`;
+            listDiv.appendChild(item);
+          }
+
+          // Reset only the fields, DO NOT hide the form or reload the whole page state
+          if (studentSelect) studentSelect.value = "";
+          if (descriptionField) descriptionField.value = "";
+          
+          // Check if both feedback forms are complete (enables final complete button)
+          checkAndEnableCompleteButton();
+        } else {
+          alert('Error submitting feedback: ' + (result.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error submitting feedback. Please try again.');
+      } finally {
+        // Re-enable submit button
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>Submit Feedback';
+        }
+      }
+
+      return false;
+    };
+  }
+
+  // Call setup function immediately when script loads
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupStudentFeedbackFormHandler);
+  } else {
+    setupStudentFeedbackFormHandler();
+  }
+
+  // ============================================
+  // GLOBAL FUNCTIONS - Available for onclick handlers
+  // ============================================
+  function skipRewards() {
+    console.log('Skipping rewards...');
+    const plannedSessionId = '{{ planned_session.id|default:"" }}';
+    
+    // Disable button and show loading
+    const skipBtn = document.querySelector('button[onclick="skipRewards()"]');
+    const originalHtml = skipBtn ? skipBtn.innerHTML : '';
+    if (skipBtn) {
+      skipBtn.disabled = true;
+      skipBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Checking...';
+    }
+
+    if (!plannedSessionId) {
+      // ✅ DOUBLE CHECK: Ensure Steps 1-6 are done even if no ID (prevent skip-to-congrats)
+      if (canAccessStep(7) && document.querySelector(`.step-btn[data-step="6"]`).classList.contains('completed-step')) {
+        markStepCompleted(7);
+        showMobileNotification('✅ Rewards skipped!', 'info');
+        hideAllTabsShowCompletion();
+      } else {
+        showMobileNotification('⚠️ Please finish Step 6 first.', 'warning');
+        goToStep(6);
+      }
+      return;
+    }
+
+    // Fetch current session status from backend
+    fetch(`/api/session-state/?planned_session_id=${plannedSessionId}`)
+      .then(response => response.json())
+      .then(statusData => {
+        console.log('Session status check:', statusData);
+
+        // Only show completion if session is actually conducted
+        // Status is an integer: 0=Pending, 1=Conducted, 2=Holiday, 3=Cancelled
+        if (statusData.success && statusData.session && statusData.session.status === 1) {
+          markStepCompleted(7);
+          showMobileNotification('✅ Session completed!', 'success');
+          hideAllTabsShowCompletion();
+        } else {
+          // Session not completed yet, just mark step as completed
+          markStepCompleted(7);
+          showMobileNotification('✅ Rewards skipped!', 'info');
+          console.warn('Session not yet completed. Status:', statusData.session?.status);
+        }
+      })
+      .catch(error => {
+        console.error('Error checking session status:', error);
+        markStepCompleted(7);
+        showMobileNotification('✅ Rewards skipped!', 'info');
+      })
+      .finally(() => {
+        if (skipBtn) {
+          skipBtn.disabled = false;
+          skipBtn.innerHTML = originalHtml;
+        }
+      });
+  }
+
+  function hideAllTabsShowCompletion() {
+    // Hide all tab panes
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+      pane.classList.remove('show', 'active');
+    });
+
+    // Hide step flow bar
+    const stepFlowBar = document.querySelector('.step-flow-bar');
+    if (stepFlowBar) {
+      stepFlowBar.style.display = 'none';
+    }
+
+    // Hide "Session in progress" alert message
+    const sessionAlerts = document.querySelectorAll('.alert-info');
+    sessionAlerts.forEach(alert => {
+      if (alert.textContent.includes('Session in progress') ||
+        alert.textContent.includes('Complete the workflow steps')) {
+        alert.style.display = 'none';
+      }
+    });
+
+    // Hide workflow card - find card containing h6 with "Session Workflow"
+    const allCards = document.querySelectorAll('.card');
+    allCards.forEach(card => {
+      const h6 = card.querySelector('h6');
+      if (h6 && h6.textContent.includes('Session Workflow')) {
+        card.style.display = 'none';
+      }
+    });
+
+    // ✅ ONLY SHOW COMPLETION IF ALL STEPS ARE DONE
+    const allStepsDone = canAccessStep(7) && document.querySelector(`.step-btn[data-step="6"]`).classList.contains('completed-step');
+    
+    if (!allStepsDone) {
+      console.warn('⚠️ Session completion message hidden: Not all steps are finished.');
+      showMobileNotification('Step 7 reached, but previous steps are pending.', 'info');
+      return;
+    }
+
+    // Show completion message with a small delay to ensure DOM is ready
+    setTimeout(() => {
+      const completionDiv = document.getElementById('completionMessage');
+      if (completionDiv) {
+        completionDiv.style.display = 'block';
+        completionDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        console.log('✅ All steps finished - Congratulations message displayed');
+      } else {
+        console.warn('Completion message div not found');
+      }
+    }, 100);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    // Initialize global contentDiv if not already done
+    if (!contentDiv) {
+      contentDiv = document.getElementById('curriculumContent');
+    }
+
+    // Language selector event listeners
+    const languageInputs = document.querySelectorAll('input[name="language"]');
+    languageInputs.forEach(input => {
+      input.addEventListener('change', function () {
+        if (this.checked) {
+          switchLanguage(this.value);
+        }
+      });
+    });
+
+    // Language switching - uses global loadCurriculumContent function
+    function switchLanguage(language) {
+      currentLanguage = language;
+      const languageLabel = document.getElementById('curriculumLanguageLabel');
+      if (languageLabel) {
+        languageLabel.textContent = language === 'hindi' ? 'Hindi' : 'English';
+      }
+      loadCurriculumContent(currentDay, language);
+      showLanguageNotification(language);
+    }
+
+    function showLanguageNotification(language) {
+      showMobileNotification(`Switched to ${language === 'hindi' ? 'हिंदी (Hindi)' : 'English'}`);
+    }
+
+    // Preparation Checklist
+    const checkpointItems = document.querySelectorAll('.checkpoint-item');
+    checkpointItems.forEach(item => {
+      item.addEventListener('change', function () {
+        updatePreparationProgress();
+        saveCheckpointProgress();
+      });
+    });
+
+    function updatePreparationProgress() {
+      const totalCheckpoints = checkpointItems.length;
+      const completedCheckpoints = document.querySelectorAll('.checkpoint-item:checked').length;
+      const progress = (completedCheckpoints / totalCheckpoints) * 100;
+
+      document.getElementById('preparationProgressBar').style.width = progress + '%';
+      document.getElementById('preparationProgressText').textContent = Math.round(progress) + '%';
+
+      const nextBtn = document.getElementById('preparationNextBtn');
+      const completeBtn = document.getElementById('preparationCompleteBtn');
+      const completeAlert = document.getElementById('preparationCompleteAlert');
+
+      if (progress === 100) {
+        // All checkpoints done - show "Mark Complete" button
+        if (nextBtn) nextBtn.style.display = 'none';
+        if (completeBtn) completeBtn.style.display = 'block';
+        if (completeAlert) completeAlert.style.display = 'block';
+        console.log('✅ All preparation checkpoints complete - showing Mark Complete button');
+      } else {
+        // Not all done - show Next button (disabled)
+        if (nextBtn) {
+          nextBtn.style.display = 'block';
+          nextBtn.disabled = true;
+        }
+        if (completeBtn) completeBtn.style.display = 'none';
+        if (completeAlert) completeAlert.style.display = 'none';
+      }
+    }
+
+    // Refresh uploaded files list without page reload
+    function refreshUploadedFilesList() {
+      const sessionId = document.querySelector('input[name="planned_session_id"]')?.value;
+      if (!sessionId) return;
+
+      // Fetch the latest uploaded files
+      fetch(`/api/lesson-plan-uploads/?planned_session_id=${sessionId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.uploads) {
+            const uploadsList = document.getElementById('uploadedFilesList');
+            if (uploadsList) {
+              // Clear existing list
+              uploadsList.innerHTML = '';
+
+              // Add each uploaded file
+              data.uploads.forEach(upload => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item';
+                item.innerHTML = `
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>${upload.filename}</strong>
+                                        <small class="text-muted d-block">Uploaded: ${upload.upload_date}</small>
+                                    </div>
+                                    <a href="${upload.file_url}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                        <i class="fas fa-download"></i> View
+                                    </a>
+                                </div>
+                            `;
+                uploadsList.appendChild(item);
+              });
+            }
+          }
+        })
+        .catch(err => console.error('Error refreshing uploads:', err));
+    }
+
+    async function saveCheckpointProgress() {
+      const formData = new FormData(document.getElementById('preparationForm'));
+      const classId = '{{ class_section.id }}'; // Get current class ID
+      
+      const savingIndicator = document.getElementById('prepSavingSatus');
+      const nextBtn = document.getElementById('preparationNextBtn');
+      const completeBtn = document.getElementById('preparationCompleteBtn');
+      
+      if (savingIndicator) savingIndicator.style.display = 'block';
+
+      try {
+        const response = await fetch('/api/save-preparation-checklist/', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          }
+        });
+
+        if (response.ok) {
+          console.log('✅ Preparation checklist saved');
+          // Save to localStorage for same-day persistence (class-specific)
+          const today = new Date().toISOString().split('T')[0];
+          localStorage.setItem(`step2_completed_date_${classId}`, today);
+          localStorage.setItem(`step2_completed_${classId}`, 'true');
+          // Mark step 2 as completed in UI
+          markStepCompleted(2);
+        } else {
+          console.error('Failed to save preparation checklist:', response.status);
+        }
+      } catch (error) {
+        console.error('Error saving checkpoint progress:', error);
+      } finally {
+        if (savingIndicator) savingIndicator.style.display = 'none';
+      }
+    }
+
+    // Rewards Form Handler
+    const rewardsForm = document.getElementById('rewardsForm');
+    if (rewardsForm) {
+      // Show/hide photo upload section based on reward type
+      const rewardTypeRadios = document.querySelectorAll('input[name="reward_type"]');
+      rewardTypeRadios.forEach(radio => {
+        radio.addEventListener('change', function () {
+          const photoSection = document.getElementById('photoUploadSection');
+          if (this.value === 'photo') {
+            photoSection.style.display = 'block';
+          } else {
+            photoSection.style.display = 'none';
+          }
+        });
+      });
+
+      // Handle form submission
+      rewardsForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        console.log('Rewards form submitted');
+
+        const formData = new FormData(this);
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+
+        try {
+          const response = await fetch('/api/save-session-reward/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+          const result = await response.json();
+          console.log('Rewards saved:', result);
+
+          if (result.success) {
+            // Verify session is actually completed before showing completion message
+            const plannedSessionId = '{{ planned_session.id|default:"" }}';
+
+            // Fetch current session status from backend
+            const statusResponse = await fetch(`/api/session-state/?planned_session_id=${plannedSessionId}`);
+            const statusData = await statusResponse.json();
+
+            console.log('Session status check:', statusData);
+
+            // Only show completion if session is actually conducted
+            // Status is an integer: 0=Pending, 1=Conducted, 2=Holiday, 3=Cancelled
+            if (statusData.success && statusData.session && statusData.session.status === 1) {
+              markStepCompleted(7);
+              showMobileNotification('✅ Rewards saved successfully!', 'success');
+
+              // Hide all tabs and show completion message
+              hideAllTabsShowCompletion();
+            } else {
+              // Session not completed yet, just show success notification
+              markStepCompleted(7);
+              showMobileNotification('✅ Rewards saved successfully!', 'success');
+              console.warn('Session not yet completed. Status:', statusData.session?.status);
+
+              // Re-enable button since we're not showing completion
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = originalText;
+            }
+          } else {
+            showMobileNotification('Error: ' + (result.error || 'Failed to save'), 'danger');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showMobileNotification('Error saving rewards', 'danger');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
+      });
+    }
+
+    // Teacher Feedback Form Handler
+    const teacherReflectionForm = document.getElementById('teacherReflectionForm');
+    console.log('Teacher reflection form found:', !!teacherReflectionForm);
+
+    if (teacherReflectionForm) {
+      console.log('Attaching submit event listener to teacher reflection form');
+
+      teacherReflectionForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        console.log('Teacher reflection form submitted');
+
+        // Validate that day_reflection text is not empty
+        const dayReflectionText = document.getElementById('dayReflectionText').value.trim();
+        if (!dayReflectionText) {
+          alert('Please write your reflection about how the day was');
+          return;
+        }
+
+        const formData = new FormData(this);
+
+        // Add actual_session_id if available
+        const actualSessionId = '{{ actual_session.id|default:"" }}';
+        if (actualSessionId) {
+          formData.append('actual_session_id', actualSessionId);
+        }
+
+        // Debug: Log all form data
+        console.log('Form data being sent:');
+        for (let [key, value] of formData.entries()) {
+          console.log(`  ${key}: ${value}`);
+        }
+
+        console.log('Sending feedback to /api/save-teacher-feedback/');
+
+        // Disable submit button and show loading state
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+
+        try {
+          const response = await fetch('/api/save-teacher-feedback/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+
+          console.log('Response status:', response.status);
+          const result = await response.json();
+          console.log('Response result:', result);
+
+          if (response.ok && result.success) {
+            // Mark step 6 (Feedback) as completed
+            markStepCompleted(6);
+
+            // Update teacher feedback status display
+            const teacherStatus = document.getElementById('teacherFeedbackStatus');
+            if (teacherStatus) {
+              teacherStatus.innerHTML = `
+                            <span class="badge bg-success">✅ Completed</span>
+                        `;
+            }
+
+            // ✅ UPDATE SESSION STATUS BADGE - Teacher feedback marks session as CONDUCTED
+            if (result.session_status === 'conducted') {
+              const sessionStatusBadge = document.querySelector('[data-session-status]');
+              if (sessionStatusBadge) {
+                sessionStatusBadge.innerHTML = '<span class="badge bg-success">Completed (Today)</span>';
+                console.log('✅ Session status updated to CONDUCTED');
+              }
+            }
+
+            // Hide form and show completion message
+            hideTeacherFeedbackForm();
+
+            // Show completion message in the feedback tab
+            const feedbackSection = document.getElementById('feedback');
+            if (feedbackSection) {
+              const completionMsg = document.createElement('div');
+              completionMsg.className = 'alert alert-success mb-3';
+              completionMsg.innerHTML = `
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>✅ Teacher Reflection Saved</strong><br>
+                            <small>Reflection: "${dayReflectionText.substring(0, 100)}..." | 
+                                   Saved: ${new Date().toLocaleString()}</small>
+                        `;
+              feedbackSection.insertBefore(completionMsg, feedbackSection.firstChild);
+            }
+
+            showMobileNotification('✅ Session feedback saved!', 'success');
+
+            // Check if both feedbacks are complete
+            checkAndEnableCompleteButton();
+          } else {
+            // Display the specific error message from the backend
+            const errorMsg = result.error || result.message || 'Failed to save feedback';
+            showMobileNotification('Error: ' + errorMsg, 'danger');
+            
+            // If it's a "missing steps" error, we can even alert it prominently
+            if (errorMsg.includes('complete these steps')) {
+              alert(errorMsg);
+            }
+            
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showMobileNotification('Error connecting to server. Please check your connection.', 'danger');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
+      });
+
+      // Add real-time validation for required fields
+      const requiredInputs = teacherReflectionForm.querySelectorAll('[required]');
+      requiredInputs.forEach(input => {
+        input.addEventListener('blur', function () {
+          if (!this.value.trim()) {
+            this.classList.add('is-invalid');
+          } else {
+            this.classList.remove('is-invalid');
+          }
+        });
+      });
+    }
+
+    // Initialize - Only load curriculum when conduct tab is first viewed
+    // Don't load on page init to avoid race conditions
+    // loadCurriculumContent(currentDay, currentLanguage);
+    updatePreparationProgress();
+
+    // Check button status every 500ms
+    setInterval(checkAndEnableCompleteButton, 500);
+  });
+</script>
+
+<script>
+  // Helper function to disable button on form submit
+  function disableButton(form) {
+    const btn = form.querySelector('button[type="submit"]');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+    }
+  }
+</script>
+
+<style>
+  /* Curriculum Content Styling */
+  .curriculum-table {
+    font-size: 13px;
+  }
+
+  .curriculum-table td {
+    padding: 6px 8px;
+    vertical-align: top;
+    border: 1px solid #dee2e6;
+  }
+
+  .curriculum-table .s0 {
+    background-color: #d9ead3 !important;
+    font-weight: bold;
+    font-size: 16px;
+    text-align: center;
+  }
+
+  .curriculum-table .s1 {
+    background-color: #d9ead3 !important;
+    font-weight: bold;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .curriculum-table .s4 {
+    background-color: #ffffff !important;
+    font-weight: bold;
+    text-align: center;
+    font-size: 11px;
+  }
+
+  .curriculum-table .s7 {
+    background-color: #fde49a !important;
+  }
+
+  .curriculum-table .s11 {
+    background-color: #d9f1f3 !important;
+  }
+
+  .curriculum-table .s21 {
+    background-color: #fef1cc !important;
+  }
+
+  .curriculum-table a {
+    color: #0066cc;
+    text-decoration: underline;
+  }
+
+  .curriculum-table a:hover {
+    color: #004499;
+  }
+
+  .curriculum-content {
+    background: #f8f9fa;
+  }
+
+  /* Workflow Navigation Styles */
+  .workflow-nav .nav-link {
+    text-align: left;
+    margin-bottom: 0.25rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .workflow-nav .nav-link:not(.active) {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #6c757d;
+  }
+
+  .workflow-nav .nav-link.active {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+  }
+
+  .workflow-nav .nav-link:hover:not(.active) {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+  }
+
+  /* Preparation Checklist Styles */
+  .checklist-container .form-check {
+    padding: 1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background-color: #f8f9fa;
+    transition: all 0.2s ease;
+  }
+
+  .checklist-container .form-check:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+  }
+
+  .checklist-container .form-check-input:checked+.form-check-label {
+    color: #198754;
+    font-weight: 500;
+  }
+
+  .checklist-container .form-check-input:checked~* {
+    color: #198754;
+  }
+
+  /* Tab Content Styling */
+  .tab-content {
+    min-height: auto;
+  }
+
+  /* Feedback Section Specific Styles */
+  #feedback .card {
+    margin-bottom: 1rem;
+  }
+
+  #feedback .feedback-status {
+    margin-bottom: 0.5rem;
+  }
+
+  #studentFeedbackFormContainer {
+    margin-top: 1rem;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .curriculum-table {
+      font-size: 11px;
+    }
+
+    .curriculum-table td {
+      padding: 4px 6px;
+    }
+
+    #feedback .row {
+      margin-bottom: 1rem;
+    }
+
+    #feedback .col-md-6 {
+      margin-bottom: 1rem;
+    }
+
+    .checklist-container .form-check {
+      padding: 0.75rem;
+    }
+  }
+
+  /* Form Styling */
+  .form-label {
+    font-weight: 500;
+    color: #495057;
+  }
+
+  .form-control:focus,
+  .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  }
+
+  /* Button Styling */
+  .btn-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+  }
+
+  .btn-success {
+    background-color: #198754;
+    border-color: #198754;
+  }
+
+  /* Alert Styling */
+  .alert {
+    border-radius: 0.375rem;
+  }
+
+  /* Progress Bar Animations */
+  .progress-bar {
+    transition: width 0.6s ease;
+  }
+
+  /* Form Validation Styling */
+  .is-invalid {
+    border-color: #dc3545 !important;
+  }
+
+  .is-invalid:focus {
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25) !important;
+  }
+</style>
+
+<script>
+  // Show actual content when page fully loads
+  document.addEventListener('DOMContentLoaded', function () {
+    // Hide loading skeleton
+    const loadingSkeleton = document.getElementById('loadingSkeleton');
+    const actualContent = document.getElementById('actualContent');
+
+    if (loadingSkeleton && actualContent) {
+      // Show actual content immediately (with skeleton still visible)
+      actualContent.style.display = 'block';
+      actualContent.style.opacity = '0';
+      actualContent.style.transition = 'opacity 0.3s ease';
+
+      // Trigger reflow to ensure transition works
+      void actualContent.offsetWidth;
+      actualContent.style.opacity = '1';
+
+      // Fade out skeleton after content is visible
+      setTimeout(() => {
+        loadingSkeleton.style.opacity = '0';
+        loadingSkeleton.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => {
+          loadingSkeleton.style.display = 'none';
+        }, 300);
+      }, 100);
+    }
+
+    // Load grouped session detection asynchronously
+    const plannedSessionId = '{{ planned_session.id }}';
+    if (plannedSessionId && '{{ detection_method }}' === 'deferred') {
+      fetch(`/api/detect-grouped-session/?planned_session_id=${plannedSessionId}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Update the UI with grouped session info
+            updateGroupedSessionUI(data);
+          }
+        })
+        .catch(error => console.error('Error loading grouped session:', error));
+    }
+
+    // Initialize Bootstrap modals
+    const cancelModal = document.getElementById('cancelSessionModal');
+    if (cancelModal) {
+      new bootstrap.Modal(cancelModal);
+    }
+  });
+
+  // Update UI with grouped session information
+  function updateGroupedSessionUI(data) {
+    // Update grouped session header if needed
+    const groupedHeader = document.querySelector('.grouped-session-header');
+    if (groupedHeader && data.is_grouped_session) {
+      let classesHtml = data.grouped_classes.map(cls =>
+        `<span class="badge bg-info me-2">${cls.display_name}</span>`
+      ).join('');
+
+      groupedHeader.innerHTML = `
+            <div class="alert alert-info mb-3 border-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2"><i class="bi bi-collection"></i> Grouped Session</h5>
+                        <p class="mb-0"><strong>Classes:</strong> ${classesHtml}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    console.log('✅ Grouped session info loaded:', data);
+  }
+</script>
+
+{% endblock %}

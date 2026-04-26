@@ -1,0 +1,166 @@
+{% extends base_template|default:"supervisor/shared/base.html" %}
+
+{% block title %}Session Details - Supervisor{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ session.title }}</h1>
+            <p class="text-gray-600">{{ session.class_section.school.name }} - {{ session.class_section.display_name }}</p>
+        </div>
+        <a href="{% if is_admin %}{% url 'admin_sessions_list' %}{% else %}{% url 'supervisor_sessions_list' %}{% endif %}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+            ← Back to Sessions
+        </a>
+    </div>
+
+    <!-- Session Info Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <p class="text-gray-600 text-sm mb-2">Day Number</p>
+            <p class="text-2xl font-bold text-gray-900">{{ session.day_number }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <p class="text-gray-600 text-sm mb-2">Status</p>
+            <p class="text-2xl font-bold">
+                {% if session.status == "conducted" %}
+                <span class="text-green-600">Conducted</span>
+                {% elif session.status == "cancelled" %}
+                <span class="text-red-600">Cancelled</span>
+                {% else %}
+                <span class="text-yellow-600">Pending</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <p class="text-gray-600 text-sm mb-2">Total Students</p>
+            <p class="text-2xl font-bold text-gray-900">{{ total_students }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <p class="text-gray-600 text-sm mb-2">Avg Rating</p>
+            <p class="text-2xl font-bold text-gray-900">{{ avg_rating|floatformat:1 }}/5</p>
+        </div>
+    </div>
+
+    <!-- Attendance Section -->
+    {% if actual_session %}
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Attendance Summary</h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="text-center">
+                <p class="text-gray-600 text-sm mb-2">Present</p>
+                <p class="text-3xl font-bold text-green-600">{{ present_count }}</p>
+            </div>
+            <div class="text-center">
+                <p class="text-gray-600 text-sm mb-2">Absent</p>
+                <p class="text-3xl font-bold text-red-600">{{ absent_count }}</p>
+            </div>
+            <div class="text-center">
+                <p class="text-gray-600 text-sm mb-2">Leave</p>
+                <p class="text-3xl font-bold text-yellow-600">{{ leave_count }}</p>
+            </div>
+            <div class="text-center">
+                <p class="text-gray-600 text-sm mb-2">Attendance %</p>
+                <p class="text-3xl font-bold text-blue-600">{{ attendance_percentage }}%</p>
+            </div>
+        </div>
+
+        <!-- Attendance Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="px-4 py-2 text-left font-semibold text-gray-900">Student Name</th>
+                        <th class="px-4 py-2 text-left font-semibold text-gray-900">Enrollment #</th>
+                        <th class="px-4 py-2 text-left font-semibold text-gray-900">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for record in attendance_records %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2 text-gray-900">{{ record.enrollment.student.full_name }}</td>
+                        <td class="px-4 py-2 text-gray-600">{{ record.enrollment.student.enrollment_number }}</td>
+                        <td class="px-4 py-2">
+                            {% if record.status == "present" %}
+                            <span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">Present</span>
+                            {% elif record.status == "absent" %}
+                            <span class="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-medium">Absent</span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">Leave</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="px-4 py-4 text-center text-gray-500">No attendance records</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Lesson Plan Uploads Section -->
+    {% if lesson_plan_uploads %}
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">📋 Lesson Plan Uploads</h2>
+        <div class="space-y-4">
+            {% for upload in lesson_plan_uploads %}
+            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                <div class="flex justify-between items-start">
+                    <div class="flex-grow">
+                        <p class="font-medium text-gray-900">{{ upload.file_name }}</p>
+                        <p class="text-sm text-gray-600 mt-1">
+                            <strong>Facilitator:</strong> {{ upload.facilitator.full_name }}
+                        </p>
+                        <p class="text-sm text-gray-600">
+                            <strong>Uploaded:</strong> {{ upload.upload_date|date:"M d, Y H:i" }}
+                        </p>
+                        {% if upload.upload_notes %}
+                        <p class="text-sm text-gray-600 mt-2">
+                            <strong>Notes:</strong> {{ upload.upload_notes }}
+                        </p>
+                        {% endif %}
+                        <p class="text-sm text-gray-600">
+                            <strong>Size:</strong> {{ upload.file_size|filesizeformat }}
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        {% if upload.lesson_plan_file %}
+                        <a href="/api/view-lesson-plan/{{ upload.id }}/" class="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium hover:bg-blue-200 transition-colors" target="_blank">
+                            👁️ View
+                        </a>
+                        {% endif %}
+                        {% if upload.is_approved %}
+                        <span class="px-3 py-1 bg-green-100 text-green-700 rounded text-sm font-medium">✓ Approved</span>
+                        {% else %}
+                        <span class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded text-sm font-medium">⏳ Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Student Feedback Section -->
+    {% if feedback %}
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Student Feedback</h2>
+        <div class="space-y-4">
+            {% for fb in feedback %}
+            <div class="border border-gray-200 rounded-lg p-4">
+                <div class="flex justify-between items-start mb-2">
+                    <p class="font-medium text-gray-900">{{ fb.student.full_name }}</p>
+                </div>
+                <p class="text-sm text-gray-600"><strong>Feedback:</strong> {{ fb.description }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

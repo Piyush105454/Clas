@@ -1,0 +1,345 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0">My Classes</h4>
+  <div class="d-flex gap-2">
+
+  </div>
+</div>
+
+<div class="row g-3">
+  {% for item in class_sections %}
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="fw-bold">
+          {{ item.class_section.school.name }}
+        </h6>
+
+        <!-- Display grouped classes -->
+        {% if item.class_sections and item.class_sections|length > 1 %}
+        <p class="mb-1"><strong>Grouped Classes ({{ item.class_sections|length }}):</strong></p>
+        <div class="mb-2">
+          {% for cls in item.class_sections %}
+          <span class="badge bg-info me-1 mb-1">
+            <i class="bi bi-collection me-1"></i>{{ cls.display_name }}
+          </span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="mb-1">
+          <i class="bi bi-book me-1"></i>{{ item.class_section.display_name }}
+        </p>
+        {% endif %}
+
+        <!-- Today's Status Badge -->
+        {% if item.today_status == 'holiday' %}
+        <div class="mb-2">
+          <span class="badge bg-warning">{% if is_sunday %}Sunday Off{% else %}Holiday Today{% endif %}</span>
+          {% if item.calendar_entry.holiday_name %}
+          <small class="text-muted d-block mt-1">{{ item.calendar_entry.holiday_name }}</small>
+          {% endif %}
+        </div>
+        {% elif item.today_status == 'office_work' %}
+        <div class="mb-2">
+          <span class="badge bg-info">Office Work Today</span>
+        </div>
+        {% elif item.today_status == 'cancelled' %}
+        <span class="badge bg-danger mb-2">Class Not Available Today</span>
+        {% else %}
+        <span class="badge bg-success mb-2">Session Today</span>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-2">
+          <!-- Smart Today's Session Button with Dropdown -->
+          {% if item.today_status == 'office_work' and not item.calendar_entry %}
+          <!-- This is a special case where we might have both office and session, handled below -->
+          {% endif %}
+
+          {% if is_sunday %}
+          <!-- Sunday Off - No session actions -->
+          <button class="btn btn-outline-secondary btn-sm flex-grow-1 disabled" disabled>
+            Weekly Off
+          </button>
+          {% elif item.today_status != 'holiday' %}
+          <!-- Session - Show dropdown menu -->
+          <div class="dropdown flex-grow-1">
+            <button class="btn btn-primary btn-sm w-100 dropdown-toggle" type="button" 
+              id="sessionDropdown_{{ item.class_section.id }}" data-bs-toggle="dropdown" aria-expanded="false">
+              Today's Session
+            </button>
+            <ul class="dropdown-menu w-100 shadow" aria-labelledby="sessionDropdown_{{ item.class_section.id }}">
+              
+              {# 1. Regular Class: Show if marked as regular OR nothing pickable yet #}
+              {% if item.has_regular_attendance_today or not item.has_any_attendance_today and item.today_status != 'cancelled' %}
+              <li>
+                <a class="dropdown-item d-flex align-items-center" href="#" data-option="present_class" 
+                  data-class-id="{{ item.class_sections.0.id }}" 
+                  data-class-name="{{ item.class_section.display_name }}"
+                  data-is-grouped="{% if item.class_sections|length > 1 %}true{% else %}false{% endif %}">
+                  <i class="bi bi-check-circle me-2"></i>Present Class
+                  {% if item.has_regular_attendance_today %}<i class="bi bi-check2 text-success ms-auto"></i>{% endif %}
+                </a>
+              </li>
+              {% endif %}
+
+              {# 2. Office Work: Always show as per user request #}
+              <li>
+                <a class="dropdown-item d-flex align-items-center" href="#" data-option="present_office" 
+                  data-class-id="{{ item.class_section.id }}" 
+                  data-class-name="{{ item.class_section.display_name }}"
+                  data-is-grouped="{% if item.class_sections|length > 1 %}true{% else %}false{% endif %}">
+                  <i class="bi bi-building me-2"></i>Present Office
+                  {% if item.has_office_today %}<i class="bi bi-check2 text-success ms-auto"></i>{% endif %}
+                </a>
+              </li>
+
+              {# 3. FLN Curriculum: Show if marked as FLN OR nothing pickable yet #}
+              {% if item.has_fln_today or not item.has_any_attendance_today and item.today_status != 'cancelled' %}
+              <li>
+                <a class="dropdown-item d-flex align-items-center" href="#" data-option="fln_curriculum" 
+                  data-class-id="{{ item.class_sections.0.id }}" 
+                  data-class-name="{{ item.class_section.display_name }}"
+                  data-is-grouped="{% if item.class_sections|length > 1 %}true{% else %}false{% endif %}">
+                  <i class="bi bi-journal-text me-2"></i>FLN Curriculum Class
+                  {% if item.has_fln_today %}<i class="bi bi-check2 text-success ms-auto"></i>{% endif %}
+                </a>
+              </li>
+              {% endif %}
+
+              {# 4. Exams Time: Show if marked as Exam OR nothing pickable yet #}
+              {% if item.has_exam_today or not item.has_any_attendance_today and item.today_status != 'cancelled' %}
+              <li>
+                <a class="dropdown-item d-flex align-items-center" href="#" data-option="exam_time" 
+                  data-class-id="{{ item.class_sections.0.id }}" 
+                  data-class-name="{{ item.class_section.display_name }}"
+                  data-is-grouped="{% if item.class_sections|length > 1 %}true{% else %}false{% endif %}">
+                  <i class="bi bi-file-earmark-text me-2"></i>Exams Time Class
+                  {% if item.has_exam_today %}<i class="bi bi-check2 text-success ms-auto"></i>{% endif %}
+                </a>
+              </li>
+              {% endif %}
+
+              {# 5. Class Not Available: Show if marked as cancelled OR nothing pickable yet #}
+              {% if item.today_status == 'cancelled' or not item.has_any_attendance_today %}
+              <li>
+                <a class="dropdown-item d-flex align-items-center" href="#" data-option="class_not_available" 
+                  data-class-id="{{ item.class_section.id }}" 
+                  data-class-name="{{ item.class_section.display_name }}"
+                  data-is-grouped="{% if item.class_sections|length > 1 %}true{% else %}false{% endif %}">
+                  <i class="bi bi-exclamation-circle me-2"></i>Class Not Available
+                  {% if item.today_status == 'cancelled' %}<i class="bi bi-check2 text-success ms-auto"></i>{% endif %}
+                </a>
+              </li>
+              {% endif %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <!-- Curriculum Button -->
+          {% if item.class_section %}
+          <a href="{% url 'facilitator_curriculum_session' item.class_section.id %}"
+            class="btn btn-success btn-sm flex-grow-1">
+            <i class="fas fa-book"></i> Curriculum
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <p class="text-muted">No classes assigned yet.</p>
+  {% endfor %}
+</div>
+
+<!-- CSRF Form for JS -->
+<form id="csrfForm" style="display:none;">{% csrf_token %}</form>
+
+<script>
+  // Handle session option selection from dropdown
+  function handleSessionOption(option, classId, className, isGrouped, element) {
+    const csrfToken = document.querySelector('#csrfForm [name=csrfmiddlewaretoken]')?.value;
+    const dropdownToggle = document.getElementById(`sessionDropdown_${classId}`);
+    
+    // UI Locking to prevent double clicks
+    if (dropdownToggle && dropdownToggle.disabled) return;
+    
+    if (option === 'present_class') {
+      window.location.href = `/facilitator/class/${classId}/today/`;
+      return;
+    } 
+    else if (option === 'fln_curriculum') {
+      window.location.href = `/facilitator/class/${classId}/attendance-only/?type=fln`;
+      return;
+    }
+    else if (option === 'exam_time') {
+      window.location.href = `/facilitator/class/${classId}/attendance-only/?type=exam`;
+      return;
+    }
+    else if (option === 'present_office') {
+      window.location.href = `/facilitator/class/${classId}/office-work/`;
+      return;
+    } 
+    else if (option === 'class_not_available') {
+      if (dropdownToggle) {
+        dropdownToggle.disabled = true;
+        dropdownToggle.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending...';
+      }
+      
+      const facilitatorName = document.body.getAttribute('data-facilitator-name') || 'Facilitator';
+      
+      fetch('/facilitator/send-class-unavailable-notification/', {
+        method: 'POST',
+        body: JSON.stringify({
+          class_id: classId,
+          class_name: className,
+          facilitator_name: facilitatorName
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          alert('Notification sent to supervisor. Class marked as unavailable.');
+          window.location.reload();
+        } else {
+          alert(data.error || 'Failed to send notification');
+          if (dropdownToggle) {
+            dropdownToggle.disabled = false;
+            dropdownToggle.innerHTML = "Today's Session";
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error sending notification');
+        if (dropdownToggle) {
+          dropdownToggle.disabled = false;
+          dropdownToggle.innerHTML = "Today's Session";
+        }
+      });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const csrfToken = document.querySelector('#csrfForm [name=csrfmiddlewaretoken]')?.value;
+
+    // Handle dropdown menu items
+    document.querySelectorAll('.dropdown-menu a[data-option]').forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const option = this.getAttribute('data-option');
+        const classId = this.getAttribute('data-class-id');
+        const className = this.getAttribute('data-class-name');
+        const isGrouped = this.getAttribute('data-is-grouped') === 'true';
+        
+        handleSessionOption(option, classId, className, isGrouped);
+      });
+    });
+
+    // Manage Group Button
+    const manageGroupBtn = document.getElementById('manageGroupBtn');
+    if (manageGroupBtn) {
+      manageGroupBtn.addEventListener('click', function () {
+        const container = document.getElementById('groupingOptionsContainer');
+        container.innerHTML = '<p class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Loading classes...</p>';
+
+        // Fetch using first class ID found on page
+        const firstClassItem = document.querySelector('[data-class-id]');
+        if (!firstClassItem) {
+          container.innerHTML = '<p class="text-muted">No classes available.</p>';
+          return;
+        }
+
+        fetch(`/facilitator/grouping-options/${firstClassItem.dataset.classId}/`)
+          .then(r => r.json())
+          .then(data => {
+            if (!data.success) {
+              container.innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
+              return;
+            }
+            const allClasses = [
+              { id: data.current_class.id, label: data.current_class.name },
+              ...data.options.map(o => ({ id: o.class_id, label: o.label }))
+            ];
+            let html = '<p class="mb-2 small">Select classes to group for today:</p>';
+            allClasses.forEach((cls, i) => {
+              html += `
+                      <div class="form-check mb-2">
+                          <input class="form-check-input" type="checkbox" name="grouping_classes" id="gc_${i}" value="${cls.id}">
+                          <label class="form-check-label" for="gc_${i}">${cls.label}</label>
+                      </div>`;
+            });
+            container.innerHTML = html;
+          });
+      });
+    }
+
+    // Apply Grouping
+    const applyGroupingBtn = document.getElementById('applyGroupingBtn');
+    if (applyGroupingBtn) {
+      applyGroupingBtn.addEventListener('click', function () {
+        const selected = Array.from(document.querySelectorAll('input[name="grouping_classes"]:checked')).map(c => c.value);
+        const isReset = selected.length < 2;
+        const url = isReset ? '/facilitator/clear-grouping/' : '/facilitator/apply-grouping/';
+        const firstClassId = document.querySelector('[data-class-id]')?.dataset.classId;
+
+        const payload = isReset ? { class_section_id: firstClassId } : {
+          primary_class_id: selected[0],
+          secondary_class_ids: selected.slice(1)
+        };
+
+        this.disabled = true;
+        this.innerHTML = 'Saving...';
+
+        fetch(url, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.success) window.location.reload();
+            else alert(data.error || 'Failed');
+          });
+      });
+    }
+
+    // Direct Clear All Button
+    const clearAllGroupsBtn = document.getElementById('clearAllGroupsBtn');
+    if (clearAllGroupsBtn) {
+      clearAllGroupsBtn.addEventListener('click', function () {
+        if (!confirm('Are you sure? This will remove ALL group links (past and present) for your classes to ensure a clean start.')) return;
+
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Clearing...';
+
+        const firstClassId = document.querySelector('[data-class-id]')?.dataset.classId;
+
+        fetch('/facilitator/clear-grouping/', {
+          method: 'POST',
+          body: JSON.stringify({ class_section_id: firstClassId }),
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.success) {
+              alert('Success! All stale grouping data cleared.');
+              window.location.reload();
+            } else {
+              alert(data.error || 'Failed to clear');
+              btn.disabled = false;
+              btn.innerHTML = '<i class="bi bi-trash me-1"></i>Clear All Groupings';
+            }
+          });
+      });
+    }
+  });
+</script>
+{% endblock %}

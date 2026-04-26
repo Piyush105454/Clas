@@ -1,0 +1,105 @@
+{% extends base_template|default:"supervisor/shared/base.html" %}
+{% block content %}
+
+<div class="space-y-6">
+    
+    <!-- Page Header -->
+    <div class="flex justify-between items-start">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Facilitators</h2>
+            <p class="text-sm text-gray-500 mt-1">Manage and monitor all facilitators</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+        <form method="get" class="flex gap-3 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select name="status" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All</option>
+                    <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Facilitators Grid -->
+    {% if facilitators %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for facilitator in facilitators %}
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-blue-50 to-blue-100 p-4 border-b border-gray-200">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-lg">
+                            {{ facilitator.full_name|first|upper }}
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900">{{ facilitator.full_name }}</h3>
+                            <p class="text-xs text-gray-600">{{ facilitator.email }}</p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if facilitator.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {% if facilitator.is_active %}Active{% else %}Inactive{% endif %}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="p-4 space-y-3">
+                <!-- Stats -->
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-blue-600">{{ facilitator.total_sessions }}</p>
+                        <p class="text-xs text-gray-600">Sessions Taken</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-purple-600">{{ facilitator.total_strength }}</p>
+                        <p class="text-xs text-gray-600">Total Strength</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-green-600">{{ facilitator.feedback_count }}</p>
+                        <p class="text-xs text-gray-600">Feedback</p>
+                    </div>
+                </div>
+
+                <!-- Joined Date -->
+                <div class="pt-2 border-t border-gray-200">
+                    <p class="text-xs text-gray-600">
+                        <span class="material-symbols-outlined text-base align-middle mr-1">calendar_today</span>
+                        Joined {{ facilitator.created_at|date:"M d, Y" }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="px-4 py-3 bg-gray-50 border-t border-gray-200">
+                {% if request.resolver_match.url_name == 'admin_view_facilitators' %}
+                    <a href="{% url 'admin_facilitator_detail' facilitator.id %}" class="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors">
+                {% else %}
+                    <a href="{% url 'supervisor_facilitator_detail' facilitator.id %}" class="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors">
+                {% endif %}
+                    <span class="material-symbols-outlined text-base">visibility</span>
+                    <span>View Profile</span>
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-12 text-center">
+        <span class="material-symbols-outlined text-6xl text-gray-300 block mb-4">person_off</span>
+        <h3 class="text-lg font-semibold text-gray-900 mb-1">No Facilitators Found</h3>
+        <p class="text-gray-600">There are no facilitators matching your filters.</p>
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock content %}

@@ -1,0 +1,166 @@
+{% extends 'supervisor/shared/base.html' %}
+
+{% block content %}
+<div class="space-y-8">
+    
+    <!-- Page Header -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
+        <p class="text-sm text-gray-500 mt-1">Monitor your platform's key metrics and activities</p>
+    </div>
+    
+    <!-- Class Unavailable Notifications -->
+    <div id="notificationsContainer"></div>
+    
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+            <p class="text-sm font-medium text-gray-600 mb-2">Total Schools</p>
+            <p class="text-3xl font-bold text-gray-900">{{ total_schools }}</p>
+            <div class="mt-3 flex items-center text-xs text-green-600">
+                <span class="material-symbols-outlined text-base mr-1">school</span>
+                <span>Schools</span>
+            </div>
+        </div>
+        
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+            <p class="text-sm font-medium text-gray-600 mb-2">Total Classes</p>
+            <p class="text-3xl font-bold text-gray-900">{{ total_classes }}</p>
+            <div class="mt-3 flex items-center text-xs text-purple-600">
+                <span class="material-symbols-outlined text-base mr-1">class</span>
+                <span>Classes</span>
+            </div>
+        </div>
+        
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+            <p class="text-sm font-medium text-gray-600 mb-2">Active Facilitators</p>
+            <p class="text-3xl font-bold text-gray-900">{{ active_facilitators }}</p>
+            <div class="mt-3 flex items-center text-xs text-yellow-600">
+                <span class="material-symbols-outlined text-base mr-1">person</span>
+                <span>Facilitators</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+        <div class="flex flex-wrap gap-3">
+            <a href="{% url 'supervisor_school_create' %}" 
+               class="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium text-sm shadow-sm whitespace-nowrap">
+                <span class="material-symbols-outlined text-[20px]">add_business</span>
+                <span>Add School</span>
+            </a>
+
+            <a href="{% url 'supervisor_schools_list' %}" 
+               class="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-sm shadow-sm whitespace-nowrap">
+                <span class="material-symbols-outlined text-[20px]">school</span>
+                <span>View Schools</span>
+            </a>
+
+            <a href="{% url 'supervisor_reports_dashboard' %}" 
+               class="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-sm shadow-sm whitespace-nowrap">
+                <span class="material-symbols-outlined text-[20px]">bar_chart</span>
+                <span>View Reports</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Recent Activity Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">  
+        
+        <!-- Recent Schools -->
+        <div class="lg:col-span-12 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-base font-semibold text-gray-900">
+                    Recent Schools
+                </h3>
+            </div>
+
+            <ul class="divide-y divide-gray-100">
+                {% for school in recent_schools %}
+                <li class="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
+                    <div class="w-10 h-10 flex items-center justify-center rounded-full bg-green-100 flex-shrink-0">
+                        <span class="material-symbols-outlined text-green-600 text-lg">school</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900">{{ school.name }}</p>
+                        <p class="text-xs text-gray-500">{{ school.district }}{% if school.block %}, {{ school.block }}{% endif %}</p>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <a href="{% url 'supervisor_school_detail' school.id %}" class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
+                            View
+                        </a>
+                    </div>
+                </li>
+                {% empty %}
+                <li class="px-6 py-8 text-center">
+                    <span class="material-symbols-outlined text-gray-300 text-4xl mb-2">inbox</span>
+                    <p class="text-sm text-gray-500">No recent schools</p>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
+
+<script>
+  // Load class unavailable notifications
+  document.addEventListener('DOMContentLoaded', function() {
+    loadNotifications();
+    // Refresh notifications every 30 seconds
+    setInterval(loadNotifications, 30000);
+  });
+
+  function loadNotifications() {
+    const container = document.getElementById('notificationsContainer');
+    
+    // Get notifications from cache via API
+    fetch('/api/supervisor/notifications/', {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.notifications && data.notifications.length > 0) {
+        let html = '<div class="bg-red-50 border border-red-200 rounded-xl shadow-sm overflow-hidden">';
+        html += '<div class="px-6 py-4 border-b border-red-200 bg-red-100">';
+        html += '<h3 class="text-base font-semibold text-red-900">';
+        html += '<span class="material-symbols-outlined text-lg mr-2" style="vertical-align: middle;">warning</span>';
+        html += 'Class Unavailable Requests (' + data.notifications.length + ')';
+        html += '</h3></div>';
+        html += '<ul class="divide-y divide-red-100">';
+        
+        data.notifications.forEach(notif => {
+          html += '<li class="flex items-center gap-4 px-6 py-4 hover:bg-red-100 transition-colors">';
+          html += '<div class="w-10 h-10 flex items-center justify-center rounded-full bg-red-200 flex-shrink-0">';
+          html += '<span class="material-symbols-outlined text-red-600 text-lg">error</span>';
+          html += '</div>';
+          html += '<div class="flex-1 min-w-0">';
+          html += '<p class="text-sm font-medium text-gray-900">' + notif.class_name + '</p>';
+          html += '<p class="text-xs text-gray-600">';
+          html += '<strong>' + notif.facilitator_name + '</strong> reported unavailable';
+          html += '</p>';
+          html += '<p class="text-xs text-gray-500 mt-1">' + notif.school_name + '</p>';
+          html += '</div>';
+          html += '<div class="flex-shrink-0 text-right">';
+          html += '<p class="text-xs text-gray-500">' + new Date(notif.timestamp).toLocaleTimeString() + '</p>';
+          html += '</div>';
+          html += '</li>';
+        });
+        
+        html += '</ul></div>';
+        container.innerHTML = html;
+      } else {
+        container.innerHTML = '';
+      }
+    })
+    .catch(error => {
+      console.error('Error loading notifications:', error);
+    });
+  }
+</script>

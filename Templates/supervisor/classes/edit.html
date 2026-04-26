@@ -1,0 +1,108 @@
+{% extends 'supervisor/shared/base.html' %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-900">Edit Class</h2>
+        <p class="text-sm text-gray-500 mt-1">Update class details</p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <!-- School -->
+            <div>
+                <label for="{{ form.school.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                    School <span class="text-red-500">*</span>
+                </label>
+                {{ form.school }}
+                {% if form.school.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.school.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Class Level -->
+            <div>
+                <label for="{{ form.class_level.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                    Class Level <span class="text-red-500">*</span>
+                </label>
+                {{ form.class_level }}
+                {% if form.class_level.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.class_level.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Section -->
+            <div>
+                <label for="{{ form.section.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                    Section <span class="text-red-500">*</span>
+                </label>
+                {{ form.section }}
+                {% if form.section.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.section.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Academic Year -->
+            <div>
+                <label for="{{ form.academic_year.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                    Academic Year <span class="text-red-500">*</span>
+                </label>
+                {{ form.academic_year }}
+                {% if form.academic_year.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.academic_year.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Status -->
+            <div>
+                <label for="{{ form.status.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                    Status
+                </label>
+                {{ form.status }}
+                {% if form.status.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.status.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex gap-3 pt-4 border-t border-gray-200">
+                <button type="submit" class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium text-sm">
+                    <span class="material-symbols-outlined text-[20px]">check</span>
+                    <span>Update Class</span>
+                </button>
+                <a href="{% url 'supervisor_classes_list' %}" class="flex items-center gap-2 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-sm">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                    <span>Cancel</span>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+        width: 100%;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus,
+    textarea:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,403 @@
+{% extends "supervisor/shared/base.html" %}
+
+{% block title %}Add Calendar Date{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 p-6">
+    <div class="max-w-3xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Add Calendar Entry</h1>
+            <p class="text-gray-600 mt-2">Create planned sessions, holidays, or office work schedules</p>
+        </div>
+
+        <!-- Form -->
+        <div class="bg-white rounded-lg shadow-sm p-8">
+            <form method="POST" class="space-y-6">
+                {% csrf_token %}
+
+                <!-- Step 1: Date Selection -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Step 1: Select Date(s)</h3>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Start Date -->
+                        <div>
+                            <label for="date" class="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
+                            <input type="date" id="date" name="date" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+
+                        <!-- Bulk Creation Toggle -->
+                        <div class="flex items-end">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="is_bulk" name="is_bulk" onchange="toggleBulkOptions()" class="w-4 h-4 text-blue-600 rounded">
+                                <span class="ml-2 text-sm font-medium text-gray-700">Create for multiple dates</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Date Options (hidden by default) -->
+                    <div id="bulk-options" class="hidden mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div class="mb-4">
+                            <label for="end_date" class="block text-sm font-medium text-gray-700 mb-2">End Date *</label>
+                            <input type="date" id="end_date" name="end_date" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Select Days of Week *</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="days_of_week" value="0" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">Monday</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="days_of_week" value="1" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">Tuesday</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="days_of_week" value="2" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">Wednesday</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="days_of_week" value="3" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">Thursday</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="days_of_week" value="4" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">Friday</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="days_of_week" value="5" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">Saturday</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="days_of_week" value="6" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="ml-2 text-sm text-gray-700">Sunday</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Time (Optional) -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Step 2: Time (Optional)</h3>
+                    <div>
+                        <label for="time" class="block text-sm font-medium text-gray-700 mb-2">Time</label>
+                        <input type="time" id="time" name="time" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1">Leave blank if no specific time</p>
+                    </div>
+                </div>
+
+                <!-- Step 3: Entry Type -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Step 3: Entry Type *</h3>
+                    <div class="space-y-3">
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="date_type" value="session" required class="w-4 h-4 text-blue-600" onchange="updateFormFields()">
+                            <div class="ml-3">
+                                <span class="text-gray-700 font-medium">📚 Planned Session</span>
+                                <p class="text-xs text-gray-500">Schedule a class session</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="date_type" value="holiday" class="w-4 h-4 text-blue-600" onchange="updateFormFields()">
+                            <div class="ml-3">
+                                <span class="text-gray-700 font-medium">🎉 Holiday / No Session</span>
+                                <p class="text-xs text-gray-500">Mark a holiday or no-session day</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="date_type" value="office_work" class="w-4 h-4 text-blue-600" onchange="updateFormFields()">
+                            <div class="ml-3">
+                                <span class="text-gray-700 font-medium">💼 Office Work / Task</span>
+                                <p class="text-xs text-gray-500">Assign office work to facilitators</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Step 4: Entry Details -->
+                <div class="border-b pb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Step 4: Details</h3>
+
+                    <!-- Session Fields -->
+                    <div id="session-fields" class="hidden space-y-4">
+                        <div>
+                            <label for="school_session" class="block text-sm font-medium text-gray-700 mb-2">School *</label>
+                            <select id="school_session" name="school_session" onchange="updateClasses(); syncSchoolField();" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">-- Select a school --</option>
+                                {% for school in schools %}
+                                    <option value="{{ school.id }}">{{ school.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Apply to Classes *</label>
+                            <div class="space-y-2">
+                                <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                    <input type="radio" name="scope" value="all" class="w-4 h-4 text-blue-600" onchange="updateClassDisplay()">
+                                    <span class="ml-2 text-gray-700 font-medium">All Classes in School</span>
+                                </label>
+                                <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                    <input type="radio" name="scope" value="specific" class="w-4 h-4 text-blue-600" onchange="updateClassDisplay()">
+                                    <span class="ml-2 text-gray-700 font-medium">Select Specific Classes</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Specific Classes Selection -->
+                        <div id="specific-classes" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Select Classes *</label>
+                            <div class="border border-gray-300 rounded-lg p-4 max-h-64 overflow-y-auto">
+                                {% for class in classes %}
+                                <label class="flex items-center mb-2">
+                                    <input type="checkbox" name="class_section" value="{{ class.id }}" data-school="{{ class.school.id }}" class="w-4 h-4 text-blue-600 rounded class-checkbox">
+                                    <span class="ml-2 text-gray-700">{{ class.school.name }} - {{ class.display_name }}</span>
+                                </label>
+                                {% empty %}
+                                <p class="text-gray-500 text-sm">No classes available</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden field to map school_session to school for backend -->
+                    <input type="hidden" id="school_hidden" name="school" value="">
+
+                    <!-- Holiday Fields -->
+                    <div id="holiday-fields" class="hidden space-y-4">
+                        <div>
+                            <label for="holiday_name" class="block text-sm font-medium text-gray-700 mb-2">Holiday Name *</label>
+                            <input type="text" id="holiday_name" name="holiday_name" placeholder="e.g., Diwali, Summer Break, Independence Day" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label for="holiday_notes" class="block text-sm font-medium text-gray-700 mb-2">Holiday Details / Reason (Optional)</label>
+                            <textarea id="holiday_notes" name="holiday_notes" rows="3" placeholder="Explain why there are no sessions (visible to facilitators)..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Office Work Fields -->
+                    <div id="office-work-fields" class="hidden space-y-4">
+                        <div>
+                            <label for="school_office" class="block text-sm font-medium text-gray-700 mb-2">School (Optional)</label>
+                            <select id="school_office" name="school_office" onchange="syncSchoolField();" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">-- Select a school (optional) --</option>
+                                {% for school in schools %}
+                                    <option value="{{ school.id }}">{{ school.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="office_task_description" class="block text-sm font-medium text-gray-700 mb-2">Task Description *</label>
+                            <textarea id="office_task_description" name="office_task_description" rows="4" placeholder="Describe the office work or task..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                        </div>
+
+                        <!-- Facilitator Selection for Office Work -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Assign Facilitators (Optional)</label>
+                            <div class="border border-gray-300 rounded-lg p-4 max-h-48 overflow-y-auto">
+                                {% for facilitator in facilitators %}
+                                <label class="flex items-center mb-2">
+                                    <input type="checkbox" name="facilitators" value="{{ facilitator.id }}" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="ml-2 text-gray-700">{{ facilitator.full_name }} ({{ facilitator.email }})</span>
+                                </label>
+                                {% empty %}
+                                <p class="text-gray-500 text-sm">No facilitators available</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex gap-4 pt-6">
+                    <button type="submit" class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg">
+                        Create Entry
+                    </button>
+                    <a href="{% url 'supervisor_calendar' %}" class="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg text-center">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Convert pre-selected IDs to JSON array
+const preSelectedIds = {{ pre_selected_class_ids|safe }};
+
+function toggleBulkOptions() {
+    const isBulk = document.getElementById('is_bulk').checked;
+    const bulkOptions = document.getElementById('bulk-options');
+    
+    if (isBulk) {
+        bulkOptions.classList.remove('hidden');
+    } else {
+        bulkOptions.classList.add('hidden');
+    }
+}
+
+function updateFormFields() {
+    const dateType = document.querySelector('input[name="date_type"]:checked').value;
+    
+    // Hide all fields
+    document.getElementById('session-fields').classList.add('hidden');
+    document.getElementById('holiday-fields').classList.add('hidden');
+    document.getElementById('office-work-fields').classList.add('hidden');
+    
+    // Clear all form values when switching types
+    document.getElementById('school_session').value = '';
+    document.getElementById('school_office').value = '';
+    document.getElementById('holiday_name').value = '';
+    document.getElementById('holiday_notes').value = '';
+    document.getElementById('office_task_description').value = '';
+    document.getElementById('school_hidden').value = '';
+    
+    // Uncheck all class checkboxes
+    document.querySelectorAll('.class-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    
+    // Uncheck all facilitator checkboxes
+    document.querySelectorAll('input[name="facilitators"]').forEach(cb => {
+        cb.checked = false;
+    });
+    
+    // Show relevant fields
+    if (dateType === 'session') {
+        document.getElementById('session-fields').classList.remove('hidden');
+        // Set default scope
+        document.querySelector('input[name="scope"][value="all"]').checked = true;
+        updateClassDisplay();
+    } else if (dateType === 'holiday') {
+        document.getElementById('holiday-fields').classList.remove('hidden');
+    } else if (dateType === 'office_work') {
+        document.getElementById('office-work-fields').classList.remove('hidden');
+    }
+}
+
+function updateClassDisplay() {
+    const scope = document.querySelector('input[name="scope"]:checked').value;
+    const specificClasses = document.getElementById('specific-classes');
+    
+    if (scope === 'specific') {
+        specificClasses.classList.remove('hidden');
+    } else {
+        specificClasses.classList.add('hidden');
+    }
+}
+
+function updateClasses() {
+    const schoolId = document.getElementById('school_session').value;
+    const classCheckboxes = document.querySelectorAll('.class-checkbox');
+    
+    classCheckboxes.forEach(checkbox => {
+        if (schoolId === '' || checkbox.dataset.school === schoolId) {
+            checkbox.parentElement.style.display = 'flex';
+        } else {
+            checkbox.parentElement.style.display = 'none';
+            checkbox.checked = false;
+        }
+    });
+}
+
+// Sync school selection to hidden field based on current form type
+function syncSchoolField() {
+    const dateType = document.querySelector('input[name="date_type"]:checked').value;
+    const schoolHidden = document.getElementById('school_hidden');
+    
+    if (dateType === 'session') {
+        schoolHidden.value = document.getElementById('school_session').value;
+    } else if (dateType === 'office_work') {
+        schoolHidden.value = document.getElementById('school_office').value;
+    }
+}
+
+// Sync school_session to hidden school field before form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const firstRadio = document.querySelector('input[name="date_type"]');
+    if (firstRadio) {
+        firstRadio.checked = true;
+        updateFormFields();
+    }
+    
+    // Pre-select classes if they were passed from bulk add
+    if (preSelectedIds && preSelectedIds.length > 0) {
+        // Set to session type
+        document.querySelector('input[name="date_type"][value="session"]').checked = true;
+        updateFormFields();
+        
+        // Set to specific classes scope
+        document.querySelector('input[name="scope"][value="specific"]').checked = true;
+        updateClassDisplay();
+        
+        // Pre-select the classes
+        preSelectedIds.forEach(classId => {
+            const checkbox = document.querySelector(`.class-checkbox[value="${classId}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+                // Get the school from this class and set it
+                const schoolId = checkbox.dataset.school;
+                document.getElementById('school_session').value = schoolId;
+                updateClasses();
+            }
+        });
+    }
+    
+    // Add form submission handler to sync values
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const dateType = document.querySelector('input[name="date_type"]:checked').value;
+            const schoolHidden = document.getElementById('school_hidden');
+            
+            // Sync the appropriate school field to hidden field
+            syncSchoolField();
+            
+            // For session type, copy school_session to hidden school field
+            if (dateType === 'session') {
+                const schoolSessionValue = document.getElementById('school_session').value;
+                if (!schoolSessionValue) {
+                    e.preventDefault();
+                    alert('Please select a school for the session');
+                    return false;
+                }
+                
+                // Verify at least one class is selected if scope is specific
+                const scope = document.querySelector('input[name="scope"]:checked').value;
+                if (scope === 'specific') {
+                    const selectedClasses = document.querySelectorAll('.class-checkbox:checked');
+                    if (selectedClasses.length === 0) {
+                        e.preventDefault();
+                        alert('Please select at least one class');
+                        return false;
+                    }
+                }
+            } 
+            // For office work, verify task description is filled
+            else if (dateType === 'office_work') {
+                const taskDesc = document.getElementById('office_task_description').value.trim();
+                if (!taskDesc) {
+                    e.preventDefault();
+                    alert('Please enter a task description');
+                    return false;
+                }
+            }
+            // For holiday, verify holiday name is filled
+            else if (dateType === 'holiday') {
+                const holidayName = document.getElementById('holiday_name').value.trim();
+                if (!holidayName) {
+                    e.preventDefault();
+                    alert('Please enter a holiday name');
+                    return false;
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

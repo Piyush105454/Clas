@@ -1,0 +1,65 @@
+{% extends "supervisor/shared/base.html" %}
+
+{% block title %}Class Sessions - Supervisor{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ class_section.display_name }} - All Sessions</h1>
+            <p class="text-gray-600">{{ class_section.school.name }}</p>
+        </div>
+        <a href="{% url 'supervisor_sessions_list' %}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+            ← Back to Sessions
+        </a>
+    </div>
+
+
+    <!-- Sessions Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for item in session_data %}
+        <div class="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h3 class="font-bold text-gray-900">Day {{ item.session.day_number }}</h3>
+                    <p class="text-sm text-gray-600">{{ item.session.title }}</p>
+                </div>
+                {% if item.actual_session %}
+                <span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">Conducted</span>
+                {% else %}
+                <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">Pending</span>
+                {% endif %}
+            </div>
+
+            {% if item.actual_session %}
+            <div class="mb-4 p-3 bg-gray-50 rounded">
+                <p class="text-sm text-gray-600 mb-1">Attendance: <strong>{{ item.attendance_count }}</strong> students</p>
+            </div>
+            {% endif %}
+
+            <a href="{% url 'supervisor_session_detail' item.session.id %}" class="text-blue-600 hover:text-blue-800 font-medium text-sm">
+                View Details →
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

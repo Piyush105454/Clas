@@ -1,0 +1,182 @@
+{% extends "facilitator/shared/base.html" %}
+{% load static %}
+
+{% block title %}My Schools - Facilitator Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="mb-0">
+                    <i class="fas fa-school me-2"></i>
+                    My Assigned Schools
+                </h2>
+                <div>
+                    <button id="listViewBtn" class="btn btn-primary btn-sm me-2">
+                        <i class="fas fa-list me-1"></i> List View
+                    </button>
+                    <button id="mapViewBtn" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-map me-1"></i> Map View
+                    </button>
+                </div>
+            </div>
+
+            <!-- MAP CONTAINER (Hidden by default) -->
+            <div id="mapContainer" class="card shadow-sm mb-4" style="display: none; height: 600px;">
+                <div id="map" style="width: 100%; height: 100%;"></div>
+            </div>
+
+            <!-- LIST VIEW -->
+            <div id="listView">
+                <div class="text-muted mb-3">
+                    <i class="fas fa-info-circle me-1"></i>
+                    {{ schools_with_counts|length }} school{{ schools_with_counts|length|pluralize }} assigned
+                </div>
+
+                {% if not schools_with_counts %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>No schools assigned</strong><br>
+                        You don't have any schools assigned to you yet. Please contact your administrator to assign schools.
+                    </div>
+                {% else %}
+                    <div class="row">
+                        {% for item in schools_with_counts %}
+                            <div class="col-md-6 col-lg-4 mb-4">
+                                <div class="card h-100 shadow-sm">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <h5 class="card-title mb-0">
+                                                <i class="fas fa-school text-primary me-2"></i>
+                                                {{ item.school.name }}
+                                            </h5>
+                                            <span class="badge bg-success">Active</span>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <p class="text-muted mb-1">
+                                                <i class="fas fa-map-marker-alt me-1"></i>
+                                                {{ item.school.block }}, {{ item.school.district }}
+                                            </p>
+                                            <p class="text-muted mb-0">
+                                                <i class="fas fa-id-card me-1"></i>
+                                                UDISE: {{ item.school.udise }}
+                                            </p>
+                                        </div>
+                                        
+                                        <div class="row text-center mb-3">
+                                            <div class="col-6">
+                                                <div class="border-end">
+                                                    <h6 class="text-primary mb-0">{{ item.enrollment_count }}</h6>
+                                                    <small class="text-muted">Students</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <h6 class="text-success mb-0">{{ item.class_count }}</h6>
+                                                <small class="text-muted">Classes</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="card-footer bg-transparent">
+                                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                            <a href="{% url 'facilitator_school_detail' item.school.id %}" 
+                                               class="btn btn-outline-primary btn-sm">
+                                                <i class="fas fa-eye me-1"></i>
+                                                View Classes
+                                            </a>
+                                            <a href="{% url 'facilitator_students_list' %}?school={{ item.school.id }}" 
+                                               class="btn btn-primary btn-sm">
+                                                <i class="fas fa-users me-1"></i>
+                                                View Students
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leaflet CSS & JS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<script>
+let map = null;
+let markers = [];
+
+const schoolsData = [
+  {% for item in schools_with_counts %}
+  {
+    id: "{{ item.school.id|escapejs }}",
+    name: "{{ item.school.name|escapejs }}",
+    block: "{{ item.school.block|escapejs|default:'' }}",
+    district: "{{ item.school.district|escapejs|default:'' }}",
+    lat: {{ item.school.latitude|default:28.7041 }},
+    lng: {{ item.school.longitude|default:77.1025 }},
+    students: {{ item.enrollment_count|default:0 }},
+    classes: {{ item.class_count|default:0 }}
+  }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+];
+
+function initMap() {
+  if (map) return;
+  
+  map = L.map('map').setView([28.7041, 77.1025], 5);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+  
+  schoolsData.forEach(school => {
+    const marker = L.marker([school.lat, school.lng]).addTo(map);
+    
+    const popupContent = `
+      <div style="width: 250px;">
+        <h6 style="margin: 0 0 8px 0; font-weight: 600; color: #1f2937;">${school.name}</h6>
+        <p style="margin: 0 0 8px 0; font-size: 0.85rem; color: #6b7280;">${school.block}, ${school.district}</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; font-size: 0.85rem;">
+          <div><strong>${school.students}</strong> Students</div>
+          <div><strong>${school.classes}</strong> Classes</div>
+        </div>
+        <a href="/facilitator/schools/${school.id}/" style="display: inline-block; margin-top: 8px; padding: 6px 12px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-size: 0.85rem; font-weight: 500;">View Details</a>
+      </div>
+    `;
+    
+    marker.bindPopup(popupContent);
+    markers.push(marker);
+  });
+}
+
+document.getElementById('mapViewBtn').addEventListener('click', function() {
+  document.getElementById('listView').style.display = 'none';
+  document.getElementById('mapContainer').style.display = 'block';
+  document.getElementById('listViewBtn').classList.remove('btn-primary');
+  document.getElementById('listViewBtn').classList.add('btn-outline-primary');
+  document.getElementById('mapViewBtn').classList.remove('btn-outline-primary');
+  document.getElementById('mapViewBtn').classList.add('btn-primary');
+  
+  setTimeout(() => {
+    initMap();
+    if (map) map.invalidateSize();
+  }, 100);
+});
+
+document.getElementById('listViewBtn').addEventListener('click', function() {
+  document.getElementById('listView').style.display = 'block';
+  document.getElementById('mapContainer').style.display = 'none';
+  document.getElementById('listViewBtn').classList.add('btn-primary');
+  document.getElementById('listViewBtn').classList.remove('btn-outline-primary');
+  document.getElementById('mapViewBtn').classList.add('btn-outline-primary');
+  document.getElementById('mapViewBtn').classList.remove('btn-primary');
+});
+</script>
+{% endblock %}

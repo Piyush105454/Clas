@@ -1,0 +1,207 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-6">
+
+  <!-- Header -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+    <div class="flex items-start justify-between">
+      <div class="flex items-start gap-4">
+        {% if school.logo %}
+          <img src="{{ school.logo.url }}" alt="{{ school.name }}" class="w-20 h-20 rounded-lg object-cover">
+        {% else %}
+          <div class="w-20 h-20 rounded-lg bg-green-100 flex items-center justify-center">
+            <span class="material-symbols-outlined text-green-600 text-3xl">school</span>
+          </div>
+        {% endif %}
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900">{{ school.name }}</h2>
+          <p class="text-sm text-gray-500 mt-1">{{ school.area }}</p>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium mt-2
+            {% if school.status == 1 %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+            {% if school.status == 1 %}Active{% else %}Inactive{% endif %}
+          </span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <a href="{% url 'supervisor_school_edit' school.id %}"
+           class="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">
+          <span class="material-symbols-outlined text-[18px]">edit</span>
+          Edit
+        </a>
+        {% if school.address %}
+        <a href="https://www.google.com/maps/search/{{ school.address|urlencode }}" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center justify-center gap-2 px-4 py-2 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 text-sm font-medium">
+          <span class="material-symbols-outlined text-[18px]">location_on</span>
+          View on Map
+        </a>
+        {% endif %}
+        <button onclick="openDeleteModal('{{ school.id }}','{{ school.name|escapejs }}')"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 text-sm font-medium">
+          <span class="material-symbols-outlined text-[18px]">delete</span>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- School Information -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    
+    <!-- Details -->
+    <div class="lg:col-span-2 bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">School Information</h3>
+      <div class="space-y-4">
+        <div class="flex justify-between py-3 border-b border-gray-200">
+          <span class="text-sm font-medium text-gray-600">Address:</span>
+          <span class="text-sm text-gray-900">{{ school.address|default:"Not specified" }}</span>
+        </div>
+        <div class="flex justify-between py-3 border-b border-gray-200">
+          <span class="text-sm font-medium text-gray-600">Contact Person:</span>
+          <span class="text-sm text-gray-900">{{ school.contact_person|default:"Not specified" }}</span>
+        </div>
+        <div class="flex justify-between py-3 border-b border-gray-200">
+          <span class="text-sm font-medium text-gray-600">Contact Number:</span>
+          <span class="text-sm text-gray-900">{{ school.contact_number|default:"Not specified" }}</span>
+        </div>
+        <div class="flex justify-between py-3">
+          <span class="text-sm font-medium text-gray-600">Email:</span>
+          <span class="text-sm text-gray-900">{{ school.email|default:"Not specified" }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">Statistics</h3>
+      <div class="space-y-4">
+        <div class="p-4 bg-blue-50 rounded-lg">
+          <p class="text-xs text-blue-600 font-medium">Total Classes</p>
+          <p class="text-2xl font-bold text-blue-900 mt-1">{{ classes|length }}</p>
+        </div>
+        <div class="p-4 bg-green-50 rounded-lg">
+          <p class="text-xs text-green-600 font-medium">Active Facilitators</p>
+          <p class="text-2xl font-bold text-green-900 mt-1">{{ facilitators|length }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Classes -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h3 class="text-lg font-semibold text-gray-900">Classes</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Class</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Section</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {% for class in classes %}
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ class.class_level }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ class.section }}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Active
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="3" class="px-6 py-8 text-center text-sm text-gray-500">
+              No classes found
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Facilitators -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h3 class="text-lg font-semibold text-gray-900">Assigned Facilitators</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {% for facilitator in facilitators %}
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm">
+                  {{ facilitator.facilitator.full_name|first|upper }}
+                </div>
+                <span class="text-sm font-medium text-gray-900">{{ facilitator.facilitator.full_name }}</span>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ facilitator.facilitator.email }}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium 
+                {% if facilitator.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                {% if facilitator.is_active %}Active{% else %}Inactive{% endif %}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="3" class="px-6 py-8 text-center text-sm text-gray-500">
+              No facilitators assigned
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeDeleteModal()"></div>
+
+  <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <form method="post" id="deleteForm">{% csrf_token %}
+      <div class="px-6 py-4 border-b"><h5 class="font-semibold text-lg">Delete School</h5></div>
+
+      <div class="px-6 py-4">
+        Are you sure you want to delete <strong id="deleteSchoolName"></strong>?
+      </div>
+
+      <div class="px-6 py-4 bg-gray-50 flex gap-3 rounded-b-xl">
+        <button type="button" onclick="closeDeleteModal()" class="flex-1 border rounded-lg px-4 py-2">Cancel</button>
+        <button type="submit" class="flex-1 bg-red-600 text-white rounded-lg px-4 py-2">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openDeleteModal(id, name) {
+  document.getElementById("deleteSchoolName").textContent = name;
+  document.getElementById("deleteForm").action = `/supervisor/schools/${id}/delete/`;
+  document.getElementById("deleteModal").classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeDeleteModal() {
+  document.getElementById("deleteModal").classList.add("hidden");
+  document.body.style.overflow = "";
+}
+</script>
+
+{% endblock %}

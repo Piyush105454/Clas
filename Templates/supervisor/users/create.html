@@ -1,0 +1,101 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="max-w-2xl mx-auto">
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 lg:p-8">
+    
+    <!-- Header -->
+    <div class="mb-8">
+      <h2 class="text-2xl font-bold text-gray-900">Create New User</h2>
+      <p class="text-sm text-gray-500 mt-2">Add a new user to the system with role assignment</p>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="space-y-6">
+      {% csrf_token %}
+
+      <!-- Full Name -->
+      <div>
+        <label for="id_full_name" class="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+        {{ form.full_name }}
+        {% if form.full_name.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.full_name.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Email -->
+      <div>
+        <label for="id_email" class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+        {{ form.email }}
+        {% if form.email.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.email.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Password -->
+      <div>
+        <label for="id_password" class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+        {{ form.password }}
+        {% if form.password.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.password.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Role -->
+      <div>
+        <label for="id_role" class="block text-sm font-medium text-gray-700 mb-2">Role</label>
+        {{ form.role }}
+        {% if form.role.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.role.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Form Errors -->
+      {% if form.non_field_errors %}
+        <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p class="text-sm text-red-700">
+            {% for error in form.non_field_errors %}
+              {{ error }}
+            {% endfor %}
+          </p>
+        </div>
+      {% endif %}
+
+      <!-- Buttons -->
+      <div class="flex gap-3 pt-6">
+        <button type="submit" class="flex-1 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium">
+          Create User
+        </button>
+        <a href="{% url 'supervisor_users_list' %}" class="flex-1 px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-center">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  select {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus,
+  select:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: #3b82f6;
+    border-color: transparent;
+  }
+</style>
+
+{% endblock %}

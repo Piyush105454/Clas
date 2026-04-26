@@ -1,0 +1,75 @@
+{% extends "admin/shared/base.html" %}
+{% load static %}
+
+{% block title %}Page Not Found{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <div class="text-center">
+            <!-- Error Icon -->
+            <div class="mx-auto h-24 w-24 text-gray-400 mb-6">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.29-1.007-5.824-2.709M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                </svg>
+            </div>
+            
+            <!-- Error Title -->
+            <h2 class="mt-6 text-3xl font-extrabold text-gray-900">
+                {{ error_title|default:"Page Not Found" }}
+            </h2>
+            
+            <!-- Error Message -->
+            <p class="mt-2 text-sm text-gray-600">
+                {{ error_message|default:"The page you're looking for doesn't exist or may have been moved." }}
+            </p>
+        </div>
+
+        <!-- Suggestions -->
+        {% if suggestions %}
+        <div class="mt-8">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">What you can do:</h3>
+            <ul class="text-sm text-gray-600 space-y-2">
+                {% for suggestion in suggestions %}
+                <li class="flex items-start">
+                    <svg class="flex-shrink-0 h-5 w-5 text-green-500 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {{ suggestion }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Action Buttons -->
+        <div class="mt-8 space-y-3">
+            {% if show_dashboard_link and user.is_authenticated %}
+            <a href="{% if user.role.name == 'ADMIN' %}/admin/dashboard/{% elif user.role.name == 'FACILITATOR' %}/facilitator/dashboard/{% else %}/supervisor/dashboard/{% endif %}" 
+               class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Go to Dashboard
+            </a>
+            {% endif %}
+            
+            <button onclick="history.back()" 
+                    class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Go Back
+            </button>
+            
+            {% if not user.is_authenticated %}
+            <a href="{% url 'login' %}" 
+               class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Login
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- Help Text -->
+        <div class="mt-6 text-center">
+            <p class="text-xs text-gray-500">
+                If you continue to experience issues, please contact your system administrator.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

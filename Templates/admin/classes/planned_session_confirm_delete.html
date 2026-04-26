@@ -1,0 +1,38 @@
+{% extends "admin/shared/base.html" %}
+
+{% block content %}
+
+<div class="py-6">
+
+  <h5 class="text-lg font-semibold text-red-600 mb-4">
+    Delete Planned Session
+  </h5>
+
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 max-w-md">
+
+    <p class="text-gray-700">
+      Are you sure you want to delete:
+    </p>
+
+    <p class="mt-2 font-semibold text-gray-900">
+      Day {{ planned_session.day_number }} — {{ planned_session.topic }}
+    </p>
+
+    <form method="post" class="mt-5">
+      {% csrf_token %}
+
+      <button class="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700">
+        Yes, Delete
+      </button>
+
+      <a href="{% url 'admin_class_sessions' class_section.id %}"
+         class="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 ml-2">
+        Cancel
+      </a>
+    </form>
+
+  </div>
+
+</div>
+
+{% endblock %}

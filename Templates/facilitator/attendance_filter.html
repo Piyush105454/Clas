@@ -1,0 +1,800 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold">Attendance Management</h4>
+</div>
+
+<!-- Debug Information (remove in production) -->
+{% if request.user.is_superuser or request.GET.debug %}
+<div class="card mb-3 border-warning">
+    <div class="card-header bg-warning text-dark">
+        <h6 class="mb-0">
+            <i class="fas fa-bug me-2"></i>Debug Information
+        </h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>User Info:</h6>
+                <ul class="list-unstyled small">
+                    <li><strong>User:</strong> {{ request.user.full_name }} ({{ request.user.email }})</li>
+                    <li><strong>Role:</strong> {{ request.user.role.name }}</li>
+                    <li><strong>User ID:</strong> {{ request.user.id }}</li>
+                </ul>
+                
+                <h6>School Assignments:</h6>
+                <ul class="list-unstyled small">
+                    {% for fs in assigned_schools %}
+                    <li>
+                        <strong>{{ fs.school.name }}</strong> (ID: {{ fs.school.id }})
+                        - Active: {{ fs.is_active }}
+                        - Created: {{ fs.created_at|date:"M d, Y" }}
+                    </li>
+                    {% empty %}
+                    <li class="text-danger">No school assignments found</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>Current Selections:</h6>
+                <ul class="list-unstyled small">
+                    <li><strong>Selected School ID:</strong> {{ request.GET.school|default:"None" }}</li>
+                    <li><strong>Selected Class ID:</strong> {{ request.GET.class_section|default:"None" }}</li>
+                    <li><strong>Selected Period:</strong> {{ selected_period|default:"None" }}</li>
+                </ul>
+                
+                {% if selected_school %}
+                <h6>Available Classes in {{ selected_school.name }}:</h6>
+                <ul class="list-unstyled small">
+                    {% for class_section in class_sections %}
+                    <li>
+                        <strong>{{ class_section.class_level }}{{ class_section.section }}</strong> 
+                        (ID: {{ class_section.id }}) - Active: {{ class_section.is_active }}
+                    </li>
+                    {% empty %}
+                    <li class="text-warning">No classes found for this school</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="mt-2">
+            <small class="text-muted">
+                <strong>AJAX Endpoint:</strong> /api/facilitator/classes/?school_id=[SCHOOL_ID]
+                <br>
+                <strong>Test URL:</strong> 
+                <a href="/api/facilitator/classes/?school_id={{ selected_school.id|default:'1' }}" target="_blank" class="text-primary">
+                    Test AJAX endpoint
+                </a>
+            </small>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Cascading Filter Interface -->
+<div class="card mb-4 date-filter-card">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+        <h6 class="mb-0">
+            <i class="fas fa-filter me-2"></i>Filter Options
+        </h6>
+        {% if selected_class_section %}
+        <a href="{% url 'facilitator_fill_past_attendance' selected_class_section.id yesterday_str %}" 
+           class="btn btn-sm btn-light py-1 px-2" style="font-size: 0.75rem;">
+            <i class="fas fa-history me-1 text-primary"></i>Fill Yesterday's Attendance ({{ yesterday_display }})
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <form method="GET" id="attendanceFilterForm">
+            <div class="row g-3">
+                <!-- School Selection -->
+                <div class="col-md-3">
+                    <label for="schoolSelect" class="form-label">Select School</label>
+                    <select class="form-select" id="schoolSelect" name="school">
+                        <option value="">Choose a school...</option>
+                        {% for fs in assigned_schools %}
+                        <option value="{{ fs.school.id }}" 
+                                {% if selected_school and selected_school.id == fs.school.id %}selected{% endif %}>
+                            {{ fs.school.name }} ({{ fs.school.district }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Class Selection -->
+                <div class="col-md-3">
+                    <label for="classSelect" class="form-label">Select Class</label>
+                    <select class="form-select" id="classSelect" name="class_section" disabled>
+                        <option value="">Choose a class...</option>
+                        {% if class_sections %}
+                            {% for class_section in class_sections %}
+                            <option value="{{ class_section.id }}"
+                                    {% if selected_class_section and selected_class_section.id == class_section.id %}selected{% endif %}>
+                                Class {{ class_section.class_level }} - {{ class_section.section }}
+                            </option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </div>
+
+                <!-- Date Period Selection -->
+                <div class="col-md-3">
+                    <label for="datePeriod" class="form-label">Time Period</label>
+                    <select class="form-select" id="datePeriod" name="period">
+                        <option value="all" {% if selected_period == 'all' %}selected{% endif %}>All Time</option>
+                        <option value="today" {% if selected_period == 'today' %}selected{% endif %}>Today</option>
+                        <option value="this_week" {% if selected_period == 'this_week' %}selected{% endif %}>This Week</option>
+                        <option value="last_week" {% if selected_period == 'last_week' %}selected{% endif %}>Last Week</option>
+                        <option value="this_month" {% if selected_period == 'this_month' %}selected{% endif %}>This Month</option>
+                        <option value="last_month" {% if selected_period == 'last_month' %}selected{% endif %}>Last Month</option>
+                        <option value="custom" {% if selected_period == 'custom' %}selected{% endif %}>Custom Range</option>
+                    </select>
+                </div>
+
+                <!-- Filter Button -->
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">Apply Filter</button>
+                    <a href="{% url 'facilitator_attendance' %}" class="btn btn-outline-secondary">Clear</a>
+                </div>
+            </div>
+
+            <!-- Custom Date Range (hidden by default) -->
+            <div class="row g-3 mt-2 custom-date-range" id="customDateRange" style="display: {% if selected_period == 'custom' %}block{% else %}none{% endif %};">
+                <div class="col-12">
+                    <h6 class="text-primary mb-2">
+                        <i class="fas fa-calendar-alt me-1"></i>Custom Date Range
+                    </h6>
+                </div>
+                <div class="col-md-4">
+                    <label for="startDate" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="startDate" name="start_date" 
+                           value="{{ start_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="endDate" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="endDate" name="end_date" 
+                           value="{{ end_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Select custom date range for detailed attendance analysis
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Date Range Summary -->
+{% if selected_class_section and selected_period and selected_period != 'all' %}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <small class="text-muted">
+                    <i class="fas fa-calendar me-1"></i>
+                    Showing attendance for: 
+                    <strong>
+                        {% if selected_period == 'today' %}Today ({% now "M d, Y" %})
+                        {% elif selected_period == 'this_week' %}This Week ({{ week_start|date:"M d" }} - {{ week_end|date:"M d, Y" }})
+                        {% elif selected_period == 'last_week' %}Last Week ({{ week_start|date:"M d" }} - {{ week_end|date:"M d, Y" }})
+                        {% elif selected_period == 'this_month' %}This Month ({{ month_start|date:"M Y" }})
+                        {% elif selected_period == 'last_month' %}Last Month ({{ month_start|date:"M Y" }})
+                        {% elif selected_period == 'custom' %}{{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }}
+                        {% endif %}
+                    </strong>
+                </small>
+            </div>
+            <div>
+                <span class="badge bg-info">{{ filtered_sessions_count }} sessions in period</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Quick Period Buttons -->
+{% if selected_class_section %}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted fw-medium">Quick Filters:</small>
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-primary quick-period-btn {% if selected_period == 'today' %}active{% endif %}" 
+                        data-period="today">Today</button>
+                <button type="button" class="btn btn-outline-primary quick-period-btn {% if selected_period == 'this_week' %}active{% endif %}" 
+                        data-period="this_week">This Week</button>
+                <button type="button" class="btn btn-outline-primary quick-period-btn {% if selected_period == 'this_month' %}active{% endif %}" 
+                        data-period="this_month">This Month</button>
+                <button type="button" class="btn btn-outline-primary quick-period-btn {% if selected_period == 'all' %}active{% endif %}" 
+                        data-period="all">All Time</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Attendance Summary Cards -->
+{% if selected_class_section and enrollment_stats %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary">{{ enrollment_stats|length }}</h5>
+                <p class="card-text small text-muted">Total Students</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-info">{{ filtered_sessions_count|default:0 }}</h5>
+                <p class="card-text small text-muted">Sessions in Period</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">
+                    {{ total_present_count|default:0 }}
+                </h5>
+                <p class="card-text small text-muted">Total Present</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-danger">
+                    {{ total_absent_count|default:0 }}
+                </h5>
+                <p class="card-text small text-muted">Total Absent</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if selected_class_section and enrollment_stats %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">
+            Students in {{ selected_school.name }} - Class {{ selected_class_section.class_level }}-{{ selected_class_section.section }}
+        </h6>
+        <span class="badge bg-primary">{{ enrollment_stats|length }} students</span>
+    </div>
+    <div class="card-body">
+        <!-- Debug info -->
+        {% if debug %}
+        <div class="alert alert-info">
+            <small>Debug: Class Section ID = {{ selected_class_section.id }}</small>
+        </div>
+        {% endif %}
+        
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Enrollment No.</th>
+                        <th>Student Name</th>
+                        <th>Total Sessions</th>
+                        <th>Present</th>
+                        <th>Absent</th>
+                        <th>Attendance %</th>
+                        <th>Visible Changes</th>
+                        <th>Invisible Changes</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in enrollment_stats %}
+                    <tr>
+                        <td>{{ stat.enrollment.student.enrollment_number }}</td>
+                        <td>{{ stat.enrollment.student.full_name }}</td>
+                        <td>
+                            <span class="badge bg-info">{{ stat.total_sessions }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-success">{{ stat.present_count }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-danger">{{ stat.absent_count }}</span>
+                        </td>
+                        <td>
+                            {% if stat.attendance_percentage >= 75 %}
+                                <span class="badge bg-success">{{ stat.attendance_percentage }}%</span>
+                            {% elif stat.attendance_percentage >= 50 %}
+                                <span class="badge bg-warning">{{ stat.attendance_percentage }}%</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ stat.attendance_percentage }}%</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {% if stat.visible_change_notes %}
+                                    <i class="fas fa-check-circle text-success me-1"></i>{{ stat.visible_change_notes|truncatewords:5 }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {% if stat.invisible_change_notes %}
+                                    <i class="fas fa-lightbulb text-warning me-1"></i>{{ stat.invisible_change_notes|truncatewords:5 }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            <a href="{% url 'facilitator_student_detail' stat.enrollment.student.id %}" 
+                               class="btn btn-sm btn-outline-primary"
+                               title="View detailed attendance for {{ stat.enrollment.student.full_name }}">
+                                <i class="fas fa-eye me-1"></i>View Details
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Sessions (if class is selected) -->
+{% if selected_class_section and recent_sessions_data %}
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">Recent Sessions with Attendance</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Day</th>
+                        <th>Status</th>
+                        <th>Present</th>
+                        <th>Absent</th>
+                        <th>Total</th>
+                        <th>Observations</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session_data in recent_sessions_data %}
+                    <tr>
+                        {% if session_data.is_missing %}
+                        <td>{{ session_data.date|date:"M d, Y" }}</td>
+                        <td>{{ session_data.day_display }}</td>
+                        <td>
+                            <span class="badge bg-danger">Missing Attendance</span>
+                        </td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>
+                            <span class="text-muted small">No session recorded</span>
+                        </td>
+                        <td>
+                            <a href="{% url 'facilitator_fill_past_attendance' selected_class_section.id session_data.date|date:'Y-m-d' %}" 
+                               class="btn btn-sm btn-primary">
+                                <i class="fas fa-edit me-1"></i>Fill Attendance
+                            </a>
+                        </td>
+                        {% else %}
+                        <td>{{ session_data.session.date|date:"M d, Y" }}</td>
+                        <td>
+                            {% if session_data.session.planned_session.day_number >= 998 %}
+                                {{ session_data.session.planned_session.title }}
+                            {% else %}
+                                Day {{ session_data.session.planned_session.day_number }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if session_data.session.status == 1 or session_data.session.attendance_marked %}
+                                <span class="badge bg-success">Completed</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Pending</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-success">{{ session_data.present_count }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-danger">{{ session_data.absent_count }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ session_data.total_count }}</span>
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                <i class="fas fa-eye me-1"></i>View notes
+                            </small>
+                        </td>
+                        <td>
+                            <a href="{% url 'mark_attendance' session_data.session.id %}" 
+                               class="btn btn-sm btn-outline-primary">
+                                View/Edit
+                            </a>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- No Selection State -->
+{% if not selected_school %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-funnel fs-1 text-muted mb-3"></i>
+        <h5 class="text-muted">Select a school to view attendance options</h5>
+        <p class="text-muted">Use the filters above to navigate through your assigned schools and classes.</p>
+        
+        {% if not assigned_schools %}
+        <div class="alert alert-warning mt-3">
+            <strong>No Schools Assigned:</strong> You are not assigned to any schools. Please contact the administrator to assign you to schools.
+        </div>
+        {% else %}
+        <div class="alert alert-info mt-3">
+            <strong>Available Schools:</strong> You have access to {{ assigned_schools|length }} school(s).
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if selected_school and not selected_class_section %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-people fs-1 text-muted mb-3"></i>
+        <h5 class="text-muted">Select a class to view students</h5>
+        <p class="text-muted">Choose a class from {{ selected_school.name }} to see enrolled students.</p>
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const schoolSelect = document.getElementById('schoolSelect');
+    const classSelect = document.getElementById('classSelect');
+    const datePeriod = document.getElementById('datePeriod');
+    const customDateRange = document.getElementById('customDateRange');
+    
+    // Initialize class dropdown state based on server-rendered content
+    if (schoolSelect.value && classSelect.options.length > 1) {
+        classSelect.disabled = false;
+        console.log('Class dropdown initialized with server-rendered options');
+    }
+    
+    // Initialize date input required attributes based on current period
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    
+    if (datePeriod.value === 'custom') {
+        startDateInput.setAttribute('required', 'required');
+        endDateInput.setAttribute('required', 'required');
+    } else {
+        startDateInput.removeAttribute('required');
+        endDateInput.removeAttribute('required');
+    }
+    
+    // Handle school selection change - Optimized to avoid unnecessary AJAX calls
+    schoolSelect.addEventListener('change', function() {
+        const schoolId = this.value;
+        
+        // If school is cleared, reset class dropdown
+        if (!schoolId) {
+            classSelect.innerHTML = '<option value="">Choose a class...</option>';
+            classSelect.disabled = true;
+            return;
+        }
+        
+        // Check if classes are already populated for this school (server-side rendered)
+        const hasExistingClasses = classSelect.options.length > 1 && classSelect.options[1].value !== "";
+        if (hasExistingClasses) {
+            console.log('Classes already populated by server, skipping AJAX call');
+            classSelect.disabled = false;
+            return;
+        }
+        
+        // Reset and disable class select for AJAX loading
+        classSelect.innerHTML = '<option value="">Loading classes...</option>';
+        classSelect.disabled = true;
+        
+        // Try AJAX to load classes with enhanced debugging
+        console.log('Loading classes for school ID:', schoolId);
+        
+        fetch(`/api/facilitator/classes/?school_id=${schoolId}`, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json',
+            },
+            credentials: 'same-origin'
+        })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Received data:', data);
+                
+                classSelect.innerHTML = '<option value="">Choose a class...</option>';
+                
+                if (data.error) {
+                    console.error('Server error:', data.error);
+                    classSelect.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                    alert(`Error loading classes: ${data.error}`);
+                    return;
+                }
+                
+                if (data.classes && data.classes.length > 0) {
+                    console.log(`Found ${data.classes.length} classes`);
+                    data.classes.forEach(cls => {
+                        const option = document.createElement('option');
+                        option.value = cls.id;
+                        option.textContent = `Class ${cls.class_level}${cls.section ? ' - ' + cls.section : ''}`;
+                        classSelect.appendChild(option);
+                    });
+                    classSelect.disabled = false;
+                } else {
+                    console.log('No classes found for this school');
+                    classSelect.innerHTML = '<option value="">No classes found for this school</option>';
+                }
+            })
+            .catch(error => {
+                console.error('AJAX Error details:', error);
+                    
+                // Show user-friendly error message
+                alert(`Failed to load classes: ${error.message}`);
+                
+                // Fallback: Submit form to reload page with school selected
+                classSelect.innerHTML = '<option value="">Failed to load - Reloading page...</option>';
+                
+                // Submit form after short delay to load classes server-side
+                setTimeout(() => {
+                    console.log('Falling back to server-side loading');
+                    document.getElementById('attendanceFilterForm').submit();
+                }, 1500);
+            });
+    });
+    
+    // Handle date period selection - Fixed to preserve class selection
+    datePeriod.addEventListener('change', function() {
+        if (this.value === 'custom') {
+            customDateRange.style.display = 'block';
+            // Add required attribute when custom is selected
+            startDateInput.setAttribute('required', 'required');
+            endDateInput.setAttribute('required', 'required');
+        } else {
+            customDateRange.style.display = 'none';
+            // Remove required attribute when not custom
+            startDateInput.removeAttribute('required');
+            endDateInput.removeAttribute('required');
+            
+            // Auto-submit if we have school selected (class selection will be preserved by form)
+            if (schoolSelect.value) {
+                document.getElementById('attendanceFilterForm').submit();
+            }
+        }
+    });
+    
+    // Auto-submit form when class is selected (but not when date period changes)
+    classSelect.addEventListener('change', function() {
+        if (this.value) {
+            document.getElementById('attendanceFilterForm').submit();
+        }
+    });
+    
+    // Set default dates for custom range
+    const today = new Date();
+    
+    if (!startDateInput.value) {
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+        startDateInput.value = lastMonth.toISOString().split('T')[0];
+    }
+    
+    if (!endDateInput.value) {
+        endDateInput.value = today.toISOString().split('T')[0];
+    }
+    
+    // Quick date period buttons - Fixed to work properly
+    function setQuickPeriod(period) {
+        datePeriod.value = period;
+        if (period !== 'custom') {
+            customDateRange.style.display = 'none';
+        } else {
+            customDateRange.style.display = 'block';
+        }
+        
+        // Only submit if we have both school and class selected
+        if (schoolSelect.value && classSelect.value) {
+            document.getElementById('attendanceFilterForm').submit();
+        }
+    }
+    
+    // Add quick period buttons functionality - Improved
+    const quickButtons = document.querySelectorAll('.quick-period-btn');
+    quickButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const period = this.dataset.period;
+            
+            // Check if school and class are selected
+            if (!schoolSelect.value) {
+                alert('Please select a school first');
+                return;
+            }
+            
+            if (!classSelect.value) {
+                alert('Please select a class first');
+                return;
+            }
+            
+            // Update active state
+            quickButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            setQuickPeriod(period);
+        });
+    });
+    
+    // Add loading states for better UX
+    const form = document.getElementById('attendanceFilterForm');
+    form.addEventListener('submit', function() {
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="spinner-border spinner-border-sm me-1"></i>Loading...';
+        submitBtn.disabled = true;
+        
+        // Re-enable after 5 seconds as fallback
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 5000);
+    });
+    
+    // Add date validation for custom range
+    function validateDateRange() {
+        if (startDateInput.value && endDateInput.value) {
+            const startDate = new Date(startDateInput.value);
+            const endDate = new Date(endDateInput.value);
+            
+            if (startDate > endDate) {
+                endDateInput.setCustomValidity('End date must be after start date');
+                return false;
+            } else {
+                endDateInput.setCustomValidity('');
+                return true;
+            }
+        }
+        return true;
+    }
+    
+    startDateInput.addEventListener('change', validateDateRange);
+    endDateInput.addEventListener('change', validateDateRange);
+    
+    // Auto-submit when custom dates are selected and valid
+    function handleCustomDateChange() {
+        if (datePeriod.value === 'custom' && validateDateRange() && startDateInput.value && endDateInput.value) {
+            // Only submit if we have school and class selected
+            if (schoolSelect.value && classSelect.value) {
+                setTimeout(() => {
+                    form.submit();
+                }, 500);
+            }
+        }
+    }
+    
+    startDateInput.addEventListener('change', handleCustomDateChange);
+    endDateInput.addEventListener('change', handleCustomDateChange);
+    
+    // Add keyboard shortcuts for quick periods (optional)
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            switch(e.key) {
+                case '1':
+                    e.preventDefault();
+                    setQuickPeriod('today');
+                    break;
+                case '2':
+                    e.preventDefault();
+                    setQuickPeriod('this_week');
+                    break;
+                case '3':
+                    e.preventDefault();
+                    setQuickPeriod('this_month');
+                    break;
+                case '0':
+                    e.preventDefault();
+                    setQuickPeriod('all');
+                    break;
+            }
+        }
+    });
+});
+</script>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .quick-period-btn.active {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: white;
+    }
+    
+    .date-filter-card {
+        border-left: 4px solid #0d6efd;
+    }
+    
+    .attendance-summary-card {
+        transition: transform 0.2s ease;
+    }
+    
+    .attendance-summary-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .period-indicator {
+        background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+        border-radius: 8px;
+        padding: 8px 12px;
+    }
+    
+    .custom-date-range {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        border: 1px dashed #dee2e6;
+    }
+    
+    .stats-card {
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .stats-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+    
+    .badge-attendance {
+        font-size: 0.75em;
+        padding: 0.35em 0.65em;
+    }
+    
+    @media (max-width: 768px) {
+        .btn-group-sm .btn {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .quick-period-btn {
+            margin-bottom: 0.25rem;
+        }
+    }
+</style>
+{% endblock %}

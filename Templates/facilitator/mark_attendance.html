@@ -1,0 +1,293 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% block extra_css %}
+<style>
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .container-fluid { padding: 10px; }
+
+    .table th, .table td {
+        padding: 8px 6px;
+        vertical-align: middle;
+    }
+
+    .enrollment-col { display: none; }
+
+    .enrollment-mobile {
+        font-size: 0.75rem;
+        color: #6c757d;
+        display: block;
+    }
+
+    .form-select { font-size: 16px; } /* Prevent zoom */
+}
+
+@media (min-width: 769px) {
+    .enrollment-mobile { display: none; }
+    .enrollment-col { display: table-cell; }
+}
+
+/* Row Colors */
+.marked-present { background-color: #d4edda; }
+.marked-absent { background-color: #f8d7da; }
+.marked-leave { background-color: #fff3cd; }
+
+.observation-notes {
+    font-size: 0.85rem;
+    padding: 6px;
+    resize: vertical;
+    min-height: 60px;
+    width: 100%;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+/* Ensure table cells can contain textareas */
+.table td {
+    vertical-align: top;
+    padding: 8px;
+}
+
+/* Make columns wider for notes */
+.notes-column {
+    min-width: 150px;
+    max-width: 250px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="card shadow-sm">
+    <div class="card-header">
+      <h5 class="mb-0">
+        <i class="fas fa-users me-2"></i>Mark Attendance
+      </h5>
+      <small class="text-muted">
+        {{ session.planned_session.class_section.school.name }} —
+        {{ session.planned_session.class_section.class_level }}-{{ session.planned_session.class_section.section }} —
+        {% if session.planned_session.day_number >= 998 %}
+          {{ session.planned_session.title }} — {{ session.date }}
+        {% else %}
+          Day {{ session.planned_session.day_number }} — {{ session.date }}
+        {% endif %}
+      </small>
+    </div>
+
+    <div class="card-body">
+
+      <div class="alert alert-info">
+        <strong>Session:</strong> {{ session.planned_session.title }} <br>
+        <strong>Date:</strong> {{ session.date }} <br>
+        <strong>Total Students:</strong> {{ enrollments.count }}
+      </div>
+
+      <form method="post" id="attendanceForm">
+        {% csrf_token %}
+
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Student Name</th>
+                <th class="enrollment-col">Enrollment</th>
+                <th>Attendance</th>
+                <th>Visible Change</th>
+                <th>Invisible Change</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for e in enrollments %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+
+                <td>
+                  <strong>{{ e.student.full_name }}</strong>
+                  <small class="enrollment-mobile">{{ e.student.enrollment_number }}</small>
+                </td>
+
+                <td class="enrollment-col">
+                  <span class="badge bg-secondary">{{ e.student.enrollment_number }}</span>
+                </td>
+
+                <!-- ✅ FIXED NAME -->
+                <td>
+                  <select name="attendance_{{ e.id }}"
+                          class="form-select attendance-select">
+                    <option value="">-- Select --</option>
+                    <option value="present" {% if e.existing_attendance.status == 1 %}selected{% endif %}>✅ Present</option>
+                    <option value="absent" {% if e.existing_attendance.status == 2 %}selected{% endif %}>❌ Absent</option>
+                    <option value="leave" {% if e.existing_attendance.status == 3 %}selected{% endif %}>📅 Leave</option>
+                  </select>
+                </td>
+
+                <!-- ✅ ADDED -->
+                <td class="notes-column">
+                  <textarea name="visible_change_{{ e.id }}"
+                            class="form-control observation-notes"
+                            rows="2"
+                            placeholder="Observable changes...">{{ e.existing_attendance.visible_change_notes|default:'' }}</textarea>
+                </td>
+
+                <td class="notes-column">
+                  <textarea name="invisible_change_{{ e.id }}"
+                            class="form-control observation-notes"
+                            rows="2"
+                            placeholder="Internal changes...">{{ e.existing_attendance.invisible_change_notes|default:'' }}</textarea>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Summary -->
+        <div class="card border-info mb-3">
+          <div class="card-body text-center">
+            <div id="attendanceSummary"></div>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="d-flex justify-content-between">
+          <a href="{% if session.planned_session.day_number >= 998 %}{% url 'facilitator_attendance' %}{% else %}{% url 'facilitator_class_today_session' session.planned_session.class_section.id %}{% endif %}"
+             class="btn btn-outline-secondary">
+             Back
+          </a>
+
+          <button type="submit" class="btn btn-success btn-lg">
+            <i class="fas fa-save me-2"></i>Save Attendance
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5>Confirm Attendance</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="confirmSummary"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success" id="confirmSave">Yes Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    const selects = document.querySelectorAll('.attendance-select');
+    const form = document.getElementById('attendanceForm');
+    const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+    selects.forEach(select => {
+        select.addEventListener('change', () => {
+            updateSummary();
+            updateRow(select);
+        });
+        updateRow(select);
+    });
+
+    updateSummary();
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        document.getElementById('confirmSummary').innerHTML =
+            document.getElementById('attendanceSummary').innerHTML;
+        modal.show();
+    });
+
+    document.getElementById('confirmSave').addEventListener('click', () => {
+        modal.hide();
+        
+        // Submit form
+        const formData = new FormData(form);
+        fetch(form.action || window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                console.log('✅ Attendance saved successfully');
+                
+                // Mark step 4 as completed
+                if (window.parent && window.parent.markStepCompleted) {
+                    window.parent.markStepCompleted(4);
+                    console.log('✅ Step 4 marked as complete');
+                }
+                
+                // Redirect to Step 5 after 1 second
+                setTimeout(() => {
+                    // Get the planned_session_id from URL or form
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const plannedSessionId = urlParams.get('planned_session_id');
+                    
+                    if (plannedSessionId) {
+                        // Redirect back to Today session page with step=5
+                        const classId = window.location.pathname.split('/')[3];
+                        window.location.href = `/facilitator/class/${classId}/today/?step=5`;
+                    } else {
+                        // Fallback: go back to previous page
+                        window.history.back();
+                    }
+                }, 1000);
+            } else {
+                alert('Error saving attendance');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error saving attendance');
+        });
+    });
+
+    function updateSummary() {
+        let present = 0, absent = 0, leave = 0, notMarked = 0;
+
+        selects.forEach(select => {
+            if (select.value === 'present') present++;
+            else if (select.value === 'absent') absent++;
+            else if (select.value === 'leave') leave++;
+            else notMarked++;
+        });
+
+        document.getElementById('attendanceSummary').innerHTML = `
+            <div class="row">
+                <div class="col text-success"><strong>${present}</strong><br>Present</div>
+                <div class="col text-danger"><strong>${absent}</strong><br>Absent</div>
+                <div class="col text-warning"><strong>${leave}</strong><br>Leave</div>
+                <div class="col text-muted"><strong>${notMarked}</strong><br>Not Marked</div>
+            </div>
+        `;
+    }
+
+    function updateRow(select) {
+        const row = select.closest('tr');
+
+        row.classList.remove('marked-present','marked-absent','marked-leave');
+
+        if (select.value === 'present') row.classList.add('marked-present');
+        if (select.value === 'absent') row.classList.add('marked-absent');
+        if (select.value === 'leave') row.classList.add('marked-leave');
+    }
+
+});
+</script>
+
+{% endblock %}

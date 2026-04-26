@@ -1,0 +1,859 @@
+{% extends "facilitator/shared/base.html" %}
+{% load static %}
+
+{% block title %}Students - Facilitator Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Modern Card Styles */
+.modern-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: none;
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.modern-card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px 24px;
+    border: none;
+}
+
+.modern-card-body {
+    padding: 24px;
+}
+
+/* Filter Section */
+.filter-section {
+    background: linear-gradient(135deg, #f8f9ff 0%, #e8f2ff 100%);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 2px solid #e0e7ff;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+}
+
+.filter-section h6 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 20px;
+}
+
+/* Student Cards for Mobile */
+.student-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    padding: 20px;
+    margin-bottom: 16px;
+    border-left: 4px solid #667eea;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.student-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+
+.student-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 18px;
+    margin-right: 16px;
+}
+
+.student-info h6 {
+    margin: 0 0 4px 0;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.student-meta {
+    font-size: 13px;
+    color: #718096;
+    margin: 2px 0;
+}
+
+.attendance-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.attendance-excellent {
+    background: #d4edda;
+    color: #155724;
+}
+
+.attendance-good {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.attendance-poor {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Action Buttons */
+.action-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    margin-right: 8px;
+    transition: all 0.2s ease;
+}
+
+.action-btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.action-btn-primary:hover {
+    background: #5a67d8;
+    color: white;
+}
+
+.action-btn-secondary {
+    background: #e2e8f0;
+    color: #4a5568;
+}
+
+.action-btn-secondary:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+}
+
+/* Table Improvements */
+.modern-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.modern-table thead th {
+    background: #f7fafc;
+    color: #4a5568;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 16px;
+    border: none;
+}
+
+.modern-table tbody td {
+    padding: 16px;
+    border-top: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.modern-table tbody tr:hover {
+    background: #f7fafc;
+}
+
+/* Search and Filter Styles */
+.search-input {
+    border-radius: 10px;
+    border: 2px solid #e2e8f0;
+    padding: 12px 16px;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.filter-select {
+    border-radius: 10px;
+    border: 2px solid #e2e8f0;
+    padding: 12px 16px;
+    font-size: 14px;
+    background: white;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.filter-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    background: white;
+}
+
+.filter-select option {
+    padding: 8px;
+    font-weight: 500;
+}
+
+.filter-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.filter-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+    color: white;
+}
+
+.filter-btn:active {
+    transform: translateY(0);
+}
+
+.filter-btn:hover {
+    transform: translateY(-1px);
+    color: white;
+}
+
+/* Stats Cards */
+.stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.stats-number {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.stats-label {
+    font-size: 14px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .desktop-table {
+        display: none;
+    }
+    
+    .mobile-cards {
+        display: block;
+    }
+    
+    .filter-section {
+        padding: 16px;
+    }
+    
+    .modern-card-body {
+        padding: 16px;
+    }
+    
+    .student-card {
+        padding: 16px;
+    }
+    
+    .student-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    /* Modal mobile optimization */
+    .modal-dialog {
+        margin: 10px;
+    }
+    
+    .modal-content {
+        border-radius: 12px;
+    }
+    
+    .modal-header {
+        padding: 12px 16px;
+    }
+    
+    .modal-body {
+        padding: 16px;
+    }
+    
+    .modal-footer {
+        padding: 12px 16px;
+    }
+    
+    .modal-footer .btn {
+        padding: 10px 12px;
+        font-size: 0.9rem;
+        min-height: 40px;
+    }
+    
+    /* Form controls mobile */
+    .form-select,
+    .form-control {
+        font-size: 16px;
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .form-label {
+        font-size: 0.95rem;
+        margin-bottom: 6px;
+    }
+    
+    /* Header buttons mobile */
+    .d-flex.gap-2 {
+        flex-wrap: wrap;
+        gap: 8px !important;
+    }
+    
+    .d-flex.gap-2 .btn {
+        flex: 1;
+        min-width: 120px;
+        font-size: 0.9rem;
+        padding: 10px 8px;
+    }
+}
+
+@media (min-width: 769px) {
+    .desktop-table {
+        display: block;
+    }
+    
+    .mobile-cards {
+        display: none;
+    }
+}
+
+/* Pagination */
+.modern-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 24px;
+}
+
+.page-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: #4a5568;
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.page-btn:hover {
+    background: #f7fafc;
+    color: #2d3748;
+}
+
+.page-btn.active {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #718096;
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="mb-1">
+                        <i class="fas fa-users me-2"></i>
+                        Student Management
+                    </h2>
+                    <p class="text-muted mb-0">Manage students from your assigned schools</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'facilitator_student_create' %}" class="btn filter-btn">
+                        <i class="fas fa-plus me-1"></i>
+                        Add Student
+                    </a>
+                    <a href="{% url 'facilitator_download_sample_csv' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-download me-1"></i>
+                        Download Sample
+                    </a>
+                    <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importModal">
+                        <i class="fas fa-file-import me-1"></i>
+                        Import Students
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-section">
+        <h6 class="mb-3">
+            <i class="fas fa-filter me-2"></i>
+            Filter & Sort Students
+        </h6>
+        <form method="get" class="row g-3" id="filterForm">
+            <div class="col-lg-2 col-md-6">
+                <label for="school" class="form-label fw-medium">School</label>
+                <select name="school" id="school" class="form-select filter-select">
+                    <option value="">All Schools</option>
+                    {% for school in schools %}
+                        <option value="{{ school.id }}" {% if filters.school == school.id|stringformat:"s" %}selected{% endif %}>
+                            {{ school.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-6">
+                <label for="class" class="form-label fw-medium">Class</label>
+                <select name="class" id="class" class="form-select filter-select">
+                    <option value="">All Classes</option>
+                    {% for class_section in classes %}
+                        <option value="{{ class_section.id }}" 
+                                data-school="{{ class_section.school.id }}"
+                                {% if filters.class == class_section.id|stringformat:"s" %}selected{% endif %}>
+                            {{ class_section.school.name }} - {{ class_section.display_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-lg-2 col-md-6">
+                <label for="search" class="form-label fw-medium">Search</label>
+                <input type="text" name="search" id="search" class="form-control search-input" 
+                       placeholder="Name or enrollment..." value="{{ filters.search }}">
+            </div>
+
+            <div class="col-lg-2 col-md-6">
+                <label for="sort" class="form-label fw-medium">Sort By</label>
+                <select name="sort" id="sort" class="form-select filter-select">
+                    <option value="">Default</option>
+                    <option value="name_asc" {% if filters.sort == 'name_asc' %}selected{% endif %}>Name (A-Z)</option>
+                    <option value="name_desc" {% if filters.sort == 'name_desc' %}selected{% endif %}>Name (Z-A)</option>
+                    <option value="enrollment_asc" {% if filters.sort == 'enrollment_asc' %}selected{% endif %}>Enrollment # (Low-High)</option>
+                    <option value="enrollment_desc" {% if filters.sort == 'enrollment_desc' %}selected{% endif %}>Enrollment # (High-Low)</option>
+                </select>
+            </div>
+
+            <div class="col-lg-2 col-md-6 d-flex align-items-end">
+                <button type="submit" class="btn filter-btn w-100" onclick="document.getElementById('filterForm').submit(); return false;">
+                    <i class="fas fa-search me-1"></i>
+                    <span class="d-none d-sm-inline">Apply</span>
+                    <span class="d-sm-none">Go</span>
+                </button>
+            </div>
+
+            <div class="col-lg-2 col-md-6 d-flex align-items-end">
+                <a href="{% url 'facilitator_students_list' %}" class="btn btn-outline-secondary w-100">
+                    <i class="fas fa-redo me-1"></i>
+                    <span class="d-none d-sm-inline">Reset</span>
+                    <span class="d-sm-none">Clear</span>
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Students List -->
+    {% if enrollment_stats %}
+        <!-- Desktop Table View -->
+        <div class="desktop-table">
+            <div class="modern-card">
+                <div class="modern-card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list me-2"></i>
+                        Students List
+                    </h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table modern-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Enrollment #</th>
+                                <th>School & Class</th>
+                                <th>Gender</th>
+                                <th>Enrollment Date</th>
+                                <th>Attendance</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in enrollment_stats %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="student-avatar me-3">
+                                                {{ stat.enrollment.student.full_name|first|upper }}
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0">{{ stat.enrollment.student.full_name }}</h6>
+                                                <small class="text-muted">ID: {{ stat.enrollment.student.enrollment_number }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <code class="bg-light px-2 py-1 rounded">{{ stat.enrollment.student.enrollment_number }}</code>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <div class="fw-medium">{{ stat.enrollment.school.name }}</div>
+                                            <span class="badge bg-info">{{ stat.enrollment.class_section.display_name }}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if stat.enrollment.student.gender == 'M' %}
+                                            <i class="fas fa-mars text-primary me-1"></i> Male
+                                        {% elif stat.enrollment.student.gender == 'F' %}
+                                            <i class="fas fa-venus text-danger me-1"></i> Female
+                                        {% else %}
+                                            <i class="fas fa-question text-muted me-1"></i> {{ stat.enrollment.student.gender }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ stat.enrollment.start_date|date:"M d, Y" }}</small>
+                                    </td>
+                                    <td>
+                                        {% if stat.attendance_percentage >= 75 %}
+                                            <span class="attendance-badge attendance-excellent">
+                                                <i class="fas fa-check-circle me-1"></i>
+                                                {{ stat.attendance_percentage }}%
+                                            </span>
+                                        {% elif stat.attendance_percentage >= 50 %}
+                                            <span class="attendance-badge attendance-good">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ stat.attendance_percentage }}%
+                                            </span>
+                                        {% else %}
+                                            <span class="attendance-badge attendance-poor">
+                                                <i class="fas fa-times-circle me-1"></i>
+                                                {{ stat.attendance_percentage }}%
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'facilitator_student_detail' stat.enrollment.student.id %}" 
+                                           class="action-btn action-btn-primary">
+                                            <i class="fas fa-eye me-1"></i>View
+                                        </a>
+                                        <a href="{% url 'facilitator_student_edit' stat.enrollment.student.id %}" 
+                                           class="action-btn action-btn-secondary">
+                                            <i class="fas fa-edit me-1"></i>Edit
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Card View -->
+        <div class="mobile-cards">
+            {% for stat in enrollment_stats %}
+                <div class="student-card">
+                    <div class="d-flex align-items-start">
+                        <div class="student-avatar">
+                            {{ stat.enrollment.student.full_name|first|upper }}
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6>{{ stat.enrollment.student.full_name }}</h6>
+                            <div class="student-meta">
+                                <i class="fas fa-id-card me-1"></i>
+                                {{ stat.enrollment.student.enrollment_number }}
+                            </div>
+                            <div class="student-meta">
+                                <i class="fas fa-school me-1"></i>
+                                {{ stat.enrollment.school.name }}
+                            </div>
+                            <div class="student-meta">
+                                <i class="fas fa-chalkboard me-1"></i>
+                                {{ stat.enrollment.class_section.display_name }}
+                            </div>
+                            <div class="student-meta">
+                                {% if stat.enrollment.student.gender == 'M' %}
+                                    <i class="fas fa-mars text-primary me-1"></i> Male
+                                {% elif stat.enrollment.student.gender == 'F' %}
+                                    <i class="fas fa-venus text-danger me-1"></i> Female
+                                {% endif %}
+                                • Enrolled: {{ stat.enrollment.start_date|date:"M d, Y" }}
+                            </div>
+                            <div class="mt-2">
+                                {% if stat.attendance_percentage >= 75 %}
+                                    <span class="attendance-badge attendance-excellent">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        {{ stat.attendance_percentage }}% Attendance
+                                    </span>
+                                {% elif stat.attendance_percentage >= 50 %}
+                                    <span class="attendance-badge attendance-good">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        {{ stat.attendance_percentage }}% Attendance
+                                    </span>
+                                {% else %}
+                                    <span class="attendance-badge attendance-poor">
+                                        <i class="fas fa-times-circle me-1"></i>
+                                        {{ stat.attendance_percentage }}% Attendance
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end mt-3">
+                        <a href="{% url 'facilitator_student_detail' stat.enrollment.student.id %}" 
+                           class="action-btn action-btn-primary">
+                            <i class="fas fa-eye me-1"></i>View
+                        </a>
+                        <a href="{% url 'facilitator_student_edit' stat.enrollment.student.id %}" 
+                           class="action-btn action-btn-secondary">
+                            <i class="fas fa-edit me-1"></i>Edit
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+            <div class="modern-pagination">
+                {% if page_obj.has_previous %}
+                    <a class="page-btn" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                    <a class="page-btn" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                {% endif %}
+                
+                <span class="page-btn active">
+                    {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                
+                {% if page_obj.has_next %}
+                    <a class="page-btn" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                    <a class="page-btn" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <h5>No Students Found</h5>
+            <p class="mb-3">
+                {% if filters.search or filters.school or filters.class or filters.grade %}
+                    No students match your current filters. Try adjusting your search criteria.
+                {% else %}
+                    No students are enrolled in your assigned schools yet.
+                {% endif %}
+            </p>
+            <a href="{% url 'facilitator_student_create' %}" class="btn filter-btn">
+                <i class="fas fa-plus me-1"></i>
+                Add First Student
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Import Students Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-import me-2"></i>
+                    Import Students
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <strong>📋 Import Instructions:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Download the sample CSV file first</li>
+                        <li>Fill in student data following the format</li>
+                        <li>Upload the file to import all students at once</li>
+                    </ul>
+                </div>
+                
+                <form method="post" enctype="multipart/form-data" id="importForm">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="classSelect" class="form-label fw-medium">Select Class *</label>
+                        <select name="class_section" id="classSelect" class="form-select" required>
+                            <option value="">Choose a class...</option>
+                            {% for class_section in classes %}
+                                <option value="{{ class_section.id }}">
+                                    {{ class_section.school.name }} - {{ class_section.display_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted d-block mt-1">Students will be enrolled in the selected class</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="fileInput" class="form-label fw-medium">Upload CSV/Excel File *</label>
+                        <input type="file" name="file" id="fileInput" class="form-control" 
+                               accept=".csv,.xlsx,.xls" required>
+                        <small class="text-muted d-block mt-1">Supported formats: CSV, XLSX, XLS (Max 5MB)</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer flex-wrap gap-2">
+                <a href="{% url 'facilitator_download_sample_csv' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-download me-1"></i>
+                    <span class="d-none d-sm-inline">Download Sample</span>
+                    <span class="d-sm-none">Sample</span>
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitImportForm()">
+                    <i class="fas fa-upload me-1"></i>
+                    <span class="d-none d-sm-inline">Import</span>
+                    <span class="d-sm-none">Upload</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+<!-- Import Form Handler Script -->
+<script>
+function submitImportForm() {
+    const form = document.getElementById('importForm');
+    const classSelect = document.getElementById('classSelect');
+    const fileInput = document.getElementById('fileInput');
+    
+    if (!classSelect.value) {
+        alert('Please select a class');
+        return;
+    }
+    
+    if (!fileInput.files.length) {
+        alert('Please select a file');
+        return;
+    }
+    
+    // Create form data and submit
+    const formData = new FormData(form);
+    const classId = classSelect.value;
+    
+    // Submit to the import endpoint
+    const importUrl = `/facilitator/class/${classId}/students/import/`;
+    
+    const submitForm = document.createElement('form');
+    submitForm.method = 'POST';
+    submitForm.action = importUrl;
+    submitForm.enctype = 'multipart/form-data';
+    
+    // Add CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = csrfToken;
+    submitForm.appendChild(csrfInput);
+    
+    // Add file
+    const fileClone = fileInput.cloneNode(true);
+    submitForm.appendChild(fileClone);
+    
+    document.body.appendChild(submitForm);
+    submitForm.submit();
+    document.body.removeChild(submitForm);
+}
+</script>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Cascade filtering: when school changes, filter classes
+    const schoolSelect = document.getElementById('school');
+    const classSelect = document.getElementById('class');
+    
+    if (schoolSelect && classSelect) {
+        schoolSelect.addEventListener('change', function() {
+            const selectedSchoolId = this.value;
+            const classOptions = classSelect.querySelectorAll('option');
+            
+            classOptions.forEach(option => {
+                if (option.value === '') {
+                    option.style.display = 'block';
+                    return;
+                }
+                
+                const optionSchoolId = option.getAttribute('data-school');
+                if (!selectedSchoolId || optionSchoolId === selectedSchoolId) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+            
+            // Reset class selection if current selection is not valid
+            const currentClassOption = classSelect.querySelector(`option[value="${classSelect.value}"]`);
+            if (currentClassOption && currentClassOption.style.display === 'none') {
+                classSelect.value = '';
+            }
+        });
+        
+        // Trigger change event on page load to set initial state
+        schoolSelect.dispatchEvent(new Event('change'));
+    }
+    
+    // Form submission handler
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            // Allow normal form submission
+            return true;
+        });
+    }
+});
+</script>
+{% endblock %}

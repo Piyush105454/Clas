@@ -1,0 +1,91 @@
+<div class="sidebar bg-white border-r border-gray-200 flex flex-col">
+    <!-- Logo/Brand -->
+    <div class="p-6 border-b border-gray-200">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                <span class="material-symbols-outlined text-white text-xl">admin_panel_settings</span>
+            </div>
+            <div>
+                <h2 class="font-bold text-gray-900">Supervisor</h2>
+                <p class="text-xs text-gray-500">Management</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 overflow-y-auto p-4 space-y-1">
+        <!-- Dashboard -->
+        <a href="{% url 'supervisor_dashboard' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'supervisor_dashboard' %}bg-blue-50 text-blue-600{% endif %}">
+            <span class="material-symbols-outlined text-[20px]">dashboard</span>
+            <span>Dashboard</span>
+        </a>
+
+        <!-- Schools -->
+        <a href="{% url 'supervisor_schools_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'supervisor_schools_list' %}bg-blue-50 text-blue-600{% endif %}">
+            <span class="material-symbols-outlined text-[20px]">school</span>
+            <span>Schools</span>
+        </a>
+
+        <!-- Classes -->
+        <a href="{% url 'supervisor_classes_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'supervisor_classes_list' %}bg-blue-50 text-blue-600{% endif %}">
+            <span class="material-symbols-outlined text-[20px]">class</span>
+            <span>Classes</span>
+        </a>
+
+        <!-- Facilitators -->
+        <a href="{% url 'supervisor_facilitators_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'supervisor_facilitators_list' %}bg-blue-50 text-blue-600{% endif %}">
+            <span class="material-symbols-outlined text-[20px]">person</span>
+            <span>Facilitators</span>
+        </a>
+
+        <!-- Calendar -->
+        <a href="{% url 'supervisor_calendar' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'supervisor_calendar' %}bg-blue-50 text-blue-600{% endif %}">
+            <span class="material-symbols-outlined text-[20px]">calendar_month</span>
+            <span>Calendar</span>
+        </a>
+
+        <!-- Sessions -->
+        <a href="{% url 'supervisor_sessions_list' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'supervisor_sessions_list' %}bg-blue-50 text-blue-600{% endif %}">
+            <span class="material-symbols-outlined text-[20px]">event</span>
+            <span>Sessions</span>
+        </a>
+
+        <!-- Reports -->
+        <a href="{% url 'supervisor_reports_dashboard' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'supervisor_reports_dashboard' %}bg-blue-50 text-blue-600{% endif %}">
+            <span class="material-symbols-outlined text-[20px]">analytics</span>
+            <span>Reports</span>
+        </a>
+
+        <!-- Notifications -->
+        <a href="#" id="notificationsLink" class="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-[20px]">notifications</span>
+                <span>Notifications</span>
+            </div>
+            <span id="sidebarNotificationBadge" class="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+        </a>
+
+        <!-- Settings -->
+        <a href="{% url 'supervisor_settings' %}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if request.resolver_match.url_name == 'supervisor_settings' %}bg-blue-50 text-blue-600{% endif %}">
+            <span class="material-symbols-outlined text-[20px]">settings</span>
+            <span>Settings</span>
+        </a>
+    </nav>
+
+    <!-- User Profile Section -->
+    <div class="p-4 border-t border-gray-200 space-y-3">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
+                {{ request.user.full_name|first|upper|default:"S" }}
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 truncate">{{ request.user.full_name|default:"Supervisor" }}</p>
+                <p class="text-xs text-gray-500 truncate">{{ request.user.email|default:"supervisor@example.com" }}</p>
+            </div>
+        </div>
+        <a href="{% url 'logout' %}" class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-base">logout</span>
+            <span>Logout</span>
+        </a>
+    </div>
+</div>

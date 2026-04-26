@@ -1,0 +1,525 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% block extra_css %}
+<style>
+/* Simple Mobile Responsive Design for Grouped Attendance */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 10px;
+    }
+    
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+    
+    .table th, .table td {
+        padding: 8px 6px;
+        vertical-align: middle;
+    }
+    
+    .enrollment-col {
+        display: none;
+    }
+    
+    .enrollment-mobile {
+        font-size: 0.75rem;
+        color: #6c757d;
+        display: block;
+    }
+    
+    .form-select {
+        font-size: 0.9rem;
+        padding: 6px 8px;
+    }
+    
+    .btn-group .btn {
+        font-size: 0.8rem;
+        padding: 6px 8px;
+    }
+    
+    .card-body {
+        padding: 15px;
+    }
+    
+    .alert {
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .container-fluid {
+        padding: 8px;
+    }
+    
+    .table {
+        font-size: 0.8rem;
+    }
+    
+    .table th, .table td {
+        padding: 6px 4px;
+    }
+    
+    .btn-group .btn {
+        font-size: 0.75rem;
+        padding: 4px 6px;
+    }
+    
+    .card-body {
+        padding: 12px;
+    }
+}
+
+@media (min-width: 769px) {
+    .enrollment-mobile {
+        display: none;
+    }
+    
+    .enrollment-col {
+        display: table-cell;
+    }
+}
+
+.class-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+    background-color: #e7f3ff;
+    border: 1px solid #b3d9ff;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+}
+
+.class-section-header {
+    background-color: #f8f9fa;
+    padding: 0.75rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    border-left: 4px solid #0d6efd;
+    border-radius: 0.25rem;
+}
+
+.class-section-header strong {
+    color: #0d6efd;
+}
+
+.observation-notes {
+    font-size: 0.85rem;
+    padding: 6px;
+    resize: vertical;
+    min-height: 60px;
+    width: 100%;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.observation-notes:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header">
+          <h5 class="mb-0">
+            <i class="fas fa-users me-2"></i>🔗 Mark Attendance - Grouped Session
+          </h5>
+          <small class="text-muted">
+            {% if session.planned_session.day_number >= 998 %}
+              {{ session.planned_session.title }} — {{ session.date }}
+            {% else %}
+              Day {{ session.planned_session.day_number }} — {{ session.date }}
+            {% endif %}
+          </small>
+        </div>
+        <div class="card-body">
+          
+          <!-- Grouped Session Info -->
+          <div class="alert alert-info mb-4">
+            <div class="row">
+              <div class="col-md-6">
+                <strong><i class="fas fa-link me-1"></i>Grouped Session:</strong><br>
+                <div class="mt-2">
+                  {% for grouped_class in grouped_classes %}
+                    <span class="class-badge">{{ grouped_class.school.name }} — {{ grouped_class.class_level }}-{{ grouped_class.section }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <strong><i class="fas fa-calendar me-1"></i>Session:</strong> {{ session.planned_session.title }}<br>
+                <strong><i class="fas fa-clock me-1"></i>Date:</strong> {{ session.date }}<br>
+                <strong><i class="fas fa-user me-1"></i>Facilitator:</strong> {{ session.facilitator.full_name }}<br>
+                <strong><i class="fas fa-users me-1"></i>Total Students:</strong> {{ total_students }}
+              </div>
+            </div>
+          </div>
+
+          <form method="post" id="attendanceForm">
+            {% csrf_token %}
+
+            <!-- Students by Class -->
+            {% for class_data in classes_with_students %}
+            <div class="class-section-header">
+              <strong><i class="fas fa-chalkboard me-2"></i>{{ class_data.class.school.name }} — {{ class_data.class.class_level }}-{{ class_data.class.section }}</strong>
+              <span class="badge bg-secondary ms-2">{{ class_data.enrollments|length }} students</span>
+            </div>
+
+            <!-- Attendance Table for this Class -->
+            <div class="table-responsive mb-4">
+              <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width: 50px;">#</th>
+                    <th>Student Name</th>
+                    <th class="enrollment-col">Enrollment Number</th>
+                    <th style="width: 150px;">Attendance</th>
+                    <th style="width: 200px;">Visible Change</th>
+                    <th style="width: 200px;">Invisible Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for e in class_data.enrollments %}
+                  <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td>
+                      <strong>{{ e.student.full_name }}</strong>
+                      <small class="enrollment-mobile">{{ e.student.enrollment_number }}</small>
+                    </td>
+                    <td class="enrollment-col">
+                      <span class="badge bg-secondary">{{ e.student.enrollment_number }}</span>
+                    </td>
+                    <td>
+                      <select name="attendance_{{ e.id }}" class="form-select attendance-select" data-student="{{ e.student.full_name }}">
+                        <option value="" {% if not e.existing_attendance %}selected{% endif %}>-- Select --</option>
+                        <option value="present" {% if e.existing_attendance.status == 1 %}selected{% endif %}>
+                          ✅ Present
+                        </option>
+                        <option value="absent" {% if e.existing_attendance.status == 2 %}selected{% endif %}>
+                          ❌ Absent
+                        </option>
+                        <option value="leave" {% if e.existing_attendance.status == 3 %}selected{% endif %}>
+                          📅 Leave
+                        </option>
+                      </select>
+                    </td>
+                    <td>
+                      <textarea name="visible_change_{{ e.id }}" class="form-control observation-notes" placeholder="e.g., Better focus, improved participation" rows="2">{{ e.existing_attendance.visible_change_notes|default:'' }}</textarea>
+                    </td>
+                    <td>
+                      <textarea name="invisible_change_{{ e.id }}" class="form-control observation-notes" placeholder="e.g., Increased confidence, better understanding" rows="2">{{ e.existing_attendance.invisible_change_notes|default:'' }}</textarea>
+                    </td>
+                  </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted">
+                      <i class="fas fa-users-slash me-2"></i>No students enrolled in this class.
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endfor %}
+
+            <!-- Quick Actions -->
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="card border-success">
+                  <div class="card-body py-2">
+                    <h6 class="card-title text-success mb-1">
+                      <i class="fas fa-users me-1"></i>Quick Actions
+                    </h6>
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-success" onclick="markAll('present')">
+                        <i class="fas fa-check me-1"></i>All Present
+                      </button>
+                      <button type="button" class="btn btn-outline-danger" onclick="markAll('absent')">
+                        <i class="fas fa-times me-1"></i>All Absent
+                      </button>
+                      <button type="button" class="btn btn-outline-warning" onclick="markAll('leave')">
+                        <i class="fas fa-calendar-times me-1"></i>All Leave
+                      </button>
+                      <button type="button" class="btn btn-outline-secondary" onclick="markAll('')">
+                        <i class="fas fa-undo me-1"></i>Clear All
+                      </button>
+                      <button type="button" class="btn btn-outline-info" id="loadPreviousDayBtn">
+                        <i class="fas fa-history me-1"></i>Previous Day
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card border-info">
+                  <div class="card-body py-2">
+                    <h6 class="card-title text-info mb-1">
+                      <i class="fas fa-chart-pie me-1"></i>Attendance Summary
+                    </h6>
+                    <div id="attendanceSummary">
+                      <small class="text-muted">Select attendance to see summary</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <a href="{% if session.planned_session.day_number >= 998 %}{% url 'facilitator_attendance' %}{% else %}{% url 'facilitator_class_today_session' session.planned_session.class_section.id %}{% endif %}" class="btn btn-outline-secondary">
+                  <i class="fas fa-arrow-left me-1"></i>Back to Session
+                </a>
+              </div>
+              <div>
+                <button type="button" class="btn btn-success btn-lg" id="saveAttendanceBtn">
+                  <i class="fas fa-save me-2"></i>Save Attendance (All Classes)
+                </button>
+              </div>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    const attendanceSelects = document.querySelectorAll('.attendance-select');
+    const saveBtn = document.getElementById('saveAttendanceBtn');
+    const attendanceForm = document.getElementById('attendanceForm');
+    const loadPrevBtn = document.getElementById('loadPreviousDayBtn');
+
+    // ✅ Update summary when selection changes
+    attendanceSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            updateSummary();
+            updateRowStyling(this);
+            removePrefilledHighlight(this);
+        });
+    });
+
+    updateSummary();
+    updateAllRowStyling();
+
+    // ✅ Load Previous Day Attendance
+    loadPrevBtn.addEventListener('click', function() {
+        loadPrevBtn.disabled = true;
+        loadPrevBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+
+        // Extract session ID from URL: /facilitator/session/<id>/attendance/
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        const actualSessionId = pathParts[2]; // Index 2 after filtering empty strings
+
+        fetch(`/api/facilitator/session/${actualSessionId}/previous-attendance/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    populatePreviousAttendance(data.data);
+                    alert(`✅ ${data.message}`);
+                    updateSummary();
+                } else {
+                    alert(`ℹ️ ${data.message}`);
+                }
+                resetLoadButton();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('❌ Error loading previous day attendance');
+                resetLoadButton();
+            });
+    });
+
+    function resetLoadButton() {
+        loadPrevBtn.disabled = false;
+        loadPrevBtn.innerHTML = '<i class="fas fa-history me-1"></i>Previous Day';
+    }
+
+    function populatePreviousAttendance(attendanceData) {
+        attendanceSelects.forEach(select => {
+            const enrollmentId = select.name.replace('attendance_', '');
+            
+            if (attendanceData[enrollmentId]) {
+                const data = attendanceData[enrollmentId];
+                
+                // Map status number to value
+                const statusMap = {
+                    1: 'present',
+                    2: 'absent',
+                    3: 'leave'
+                };
+                
+                select.value = statusMap[data.status] || '';
+                
+                // Mark row as prefilled
+                const row = select.closest('tr');
+                if (row) {
+                    row.classList.add('prefilled-row');
+                }
+                
+                // Populate notes if they exist
+                const visibleNotesField = document.querySelector(`textarea[name="visible_change_${enrollmentId}"]`);
+                const invisibleNotesField = document.querySelector(`textarea[name="invisible_change_${enrollmentId}"]`);
+                
+                if (visibleNotesField && data.visible_change_notes) {
+                    visibleNotesField.value = data.visible_change_notes;
+                }
+                
+                if (invisibleNotesField && data.invisible_change_notes) {
+                    invisibleNotesField.value = data.invisible_change_notes;
+                }
+                
+                updateRowStyling(select);
+            }
+        });
+    }
+
+    function removePrefilledHighlight(select) {
+        const row = select.closest('tr');
+        if (row) {
+            row.classList.remove('prefilled-row');
+        }
+    }
+
+    // ✅ Save Attendance Click
+    saveBtn.addEventListener('click', function() {
+
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+        const formData = new FormData(attendanceForm);
+
+        fetch(attendanceForm.action || window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(async response => {
+
+            const text = await response.text();
+
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+
+                console.error("NON-JSON RESPONSE:", text);
+
+                alert("⚠ Session expired or server error.\nPlease refresh page.");
+
+                throw new Error("Invalid JSON response");
+            }
+        })
+        .then(data => {
+
+            if (data.success) {
+
+                alert(
+                    `✅ Attendance Saved!\n\nSaved: ${data.saved}\nUpdated: ${data.updated}\nNot Marked: ${data.skipped}`
+                );
+
+                window.location.href = data.redirect_url;
+
+            } else {
+
+                alert("❌ Error: " + data.message);
+                resetButton();
+            }
+        })
+        .catch(error => {
+
+            console.error("Fetch Error:", error);
+            resetButton();
+        });
+    });
+
+    // ✅ Utility Functions (CORRECT POSITION)
+
+    function resetButton() {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Attendance (All Classes)';
+    }
+
+    function updateSummary() {
+        let present = 0, absent = 0, leave = 0, notMarked = 0;
+
+        attendanceSelects.forEach(select => {
+            switch(select.value) {
+                case 'present': present++; break;
+                case 'absent': absent++; break;
+                case 'leave': leave++; break;
+                default: notMarked++; break;
+            }
+        });
+
+        document.getElementById('attendanceSummary').innerHTML = `
+            <div class="row text-center">
+                <div class="col-3 text-success"><strong>${present}</strong><br><small>Present</small></div>
+                <div class="col-3 text-danger"><strong>${absent}</strong><br><small>Absent</small></div>
+                <div class="col-3 text-warning"><strong>${leave}</strong><br><small>Leave</small></div>
+                <div class="col-3 text-muted"><strong>${notMarked}</strong><br><small>Not Marked</small></div>
+            </div>
+        `;
+    }
+
+    function updateRowStyling(select) {
+        const row = select.closest('tr');
+        if (!row) return;
+
+        row.classList.remove('marked-present', 'marked-absent', 'marked-leave');
+
+        if (select.value === 'present') row.classList.add('marked-present');
+        if (select.value === 'absent') row.classList.add('marked-absent');
+        if (select.value === 'leave') row.classList.add('marked-leave');
+    }
+
+    function updateAllRowStyling() {
+        attendanceSelects.forEach(updateRowStyling);
+    }
+
+    window.markAll = function(status) {
+        attendanceSelects.forEach(select => {
+            select.value = status;
+            updateRowStyling(select);
+            removePrefilledHighlight(select);
+        });
+        updateSummary();
+    };
+
+    
+    // Mobile-specific enhancements
+    if (window.innerWidth <= 768) {
+        attendanceSelects.forEach(select => {
+            select.style.fontSize = '16px';
+        });
+    }
+});
+</script>
+
+<style>
+.marked-present {
+    background-color: #d4edda !important;
+}
+
+.marked-absent {
+    background-color: #f8d7da !important;
+}
+
+.marked-leave {
+    background-color: #fff3cd !important;
+}
+
+.prefilled-row {
+    border-left: 4px solid #0d6efd !important;
+}
+</style>
+{% endblock %}

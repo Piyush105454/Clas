@@ -1,0 +1,142 @@
+{% extends 'supervisor/shared/base.html' %}
+
+{% block content %}
+<div class="space-y-6">
+    
+    <!-- Page Header -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-900">Create Multiple Classes</h2>
+        <p class="text-sm text-gray-500 mt-1">Quickly add multiple classes to a school</p>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-6">
+        {% csrf_token %}
+        
+        <!-- School Selection -->
+        <div>
+            <label for="school" class="block text-sm font-medium text-gray-700 mb-2">
+                School <span class="text-red-500">*</span>
+            </label>
+            <select id="school" 
+                    name="school" 
+                    required
+                    class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="">-- Select School --</option>
+                {% for school in schools %}
+                <option value="{{ school.id }}">{{ school.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Class Levels Selection -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-3">
+                Select Class Levels <span class="text-red-500">*</span>
+            </label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                {% for level in class_levels %}
+                <label class="flex items-center gap-2 p-3 border border-gray-300 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors">
+                    <input type="checkbox" 
+                           name="class_levels" 
+                           value="{{ level }}"
+                           class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500">
+                    <span class="text-sm font-medium text-gray-700">Class {{ level }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Select one or more class levels</p>
+        </div>
+
+        <!-- Section Selection -->
+        <div>
+            <label for="section" class="block text-sm font-medium text-gray-700 mb-2">
+                Section <span class="text-red-500">*</span>
+            </label>
+            <select id="section" 
+                    name="section" 
+                    required
+                    class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="">-- Select Section --</option>
+                <option value="A" selected>A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+                <option value="E">E</option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">All selected classes will use this section (default: A)</p>
+        </div>
+
+        <!-- Academic Year -->
+        <div>
+            <label for="academic_year" class="block text-sm font-medium text-gray-700 mb-2">
+                Academic Year <span class="text-red-500">*</span>
+            </label>
+            <input type="text" 
+                   id="academic_year" 
+                   name="academic_year" 
+                   required
+                   placeholder="e.g., 2024-2025"
+                   value="2024-2025"
+                   class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        </div>
+
+        <!-- Summary -->
+        <div id="summary" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <p class="text-sm text-blue-900">
+                <span class="font-semibold">Ready to create:</span>
+                <span id="summaryText"></span>
+            </p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+            <a href="{% url 'supervisor_classes_list' %}" 
+               class="px-4 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-sm">
+                Cancel
+            </a>
+            <button type="submit" 
+                    class="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors font-medium text-sm shadow-sm">
+                <span class="material-symbols-outlined text-[20px]">add_box</span>
+                <span>Create Classes</span>
+            </button>
+        </div>
+    </form>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const classLevelCheckboxes = document.querySelectorAll('input[name="class_levels"]');
+    const sectionSelect = document.getElementById("section");
+    const schoolSelect = document.getElementById("school");
+    const summary = document.getElementById("summary");
+    const summaryText = document.getElementById("summaryText");
+
+    function updateSummary() {
+        const selectedLevels = Array.from(classLevelCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+        
+        const school = schoolSelect.options[schoolSelect.selectedIndex].text;
+        const section = sectionSelect.value;
+
+        if (selectedLevels.length > 0 && schoolSelect.value && section) {
+            const classNames = selectedLevels.map(level => `Class ${level}-${section}`).join(", ");
+            summaryText.textContent = `${classNames} in ${school}`;
+            summary.classList.remove("hidden");
+        } else {
+            summary.classList.add("hidden");
+        }
+    }
+
+    classLevelCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener("change", updateSummary);
+    });
+
+    sectionSelect.addEventListener("change", updateSummary);
+    schoolSelect.addEventListener("change", updateSummary);
+});
+</script>
+
+{% endblock %}

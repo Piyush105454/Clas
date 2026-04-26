@@ -1,0 +1,75 @@
+{% extends "admin/shared/base.html" %}
+{% load static %}
+
+{% block title %}Bad Request{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <div class="text-center">
+            <!-- Error Icon -->
+            <div class="mx-auto h-24 w-24 text-orange-400 mb-6">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            
+            <!-- Error Title -->
+            <h2 class="mt-6 text-3xl font-extrabold text-gray-900">
+                {{ error_title|default:"Bad Request" }}
+            </h2>
+            
+            <!-- Error Message -->
+            <p class="mt-2 text-sm text-gray-600">
+                {{ error_message|default:"The request could not be processed due to invalid data." }}
+            </p>
+        </div>
+
+        <!-- Suggestions -->
+        {% if suggestions %}
+        <div class="mt-8">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">What you can try:</h3>
+            <ul class="text-sm text-gray-600 space-y-2">
+                {% for suggestion in suggestions %}
+                <li class="flex items-start">
+                    <svg class="flex-shrink-0 h-5 w-5 text-orange-500 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    {{ suggestion }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Action Buttons -->
+        <div class="mt-8 space-y-3">
+            <button onclick="history.back()" 
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                Go Back and Try Again
+            </button>
+            
+            {% if show_dashboard_link and user.is_authenticated %}
+            <a href="{% if user.role.name == 'ADMIN' %}/admin/dashboard/{% elif user.role.name == 'FACILITATOR' %}/facilitator/dashboard/{% else %}/supervisor/dashboard/{% endif %}" 
+               class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Go to Dashboard
+            </a>
+            {% endif %}
+            
+            {% if not user.is_authenticated %}
+            <a href="{% url 'login' %}" 
+               class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Login
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- Help Text -->
+        <div class="mt-6 text-center">
+            <p class="text-xs text-gray-500">
+                If you continue to experience issues, please contact your system administrator.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

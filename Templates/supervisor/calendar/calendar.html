@@ -1,0 +1,653 @@
+{% extends base_template|default:"supervisor/shared/base.html" %}
+
+{% block title %}Calendar Management{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Base styles */
+.calendar-container {
+    padding: 1rem;
+}
+
+.calendar-header {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+}
+
+.calendar-header-top {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.calendar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    align-items: center;
+}
+
+.calendar-nav-buttons {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: center;
+}
+
+.calendar-nav-buttons a {
+    flex: 1;
+    max-width: 120px;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+}
+
+.calendar-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+    color: #111827;
+    min-height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.calendar-add-btn {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+/* Tablet styles (768px - 1023px) */
+@media (min-width: 768px) {
+    .calendar-container {
+        padding: 1.5rem;
+    }
+    
+    .calendar-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1.5rem;
+    }
+    
+    .calendar-header-top {
+        flex: 1;
+        flex-direction: row;
+        gap: 1rem;
+        align-items: center;
+    }
+    
+    .calendar-nav {
+        flex-direction: row;
+        gap: 0.75rem;
+        width: auto;
+        align-items: center;
+    }
+    
+    .calendar-nav-buttons {
+        flex-direction: row;
+        gap: 0.75rem;
+        width: auto;
+        max-width: none;
+    }
+    
+    .calendar-nav-buttons a {
+        flex: 0 1 auto;
+        max-width: none;
+        padding: 0.625rem 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .calendar-title {
+        font-size: 1.75rem;
+        min-width: 200px;
+        flex-shrink: 0;
+    }
+    
+    .calendar-add-btn {
+        width: auto;
+        padding: 0.625rem 1.5rem;
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+}
+
+/* Desktop styles (1024px+) */
+@media (min-width: 1024px) {
+    .calendar-container {
+        padding: 2rem;
+    }
+    
+    .calendar-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: 2rem;
+    }
+    
+    .calendar-header-top {
+        flex-direction: row;
+        gap: 1.5rem;
+        align-items: center;
+        flex: 1;
+    }
+    
+    .calendar-nav {
+        flex-direction: row;
+        gap: 1rem;
+        width: auto;
+        align-items: center;
+    }
+    
+    .calendar-nav-buttons {
+        flex-direction: row;
+        gap: 1rem;
+        width: auto;
+    }
+    
+    .calendar-nav-buttons a {
+        flex: 0 1 auto;
+        max-width: none;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.875rem;
+    }
+    
+    .calendar-title {
+        font-size: 2rem;
+        min-width: 250px;
+        flex-shrink: 0;
+    }
+    
+    .calendar-add-btn {
+        width: auto;
+        padding: 0.625rem 1.75rem;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+}
+
+/* Calendar grid responsive styles */
+.calendar-grid {
+    font-size: 0.75rem;
+}
+
+.calendar-day-header {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.7rem;
+    width: 14.28% !important;
+    flex: 0 0 14.28% !important;
+}
+
+.calendar-day-cell {
+    min-height: 120px;
+    padding: 0.5rem;
+    border-right: 1px solid #e5e7eb;
+    min-width: 0 !important;
+    width: 14.28% !important;
+    overflow: hidden;
+    position: relative;
+}
+
+.calendar-day-cell.clickable {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.calendar-day-cell.clickable:hover {
+    background-color: #f0f9ff !important;
+}
+
+.calendar-day-number {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.calendar-icons {
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.calendar-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 0.6rem;
+}
+
+.calendar-entry-box {
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.65rem;
+}
+
+.calendar-entry-box div {
+    font-size: 0.65rem;
+}
+
+.calendar-actions {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap; /* Allows buttons to wrap on small cells */
+}
+
+.calendar-actions a {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.65rem;
+}
+
+.legend-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+}
+
+.legend-item {
+    font-size: 0.875rem;
+}
+
+/* Tablet calendar grid */
+@media (min-width: 768px) {
+    .calendar-grid {
+        font-size: 0.8rem;
+    }
+    
+    .calendar-day-header {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .calendar-day-cell {
+        min-height: 100px;
+        padding: 0.75rem;
+    }
+    
+    .calendar-day-number {
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .calendar-icon {
+        width: 22px;
+        height: 22px;
+        font-size: 0.65rem;
+    }
+    
+    .calendar-entry-box {
+        padding: 0.625rem;
+        margin-bottom: 0.375rem;
+        font-size: 0.7rem;
+    }
+    
+    .calendar-actions a {
+        padding: 0.375rem 0.625rem;
+        font-size: 0.7rem;
+    }
+    
+    .legend-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+}
+
+/* Desktop calendar grid */
+@media (min-width: 1024px) {
+    .calendar-grid {
+        font-size: 0.875rem;
+    }
+    
+    .calendar-day-header {
+        padding: 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .calendar-day-cell {
+        min-height: 128px;
+        padding: 1rem;
+    }
+    
+    .calendar-day-number {
+        font-size: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .calendar-icon {
+        width: 24px;
+        height: 24px;
+        font-size: 0.7rem;
+    }
+    
+    .calendar-entry-box {
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .calendar-actions a {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+    }
+    
+    .legend-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.5rem;
+    }
+}
+
+/* Very small screens (< 480px) */
+@media (max-width: 479px) {
+    .calendar-container {
+        padding: 0.75rem;
+    }
+    
+    .calendar-nav-buttons a {
+        padding: 0.625rem 0.75rem;
+        font-size: 0.8rem;
+        max-width: 100px;
+    }
+    
+    .calendar-title {
+        font-size: 1.25rem;
+    }
+    
+    .calendar-add-btn {
+        padding: 0.625rem 0.75rem;
+        font-size: 0.8rem;
+    }
+    
+    .calendar-day-cell {
+        min-height: 70px;
+        padding: 0.375rem;
+    }
+    
+    .calendar-day-number {
+        font-size: 0.65rem;
+    }
+    
+    .calendar-icon {
+        width: 18px;
+        height: 18px;
+        font-size: 0.55rem;
+    }
+    
+    .calendar-entry-box {
+        padding: 0.375rem;
+        margin-bottom: 0.25rem;
+        font-size: 0.6rem;
+    }
+    
+    .calendar-actions a {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.6rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function handleSchoolChange() {
+    const schoolSelect = document.getElementById('school_filter');
+    const facilitatorSelect = document.getElementById('facilitator_filter');
+    const schoolId = schoolSelect.value;
+    
+    // Reset facilitator filter
+    facilitatorSelect.value = '';
+    
+    if (schoolId) {
+        // Fetch facilitators for this school
+        fetch(`/supervisor/calendar/facilitators-api/?school_id=${schoolId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Clear existing options except the first one
+                    while (facilitatorSelect.options.length > 1) {
+                        facilitatorSelect.remove(1);
+                    }
+                    
+                    // Add new facilitators
+                    data.facilitators.forEach(facilitator => {
+                        const option = document.createElement('option');
+                        option.value = facilitator.id;
+                        option.textContent = facilitator.name;
+                        facilitatorSelect.appendChild(option);
+                    });
+                    
+                    // Enable facilitator select
+                    facilitatorSelect.disabled = false;
+                }
+            })
+            .catch(error => console.error('Error fetching facilitators:', error));
+    } else {
+        // Clear facilitators if no school selected
+        while (facilitatorSelect.options.length > 1) {
+            facilitatorSelect.remove(1);
+        }
+        facilitatorSelect.disabled = true;
+    }
+    
+    // Submit form to update calendar
+    document.querySelector('form').submit();
+}
+
+function handleDateClick(date, facilitatorId) {
+    const schoolId = document.getElementById('school_filter').value;
+    
+    if (!schoolId) {
+        alert('Please select a school first');
+        return;
+    }
+    
+    if (!facilitatorId) {
+        alert('Please select a facilitator first');
+        return;
+    }
+    
+    // Redirect to daily profile with date and facilitator
+    const year = {{ current_year }};
+    const month = {{ current_month }};
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+    
+    {% if request.resolver_match.url_name == 'admin_view_calendar' %}
+        window.location.href = `/admin/facilitators/${facilitatorId}/daily-profile/?date=${dateStr}&school_id=${schoolId}`;
+    {% else %}
+        window.location.href = `/supervisor/facilitators/${facilitatorId}/daily-profile/?date=${dateStr}&school_id=${schoolId}`;
+    {% endif %}
+}
+
+// Make calendar dates clickable
+document.addEventListener('DOMContentLoaded', function() {
+    const facilitatorId = document.getElementById('facilitator_filter').value;
+    
+    if (facilitatorId) {
+        const dateCells = document.querySelectorAll('.calendar-day-cell');
+        dateCells.forEach(cell => {
+            const dayNumber = cell.querySelector('.calendar-day-number');
+            if (dayNumber && dayNumber.textContent.trim()) {
+                cell.classList.add('clickable');
+                cell.addEventListener('click', function() {
+                    const date = parseInt(dayNumber.textContent.trim());
+                    handleDateClick(date, facilitatorId);
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 calendar-container">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-4 md:mb-8">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Calendar Management</h1>
+            <p class="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">Manage planned sessions, holidays, and office work dates</p>
+        </div>
+
+        <!-- Navigation & Controls -->
+        <div class="bg-white rounded-lg shadow-sm p-3 md:p-6 mb-4 md:mb-6">
+            <div class="calendar-header">
+                <div class="calendar-header-top">
+                    <div class="calendar-nav">
+                        <div class="calendar-nav-buttons">
+                            <a href="?year={{ prev_year }}&month={{ prev_month }}{% if selected_school_id %}&school_filter={{ selected_school_id }}{% endif %}{% if selected_facilitator_id %}&facilitator_filter={{ selected_facilitator_id }}{% endif %}" class="bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 font-medium transition-colors">
+                                ← Previous
+                            </a>
+                            <a href="?year={{ next_year }}&month={{ next_month }}{% if selected_school_id %}&school_filter={{ selected_school_id }}{% endif %}{% if selected_facilitator_id %}&facilitator_filter={{ selected_facilitator_id }}{% endif %}" class="bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 font-medium transition-colors">
+                                Next →
+                            </a>
+                        </div>
+                        <h2 class="calendar-title font-bold">
+                            {{ month_name }} {{ current_year }}
+                        </h2>
+                    </div>
+                </div>
+                {% if request.resolver_match.url_name == 'admin_view_calendar' %}
+                    <a href="{% url 'admin_calendar_add_date' %}" class="calendar-add-btn bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                {% else %}
+                    <a href="{% url 'supervisor_calendar_add_date' %}" class="calendar-add-btn bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                {% endif %}
+                    + Add Date
+                </a>
+            </div>
+
+            <!-- School & Facilitator Filter -->
+            <div class="mt-4 pt-4 border-t border-gray-200">
+                <form method="get" class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                    <label for="school_filter" class="text-sm font-medium text-gray-700">Filter by School:</label>
+                    <select name="school_filter" id="school_filter" onchange="handleSchoolChange()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:flex-none">
+                        <option value="">All Schools</option>
+                        {% for school in all_schools %}
+                        <option value="{{ school.id }}" {% if selected_school_id == school.id|stringformat:"s" %}selected{% endif %}>
+                            {{ school.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    
+                    <label for="facilitator_filter" class="text-sm font-medium text-gray-700">Filter by Facilitator:</label>
+                    <select name="facilitator_filter" id="facilitator_filter" onchange="this.form.submit()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:flex-none">
+                        <option value="">All Facilitators</option>
+                        {% for facilitator in facilitators %}
+                        <option value="{{ facilitator.id }}" {% if selected_facilitator_id == facilitator.id|stringformat:"s" %}selected{% endif %}>
+                            {{ facilitator.full_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    
+                    <!-- Hidden inputs to preserve year and month -->
+                    <input type="hidden" name="year" value="{{ current_year }}">
+                    <input type="hidden" name="month" value="{{ current_month }}">
+                </form>
+            </div>
+        </div>        <!-- Calendar Grid Table (Iron-Clad Stability) -->
+        <div class="bg-white rounded-lg shadow-sm overflow-x-auto calendar-grid">
+            <table style="width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; min-width: 800px !important;">
+                <thead>
+                    <tr class="bg-gray-100 border-b">
+                        <th style="width: 14.28% !important; padding: 12px 5px !important; text-align: center !important; font-weight: bold !important; border: 1px solid #e5e7eb !important;">Sun</th>
+                        <th style="width: 14.28% !important; padding: 12px 5px !important; text-align: center !important; font-weight: bold !important; border: 1px solid #e5e7eb !important;">Mon</th>
+                        <th style="width: 14.28% !important; padding: 12px 5px !important; text-align: center !important; font-weight: bold !important; border: 1px solid #e5e7eb !important;">Tue</th>
+                        <th style="width: 14.28% !important; padding: 12px 5px !important; text-align: center !important; font-weight: bold !important; border: 1px solid #e5e7eb !important;">Wed</th>
+                        <th style="width: 14.28% !important; padding: 12px 5px !important; text-align: center !important; font-weight: bold !important; border: 1px solid #e5e7eb !important;">Thu</th>
+                        <th style="width: 14.28% !important; padding: 12px 5px !important; text-align: center !important; font-weight: bold !important; border: 1px solid #e5e7eb !important;">Fri</th>
+                        <th style="width: 14.28% !important; padding: 12px 5px !important; text-align: center !important; font-weight: bold !important; border: 1px solid #e5e7eb !important;">Sat</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for week in calendar_grid %}
+                    <tr>
+                        {% for day in week %}
+                        <td class="calendar-day-cell {% if day and day.date == today %}bg-blue-50{% elif day %}bg-white{% else %}bg-gray-50{% endif %}" 
+                            style="vertical-align: top !important; padding: 10px !important; height: 130px !important; border: 1px solid #e5e7eb !important; min-width: 0 !important; overflow: hidden !important;">
+                            {% if day %}
+                                <div class="font-bold text-gray-900 mb-1" style="font-size: 1.1rem !important;">{{ day.date.day }}</div>
+                                
+                                {% if day.calendar_date %}
+                                    <div class="flex gap-1 mb-2">
+                                        {% for entry in day.calendar_date %}
+                                            {% if entry.date_type == 1 %}
+                                                <span title="Session">📚</span>
+                                            {% elif entry.date_type == 2 %}
+                                                <span title="Holiday">🎉</span>
+                                            {% elif entry.date_type == 3 %}
+                                                <span title="Office Work">💼</span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                    
+                                    {% with first_entry=day.calendar_date.0 %}
+                                        {% if first_entry.date_type == 1 %}
+                                            <div class="bg-green-100 border border-green-300 rounded p-1.5 mb-1 text-xs">
+                                                <div class="font-bold text-green-800">
+                                                    {% if first_entry.class_sections.count > 1 %}🔗 Grouped{% else %}Session{% endif %}
+                                                </div>
+                                                <div class="text-green-700 flex flex-wrap gap-1 mt-1">
+                                                    {% for cls in first_entry.class_sections.all %}
+                                                        <span class="bg-green-200 px-1 rounded" style="font-size: 9px;">{{ cls.display_name }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        {% elif first_entry.date_type == 2 %}
+                                            <div class="bg-red-100 border border-red-300 rounded p-1.5 mb-1 text-xs">
+                                                <div class="font-bold text-red-800">Holiday</div>
+                                                <div class="text-red-700 truncate" title="{{ first_entry.holiday_name }}">{{ first_entry.holiday_name }}</div>
+                                            </div>
+                                        {% elif first_entry.date_type == 3 %}
+                                            <div class="bg-yellow-100 border border-yellow-300 rounded p-1.5 mb-1 text-xs">
+                                                <div class="font-bold text-yellow-800">Office Task</div>
+                                                <div class="text-yellow-700 truncate">{{ first_entry.office_task_description }}</div>
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+                                    
+                                    <div class="flex gap-1 mt-auto pt-2">
+                                        {% if request.resolver_match.url_name == 'admin_view_calendar' %}
+                                            <a href="{% url 'admin_calendar_edit_date' day.calendar_date.0.id %}" class="flex-1 bg-blue-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Edit</a>
+                                            <a href="{% url 'admin_calendar_delete_date' day.calendar_date.0.id %}" class="flex-1 bg-red-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Del</a>
+                                        {% else %}
+                                            <a href="{% url 'supervisor_calendar_edit_date' day.calendar_date.0.id %}" class="flex-1 bg-blue-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Edit</a>
+                                            <a href="{% url 'supervisor_calendar_delete_date' day.calendar_date.0.id %}" class="flex-1 bg-red-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Del</a>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="mt-4 md:mt-6 bg-white rounded-lg shadow-sm p-3 md:p-6">
+            <h3 class="font-bold text-gray-900 mb-3 md:mb-4 text-sm md:text-base">Legend</h3>
+            <div class="legend-grid grid gap-2 md:gap-4">
+                <div class="legend-item flex items-center gap-3">
+                    <div class="w-4 h-4 bg-green-100 border border-green-300 rounded"></div>
+                    <span class="text-gray-700 text-sm md:text-base">Planned Session</span>
+                </div>
+                <div class="legend-item flex items-center gap-3">
+                    <div class="w-4 h-4 bg-purple-100 border border-purple-300 rounded"></div>
+                    <span class="text-gray-700 text-sm md:text-base">Grouped Session (Multiple Classes)</span>
+                </div>
+                <div class="legend-item flex items-center gap-3">
+                    <div class="w-4 h-4 bg-red-100 border border-red-300 rounded"></div>
+                    <span class="text-gray-700 text-sm md:text-base">Holiday / No Session</span>
+                </div>
+                <div class="legend-item flex items-center gap-3">
+                    <div class="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded"></div>
+                    <span class="text-gray-700 text-sm md:text-base">Office Work / Task</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

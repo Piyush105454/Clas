@@ -1,0 +1,774 @@
+{% extends 'facilitator/shared/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - {{ facilitator_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== RESET & BASE ===== */
+    * {
+        box-sizing: border-box;
+    }
+
+    /* ===== DASHBOARD HEADER ===== */
+    .dashboard-header {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .dashboard-header h1 {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #111827;
+        margin: 0 0 2px 0;
+    }
+
+    .dashboard-header p {
+        font-size: 0.82rem;
+        color: #6b7280;
+        margin: 0;
+    }
+
+    .dashboard-header .last-updated {
+        font-size: 0.75rem;
+        color: #9ca3af;
+    }
+
+    /* ===== QUICK ACTIONS BAR ===== */
+    .quick-actions-bar {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 14px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .quick-actions-bar .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-weight: 500;
+        text-decoration: none;
+        border: 1.5px solid #e5e7eb;
+        background: white;
+        color: #374151;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        white-space: nowrap;
+        min-height: 38px;
+        line-height: 1;
+    }
+
+    .quick-actions-bar .action-btn i {
+        font-size: 0.95rem;
+        color: #6b7280;
+        transition: color 0.18s ease;
+    }
+
+    .quick-actions-bar .action-btn:hover {
+        background: #f9fafb;
+        border-color: #9ca3af;
+        color: #111827;
+    }
+
+    .quick-actions-bar .action-btn:hover i {
+        color: #374151;
+    }
+
+    .quick-actions-bar .action-btn:active {
+        background: #f3f4f6;
+        transform: scale(0.98);
+    }
+
+    /* ===== STAT CARDS ===== */
+    .stat-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .stat-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .stat-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transform: translateY(-1px);
+    }
+
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1;
+        margin: 0 0 4px 0;
+    }
+
+    .stat-label {
+        font-size: 0.72rem;
+        color: #9ca3af;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ===== TODAY DATE BADGE ===== */
+    .today-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 0.78rem;
+        color: #374151;
+        font-weight: 500;
+    }
+
+    .today-badge i {
+        color: #9ca3af;
+        font-size: 0.8rem;
+    }
+
+    /* ===== DASHBOARD CARDS ===== */
+    .dashboard-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 14px;
+        height: 100%;
+    }
+
+    .dashboard-card .card-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .dashboard-card .card-title i {
+        color: #9ca3af;
+        font-size: 0.95rem;
+    }
+
+    /* ===== PROGRESS BARS ===== */
+    .progress-bar-wrap {
+        background: #f3f4f6;
+        border-radius: 99px;
+        height: 7px;
+        overflow: hidden;
+        margin: 6px 0 12px 0;
+    }
+
+    .progress-fill {
+        height: 100%;
+        border-radius: 99px;
+        transition: width 0.8s ease;
+        background: #d1d5db;
+    }
+
+    .progress-fill.high {
+        background: #6ee7b7;
+    }
+
+    .progress-fill.medium {
+        background: #fcd34d;
+    }
+
+    .progress-fill.low {
+        background: #fca5a5;
+    }
+
+    .perf-row {
+        margin-bottom: 4px;
+    }
+
+    .perf-row-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 2px;
+    }
+
+    .perf-row-header .school-name {
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: #374151;
+    }
+
+    .perf-row-header .student-count {
+        font-size: 0.72rem;
+        color: #9ca3af;
+    }
+
+    .perf-row-header .rate {
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .rate.high {
+        color: #059669;
+    }
+
+    .rate.medium {
+        color: #d97706;
+    }
+
+    .rate.low {
+        color: #dc2626;
+    }
+
+    /* ===== TIPS CARD ===== */
+    .tips-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .tips-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 0.82rem;
+        color: #6b7280;
+        line-height: 1.4;
+    }
+
+    .tips-list li:last-child {
+        border-bottom: none;
+    }
+
+    .tips-list li::before {
+        content: '→';
+        color: #d1d5db;
+        font-size: 0.85rem;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    /* ===== EQUAL HEIGHT ROW ===== */
+    .equal-height-row {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .equal-height-row>[class*="col-"] {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* ===== MOBILE ===== */
+    @media (max-width: 991px) {
+        .stat-cards-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .stat-card {
+            padding: 12px 10px;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+        }
+
+        .stat-label {
+            font-size: 0.65rem;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .dashboard-header {
+            padding: 12px 14px;
+        }
+
+        .dashboard-header h1 {
+            font-size: 1.05rem;
+        }
+
+        .stat-cards-grid {
+            gap: 6px;
+        }
+
+        .stat-card {
+            padding: 10px 8px;
+            border-radius: 10px;
+        }
+
+        .stat-value {
+            font-size: 1.15rem;
+        }
+
+        .stat-label {
+            font-size: 0.6rem;
+        }
+
+        .quick-actions-bar {
+            padding: 10px 12px;
+            gap: 6px;
+        }
+
+        .quick-actions-bar .action-btn {
+            padding: 7px 11px;
+            font-size: 0.78rem;
+            min-height: 34px;
+        }
+
+        .quick-actions-bar .action-btn i {
+            font-size: 0.88rem;
+        }
+
+        .dashboard-card {
+            padding: 12px;
+        }
+    }
+
+    @media (max-width: 400px) {
+        .stat-card {
+            padding: 8px 6px;
+        }
+
+        .stat-value {
+            font-size: 1rem;
+        }
+
+        .stat-label {
+            font-size: 0.55rem;
+        }
+
+        .quick-actions-bar .action-btn span {
+        display: none;
+    }
+
+    .quick-actions-bar .action-btn {
+        padding: 8px 12px;
+        min-height: 40px;
+        justify-content: center;
+    }
+    
+    .quick-actions-bar .action-btn i {
+        font-size: 1.1rem;
+        margin: 0;
+    }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- Header -->
+    <div class="dashboard-header">
+        <div>
+            <h1>Welcome back, {{ request.user.full_name }}!</h1>
+            <p>Here's what's happening with your classes today</p>
+        </div>
+
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions-bar">
+          <button class="action-btn" onclick="openCreateGroupingModal()">
+            <i class="bi bi-layers"></i>
+            <span>Create Group</span>
+        </button>
+        <a href="{% url 'facilitator_student_create' %}" class="action-btn">
+            <i class="bi bi-person-plus"></i>
+            <span>Add Student</span>
+        </a>
+        <a href="{% url 'facilitator_students_list' %}" class="action-btn">
+            <i class="bi bi-people"></i>
+            <span>Students list</span>
+        </a>
+        <a href="{% url 'facilitator_schools_list' %}" class="action-btn">
+            <i class="bi bi-building"></i>
+            <span>Schools</span>
+        </a>
+        <a href="/Facilitator/classes/" class="action-btn">
+            <i class="bi bi-easel"></i>
+            <span>Classes</span>
+        </a>
+      
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="stat-cards-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ total_schools }}</div>
+            <div class="stat-label">School{{ total_schools|pluralize }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ total_classes }}</div>
+            <div class="stat-label">Class{{ total_classes|pluralize }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ total_students }}</div>
+            <div class="stat-label">Student{{ total_students|pluralize }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ conducted_sessions }}</div>
+            <div class="stat-label">Session{{ conducted_sessions|pluralize }}</div>
+        </div>
+    </div>
+
+    <!-- Performance & Tips -->
+    <div class="row equal-height-row mb-2">
+
+        <div class="col-lg-4 mb-3">
+            <div class="dashboard-card">
+                <div class="card-title">
+                    <i class="bi bi-lightbulb"></i>
+                    Tips
+                </div>
+                <ul class="tips-list">
+                    <li>button 1 Create groupings to share sessions across classes </li>
+                    <li>button 2 Use quick actions above to add or manage students</li>
+                    <li> Check attendance rates in the performance panel</li>
+
+                    <li> Visit Settings to update your profile</li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-lg-8 mb-3">
+            <div class="dashboard-card">
+                <div class="card-title">
+                    <i class="bi bi-bar-chart"></i>
+                    Class-wise Attendance Performance
+                </div>
+                {% if class_attendance_stats %}
+                {% for class_stat in class_attendance_stats %}
+                <div class="perf-row">
+                    <div class="perf-row-header">
+                        <span class="school-name">
+                            {{ class_stat.class_section.school.name }} — {{ class_stat.class_section.display_name }}
+                            <span class="student-count">({{ class_stat.total_students }} students)</span>
+                        </span>
+                        <span
+                            class="rate {% if class_stat.attendance_rate >= 85 %}high{% elif class_stat.attendance_rate >= 70 %}medium{% else %}low{% endif %}">
+                            {{ class_stat.attendance_rate }}%
+                        </span>
+                    </div>
+                    <div class="progress-bar-wrap">
+                        <div class="progress-fill {% if class_stat.attendance_rate >= 85 %}high{% elif class_stat.attendance_rate >= 70 %}medium{% else %}low{% endif %}"
+                            style="width: {{ class_stat.attendance_rate }}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-bar-chart fa-2x text-muted mb-2 d-block"></i>
+                    <p class="text-muted mb-0" style="font-size:0.85rem;">No attendance data available yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Hidden CSRF token -->
+<form id="csrfForm" style="display:none;">{% csrf_token %}</form>
+
+<!-- Create Grouping Modal -->
+<div class="modal fade" id="createGroupingModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-layers me-2"></i>Create Class Grouping</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="selectClassesTab" data-bs-toggle="tab"
+                            data-bs-target="#selectClasses" type="button">
+                            <i class="bi bi-check2-square me-1"></i>Select Classes
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="groupedListTab" data-bs-toggle="tab" data-bs-target="#groupedList"
+                            type="button" onclick="loadGroupedSessions()">
+                            <i class="bi bi-list-task me-1"></i>Grouped Sessions
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="selectClasses">
+                        <div id="classesLoading" class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                            <p class="mt-2 text-muted small">Loading classes...</p>
+                        </div>
+                        <div id="classesContainer" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold small">Select Classes to Group:</label>
+                                <div id="classCheckboxes" class="border rounded p-3"
+                                    style="max-height: 300px; overflow-y: auto;"></div>
+                            </div>
+                            <div class="alert alert-light border small">
+                                <i class="bi bi-info-circle me-2 text-muted"></i>
+                                Select 2 or more classes. All selected classes will share the same 150-day session plan.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="groupedList">
+                        <div id="groupedListLoading" class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                            <p class="mt-2 text-muted small">Loading grouped sessions...</p>
+                        </div>
+                        <div id="groupedListContainer" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-label fw-semibold small mb-0">Existing Groups:</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="showAllGroupsCheck"
+                                        onchange="loadGroupedSessions()">
+                                    <label class="form-check-label small" for="showAllGroupsCheck">Show All
+                                        History</label>
+                                </div>
+                            </div>
+                            <div id="groupedSessionsList" class="list-group"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-dark" id="createGroupingBtn" onclick="createGrouping()">
+                    <i class="bi bi-plus-lg me-1"></i>Create Grouping
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Group Details Modal -->
+<div class="modal fade" id="groupDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="groupDetailsTitle">Group Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="groupDetailsContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openCreateGroupingModal() {
+        const modal = new bootstrap.Modal(document.getElementById('createGroupingModal'));
+        loadAvailableClasses();
+        loadGroupedSessions();
+        modal.show();
+    }
+
+    function loadAvailableClasses() {
+        const container = document.getElementById('classCheckboxes');
+        const loading = document.getElementById('classesLoading');
+        const classesContainer = document.getElementById('classesContainer');
+        if (!container || !loading || !classesContainer) return;
+
+        fetch('/api/get-available-classes/')
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+            .then(data => {
+                loading.style.display = 'none';
+                classesContainer.style.display = 'block';
+                if (data.success && data.classes && data.classes.length > 0) {
+                    container.innerHTML = data.classes.map(cls => `
+                    <div class="form-check mb-2">
+                        <input class="form-check-input class-checkbox" type="checkbox" value="${cls.id}" id="class_${cls.id}">
+                        <label class="form-check-label" for="class_${cls.id}">
+                            <strong>${cls.school_name}</strong> — ${cls.display_name}
+                            <small class="text-muted d-block">${cls.student_count} students</small>
+                        </label>
+                    </div>`).join('');
+                } else {
+                    container.innerHTML = '<p class="text-muted small">No classes available</p>';
+                }
+            })
+            .catch(err => {
+                loading.style.display = 'none';
+                classesContainer.style.display = 'block';
+                container.innerHTML = `<p class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Error: ${err.message}</p>`;
+            });
+    }
+
+    function loadGroupedSessions() {
+        const container = document.getElementById('groupedSessionsList');
+        const loading = document.getElementById('groupedListLoading');
+        const listContainer = document.getElementById('groupedListContainer');
+        if (!container || !loading || !listContainer) return;
+
+        const showAll = document.getElementById('showAllGroupsCheck')?.checked || false;
+        const url = `/api/get-grouped-sessions/?all=${showAll}`;
+
+        fetch(url)
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+            .then(data => {
+                loading.style.display = 'none';
+                listContainer.style.display = 'block';
+                if (data.success && data.grouped_sessions && data.grouped_sessions.length > 0) {
+                    container.innerHTML = data.grouped_sessions.map(group => `
+                    <div class="list-group-item list-group-item-action p-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div onclick="showGroupDetails('${group.id}')" style="cursor:pointer; flex-grow:1;">
+                                <div class="fw-semibold small">${group.classes.join(' & ')}</div>
+                                <small class="text-muted">Day Count: ${group.session_count} · Created: ${group.created_at}</small>
+                            </div>
+                            <div class="ms-2 d-flex flex-column align-items-end gap-2">
+                                <span class="badge bg-secondary">${group.classes.length} classes</span>
+                                <button class="btn btn-sm btn-outline-dark" onclick="applyGroupToToday('${group.id}', this)">
+                                    <i class="bi bi-calendar-check me-1"></i>Set for Today
+                                </button>
+                            </div>
+                        </div>
+                    </div>`).join('');
+                } else {
+                    container.innerHTML = '<p class="text-muted text-center py-4 small">No grouped sessions yet</p>';
+                }
+            })
+            .catch(err => {
+                loading.style.display = 'none';
+                listContainer.style.display = 'block';
+                container.innerHTML = `<p class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Error: ${err.message}</p>`;
+            });
+    }
+
+    function createGrouping() {
+        const selectedClasses = Array.from(document.querySelectorAll('.class-checkbox:checked')).map(cb => cb.value);
+        if (selectedClasses.length < 2) { alert('Please select at least 2 classes to create a grouping'); return; }
+    const btn = document.getElementById('createGroupingBtn');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+    const csrfEl = document.querySelector('#csrfForm [name=csrfmiddlewaretoken]');
+    if (!csrfEl) { alert('Error: CSRF token not found'); btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-lg me-1"></i>Create Grouping'; return; }
+        fetch('/api/create-grouping/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfEl.value },
+            body: JSON.stringify({ class_ids: selectedClasses })
+        })
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Grouping created successfully!');
+                    loadGroupedSessions();
+                    document.querySelectorAll('.class-checkbox').forEach(cb => cb.checked = false);
+                    document.getElementById('groupedListTab')?.click();
+                } else {
+            alert('❌ Error: ' + (data.error || 'Unknown error'));
+        }
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plus-lg me-1"></i>Create Grouping';
+    })
+    .catch(err => { alert('Error: ' + err.message); btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-lg me-1"></i>Create Grouping'; });
+    }
+
+    function applyGroupToToday(groupId, btn) {
+        if (!confirm('Apply this group grouping to today? This will link these classes together for today\'s attendance.')) return;
+
+        const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        const csrfEl = document.querySelector('#csrfForm [name=csrfmiddlewaretoken]');
+
+        fetch('/api/apply-group-to-today/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfEl.value },
+            body: JSON.stringify({ group_id: groupId })
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Success: ' + data.message + '\n\nRefresh the dashboard to see grouped classes.');
+                    bootstrap.Modal.getInstance(document.getElementById('createGroupingModal')).hide();
+                    window.location.reload();
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            })
+            .catch(err => {
+                alert('Error: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            });
+    }
+
+    function showGroupDetails(groupId) {
+        const modal = new bootstrap.Modal(document.getElementById('groupDetailsModal'));
+        const content = document.getElementById('groupDetailsContent');
+        fetch(`/api/get-group-details/${groupId}/`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const group = data.group;
+                    document.getElementById('groupDetailsTitle').textContent = `${group.classes.join(' & ')} — Details`;
+                    content.innerHTML = `
+                    <h6 class="fw-semibold mb-2 small text-uppercase text-muted">Classes in Group</h6>
+                    <div class="list-group mb-3">
+                        ${group.classes.map(cls => `
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="small">${cls}</span>
+                                <button class="btn btn-sm btn-light border" onclick="window.location.href='/Facilitator/classes/'">
+                                    <i class="bi bi-arrow-right me-1"></i>View
+                                </button>
+                            </div>`).join('')}
+                    </div>
+                    <div class="alert alert-light border small"><strong>Sessions:</strong> ${group.session_count} shared sessions</div>`;
+                    modal.show();
+                }
+            })
+            .catch(err => console.error('Error loading group details:', err));
+    }
+
+    // Animate progress bars on load
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.progress-fill').forEach(bar => {
+            const w = bar.style.width;
+            bar.style.width = '0%';
+            setTimeout(() => { bar.style.width = w; }, 400);
+        });
+    });
+</script>
+{% endblock %}

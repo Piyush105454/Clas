@@ -1,0 +1,70 @@
+{% extends 'admin/shared/base.html' %}
+{% load static %}
+
+{% block content %}
+
+<h5 class="text-lg font-semibold text-gray-900 mb-4">
+  {{ class_section.class_level }} — Attendance
+</h5>
+
+<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50 text-sm text-gray-600">
+        <tr>
+          <th class="px-4 py-2 text-left font-semibold">Date</th>
+          <th class="px-4 py-2 text-left font-semibold">Topic</th>
+          <th class="px-4 py-2 text-left font-semibold">Status</th>
+        </tr>
+      </thead>
+
+      <tbody class="divide-y">
+
+        {% for s in sessions %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-2 text-gray-800">
+            {{ s.date }}
+          </td>
+
+          <td class="px-4 py-2 text-gray-800">
+            {{ s.planned_session.topic }}
+          </td>
+
+          <td class="px-4 py-2">
+
+            {% if s.status == "Present" %}
+              <span class="px-3 py-1 text-xs rounded-full bg-green-100 text-green-700">
+                Present
+              </span>
+
+            {% elif s.status == "Absent" %}
+              <span class="px-3 py-1 text-xs rounded-full bg-red-100 text-red-700">
+                Absent
+              </span>
+
+            {% else %}
+              <span class="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-700">
+                {{ s.status }}
+              </span>
+
+            {% endif %}
+          </td>
+        </tr>
+
+        {% empty %}
+        <tr>
+          <td colspan="3"
+              class="text-center text-gray-500 py-6">
+            No sessions conducted yet.
+          </td>
+        </tr>
+        {% endfor %}
+
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+{% endblock %}

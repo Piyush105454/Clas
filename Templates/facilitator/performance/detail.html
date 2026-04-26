@@ -1,0 +1,139 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% load custom_filters %}
+
+{% block title %}Student Performance - {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="container">
+        <!-- Header -->
+        <div class="mb-4">
+            <a href="{% url 'student_performance_list' class_section.id %}" class="btn btn-sm btn-secondary mb-3">
+                <i class="bi bi-arrow-left"></i> Back
+            </a>
+            <h1 class="h2 fw-bold text-dark">{{ student.full_name }}</h1>
+            <p class="text-muted">{{ class_section.display_name }} - {{ student.enrollment_number }}</p>
+        </div>
+
+        <!-- Performance Form -->
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">📝 Add/Edit Scores</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for subject in subjects %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card border">
+                            <div class="card-body">
+                                <h6 class="card-title">{{ subject.name }}</h6>
+                                
+                                {% with perf=performance_dict|get_item:subject.id %}
+                                <form class="performance-form" data-subject-id="{{ subject.id }}">
+                                    {% csrf_token %}
+                                    
+                                    <!-- Score Input -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Score (0-100)</label>
+                                        <input type="number" class="form-control score-input" 
+                                               min="0" max="100" 
+                                               value="{% if perf %}{{ perf.score }}{% endif %}"
+                                               placeholder="Enter score">
+                                    </div>
+                                    
+                                    <!-- Grade Display -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Grade</label>
+                                        <div class="grade-display">
+                                            {% if perf %}
+                                                <span class="badge bg-{% if perf.grade == 'A' %}success{% elif perf.grade == 'B' %}info{% elif perf.grade == 'C' %}warning{% else %}danger{% endif %}">
+                                                    {{ perf.get_grade_display }}
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">-</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Remarks -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Remarks</label>
+                                        <textarea class="form-control remarks-input" rows="2" 
+                                                  placeholder="Add remarks...">{% if perf %}{{ perf.remarks }}{% endif %}</textarea>
+                                    </div>
+                                    
+                                    <!-- Save Button -->
+                                    <button type="button" class="btn btn-primary btn-sm w-100 save-btn">
+                                        <i class="bi bi-check-lg"></i> Save
+                                    </button>
+                                </form>
+                                {% endwith %}
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12">
+                        <p class="text-muted text-center">No subjects available</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Back Button -->
+        <div class="mt-4">
+            <a href="{% url 'student_performance_list' class_section.id %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Rankings
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.save-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const form = this.closest('.performance-form');
+        const subjectId = form.dataset.subjectId;
+        const score = form.querySelector('.score-input').value;
+        const remarks = form.querySelector('.remarks-input').value;
+        
+        if (!score) {
+            alert('Please enter a score');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('subject_id', subjectId);
+        formData.append('score', score);
+        formData.append('remarks', remarks);
+        
+        fetch('{% url "student_performance_save" class_section.id student.id %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Score saved successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to save score');
+        });
+    });
+});
+</script>
+
+<!-- Template filter for dict access -->
+<script>
+// Add custom template filter for dict access in Django template
+</script>
+{% endblock %}

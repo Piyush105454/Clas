@@ -1,0 +1,94 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-8">
+    
+    <!-- Page Header -->
+    <div class="flex justify-between items-start">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Reports & Analytics</h2>
+            <p class="text-sm text-gray-500 mt-1">Monitor system statistics and performance metrics</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="{% url 'supervisor_attendance_report_excel' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors shadow-sm">
+                <span class="material-symbols-outlined text-lg">download</span>
+                <span>Download Today's Attendance Report (Excel)</span>
+            </a>
+        </div>
+    </div>
+    
+  
+
+    <!-- Charts Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+    
+
+        <!-- Schools by Status -->
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-6">Schools by Status</h3>
+            <div class="space-y-4">
+                {% for status_data in schools_by_status %}
+                <div>
+                    <div class="flex justify-between mb-2">
+                        <span class="text-sm font-medium text-gray-700">
+                            {% if status_data.status == 1 %}Active{% else %}Inactive{% endif %}
+                        </span>
+                        <span class="text-sm font-semibold text-gray-900">{{ status_data.count }}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="{% if status_data.status == 1 %}bg-green-600{% else %}bg-red-600{% endif %} h-2 rounded-full" style="width: {% widthratio status_data.count total_schools 100 %}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Statistics -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+       
+        <!-- School Statistics -->
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">School Statistics</h3>
+            <div class="space-y-3">
+                <div class="flex justify-between py-2 border-b border-gray-200">
+                    <span class="text-sm text-gray-600">Total Schools</span>
+                    <span class="text-sm font-semibold text-gray-900">{{ total_schools }}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-200">
+                    <span class="text-sm text-gray-600">Status Types</span>
+                    <span class="text-sm font-semibold text-gray-900">{{ schools_by_status|length }}</span>
+                </div>
+                <div class="flex justify-between py-2">
+                    <span class="text-sm text-gray-600">Average Classes</span>
+                    <span class="text-sm font-semibold text-gray-900">{{ total_classes|default:0 }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Class Statistics -->
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Class Statistics</h3>
+            <div class="space-y-3">
+                <div class="flex justify-between py-2 border-b border-gray-200">
+                    <span class="text-sm text-gray-600">Total Classes</span>
+                    <span class="text-sm font-semibold text-gray-900">{{ total_classes }}</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-200">
+                    <span class="text-sm text-gray-600">Schools with Classes</span>
+                    <span class="text-sm font-semibold text-gray-900">{{ total_schools }}</span>
+                </div>
+                <div class="flex justify-between py-2">
+                    <span class="text-sm text-gray-600">Status</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Active</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+</div>
+
+{% endblock content %}

@@ -1,0 +1,153 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold mb-1">Office Work Details</h2>
+                    <p class="text-muted mb-0">Log your office work for {{ class_section.display_name }}</p>
+                </div>
+                <a href="{% url 'facilitator_classes' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Classes
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info border-0" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-info-circle me-3" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <h6 class="alert-heading mb-1">Class Replacement</h6>
+                        <p class="mb-0">
+                            You are marking <strong>{{ class_section.display_name }}</strong> today ({{ today|date:"l, F j, Y" }}) as Office Work.
+                            {% if is_grouped %}
+                            <br><small>This will apply to all <strong>{{ grouped_classes|length }}</strong> classes in this group.</small>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-light border-bottom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-building me-2"></i>What current office work are you doing?
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{% url 'facilitator_class_office_work' class_section.id %}" id="officeWorkForm">
+                        {% csrf_token %}
+                        
+                        <!-- Category Selection -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Select Option <span class="text-danger">*</span></label>
+                            
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="office_work_category" id="cat_admin" value="Administrative">
+                                        <label class="form-check-label w-100" for="cat_admin">
+                                            <i class="bi bi-journal-text text-primary me-2"></i>Administrative Work
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="office_work_category" id="cat_prep" value="Material Preparation">
+                                        <label class="form-check-label w-100" for="cat_prep">
+                                            <i class="bi bi-box-seam text-success me-2"></i>Material Preparation
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="office_work_category" id="cat_meeting" value="Meeting">
+                                        <label class="form-check-label w-100" for="cat_meeting">
+                                            <i class="bi bi-people text-warning me-2"></i>Staff Meeting
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="office_work_category" id="cat_other" value="Other">
+                                        <label class="form-check-label w-100" for="cat_other">
+                                            <i class="bi bi-three-dots text-secondary me-2"></i>Other
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Description Text -->
+                        <div class="mb-4">
+                            <label for="office_work_description" class="form-label fw-bold">Description (Optional)</label>
+                            <textarea class="form-control" id="office_work_description" name="office_work_description" rows="4" 
+                                      placeholder="Provide a brief description of the office work you are doing..."></textarea>
+                            <small class="text-muted">Maximum 500 characters</small>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                                <i class="bi bi-check-lg me-2"></i>Save Office Work
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-check-label {
+        cursor: pointer;
+        padding: 1rem;
+        border: 2px solid #e9ecef;
+        border-radius: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .form-check-input:checked + .form-check-label {
+        border-color: #0d6efd;
+        background-color: #f0f6ff;
+    }
+
+    .form-check-input {
+        cursor: pointer;
+        margin-top: 0.5rem;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('officeWorkForm');
+        
+        form.addEventListener('submit', function(e) {
+            const statusRadios = document.querySelectorAll('input[name="office_work_category"]');
+            const isSelected = [...statusRadios].some(r => r.checked);
+            
+            if (!isSelected) {
+                e.preventDefault();
+                alert('Please select an office work option.');
+            } else {
+                document.getElementById('submitBtn').innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Saving...';
+                // Note: we do not disable the button strictly before submit completes for simpler forms, but we can visually change it
+                // setTimeout(() => { document.getElementById('submitBtn').disabled = true; }, 10);
+            }
+        });
+    });
+</script>
+{% endblock %}

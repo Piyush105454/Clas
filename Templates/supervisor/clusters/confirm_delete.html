@@ -1,0 +1,40 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="max-w-md mx-auto mt-12">
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-8">
+    
+    <!-- Icon -->
+    <div class="flex justify-center mb-6">
+      <div class="w-16 h-16 flex items-center justify-center bg-red-100 text-red-600 rounded-full">
+        <span class="material-symbols-outlined text-4xl">warning</span>
+      </div>
+    </div>
+
+    <!-- Message -->
+    <h2 class="text-2xl font-bold text-gray-900 text-center mb-2">Delete Cluster?</h2>
+    <p class="text-gray-600 text-center mb-6">
+      Are you sure you want to delete <strong>{{ cluster.name }}</strong>? This action cannot be undone.
+    </p>
+
+    <!-- Info -->
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+      <p class="text-sm text-yellow-800">
+        <strong>Note:</strong> Schools assigned to this cluster will not be deleted, only the cluster will be removed.
+      </p>
+    </div>
+
+    <!-- Buttons -->
+    <form method="post" class="space-y-3">
+      {% csrf_token %}
+      <button type="submit" class="w-full px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors font-medium">
+        Yes, Delete Cluster
+      </button>
+      <a href="{% url 'clusters_list' %}" class="block w-full px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors font-medium text-center">
+        Cancel
+      </a>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,783 @@
+{% extends "facilitator/shared/base.html" %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    .attendance-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .session-item {
+        background: white;
+        border-left: 4px solid #e5e7eb;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        border-radius: 0.375rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .session-item.present {
+        border-left-color: #10b981;
+    }
+
+    .session-item.absent {
+        border-left-color: #ef4444;
+    }
+
+    .session-item.leave {
+        border-left-color: #f59e0b;
+    }
+
+    .session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .session-info h5 {
+        margin: 0 0 0.5rem 0;
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .session-info small {
+        color: #6b7280;
+        display: block;
+    }
+
+    .status-badge {
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.25rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    .status-not-marked {
+        background-color: #f3f4f6;
+        color: #6b7280;
+    }
+
+    .status-present {
+        background-color: #d1fae5;
+        color: #065f46;
+    }
+
+    .status-absent {
+        background-color: #fee2e2;
+        color: #7f1d1d;
+    }
+
+    .status-leave {
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    
+    .status-sunday {
+        background-color: #e0f2fe;
+        color: #0369a1;
+    }
+
+    .btn-group-attendance {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-attendance {
+        flex: 1;
+        min-width: 100px;
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+        border: 1px solid #d1d5db;
+        background: white;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-attendance:hover {
+        background-color: #f9fafb;
+    }
+
+    .btn-attendance.active {
+        background-color: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
+    }
+
+    .change-grouping-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        border: 1px solid #d1d5db;
+        background: #f0f9ff;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-left: 0.5rem;
+        color: #0369a1;
+    }
+
+    .change-grouping-btn:hover {
+        background-color: #e0f2fe;
+        border-color: #0369a1;
+    }
+
+    .change-grouping-btn.loading {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #6b7280;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        color: #d1d5db;
+        margin-bottom: 1rem;
+        display: block;
+    }
+
+    .success-message {
+        animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .grouping-options-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .grouping-option {
+        padding: 0.75rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.375rem;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .grouping-option:hover {
+        background-color: #f3f4f6;
+        border-color: #0369a1;
+    }
+
+    .grouping-option input[type="radio"] {
+        margin-right: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="attendance-container">
+    <!-- PAGE HEADER -->
+    <div class="mb-4 d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-1">
+                <i class="bi bi-person-check me-2"></i>My Attendance
+            </h2>
+            <p class="text-muted mb-0">Mark your attendance for today's sessions</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-info btn-sm" id="manageGroupBtn" data-bs-toggle="modal"
+                data-bs-target="#groupingModal" title="Create or change today's group">
+                <i class="bi bi-collection me-1"></i>Manage Today's Group
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm" id="clearAllGroupsBtn" title="Nuclear Clear: Remove all past and present grouping links">
+                <i class="bi bi-trash me-1"></i>Clear All Groupings
+            </button>
+        </div>
+    </div>
+
+    <!-- TODAY'S DATE -->
+    <div class="alert alert-info mb-4">
+        <i class="bi bi-calendar-event me-2"></i>
+        <strong>Today:</strong> {{ today|date:"l, F d, Y" }}
+    </div>
+
+    <!-- ATTENDANCE SUMMARY -->
+    {% if total_sessions %}
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total Sessions</h5>
+                    <h3 class="text-primary">{{ total_sessions }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Marked</h5>
+                    <h3 class="text-success">{{ marked_sessions }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Pending</h5>
+                    <h3 class="text-warning">{{ unmarked_sessions }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- SESSIONS LIST GROUPED BY DATE -->
+    {% if total_sessions %}
+    {% regroup sessions by date as sessions_by_date_list %}
+    {% for date_group in sessions_by_date_list %}
+    <div class="mb-5">
+        <h5 class="mb-3 d-flex align-items-center">
+            <i class="bi bi-calendar-check me-2 text-primary"></i>
+            {{ date_group.grouper|date:"l, F d, Y" }}
+            {% if date_group.grouper == today %}
+            <span class="badge bg-info ms-2">Today</span>
+            {% elif date_group.grouper < today %}
+            <span class="badge bg-secondary ms-2">Past</span>
+            {% else %}
+            <span class="badge bg-primary ms-2">Upcoming</span>
+            {% endif %}
+        </h5>
+
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for session in date_group.list %}
+            <div class="col">
+                <div class="session-item h-100 {% if session.facilitator_attendance %}{{ session.facilitator_attendance }}{% endif %}"
+                    data-class-id="{{ session.planned_session.class_section.id }}">
+                    
+                    <!-- SESSION HEADER -->
+                    <div class="session-header">
+                        <div class="session-info">
+                            <h5>{{ session.planned_session.class_section.display_name }}</h5>
+                            <small class="text-muted">
+                                <i class="bi bi-building me-1"></i>
+                                {{ session.planned_session.class_section.school.name }}
+                            </small>
+                            
+                            <!-- GROUPING STATUS BADGE -->
+                            <div class="mt-2">
+                                {% if session.grouping_status == 'grouped' %}
+                                <span class="badge bg-info text-dark" title="This class is part of a grouped session"
+                                    style="font-size: 0.8rem;">
+                                    <i class="bi bi-collection me-1"></i>Grouped: {{ session.grouped_class_names }}
+                                </span>
+                                {% else %}
+                                <span class="badge bg-light text-dark border border-secondary"
+                                    title="This class has individual sessions" style="font-size: 0.8rem;">
+                                    <i class="bi bi-person me-1"></i>Single
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            {% if session.facilitator_attendance %}
+                            <span class="status-badge status-{{ session.facilitator_attendance }}">
+                                {% if session.facilitator_attendance == 'present' %}
+                                ✅ Present
+                                {% elif session.facilitator_attendance == 'absent' %}
+                                ❌ Absent
+                                {% elif session.facilitator_attendance == 'leave' %}
+                                🏖️ Leave
+                                {% endif %}
+                            </span>
+                            {% else %}
+                            <span class="status-badge {% if is_sunday %}status-sunday{% else %}status-not-marked{% endif %}">
+                                {% if is_sunday %}🏖️ Sunday Off{% else %}⚠️ Not Marked{% endif %}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- ATTENDANCE BUTTONS -->
+                    <div class="mt-4">
+                        {% if session.id and not is_sunday and session.event_type != 2 %}
+                        <form class="attendance-form" data-session-id="{{ session.id }}" method="post"
+                            action="{% url 'mark_facilitator_attendance' session.id %}">
+                            {% csrf_token %}
+                            <div class="btn-group-attendance">
+                                <button type="button" class="btn-attendance attendance-btn" data-status="present"
+                                    title="Mark as Present">
+                                    <i class="bi bi-check-circle me-1"></i>Present
+                                </button>
+                                <button type="button" class="btn-attendance attendance-btn" data-status="absent"
+                                    title="Mark as Absent">
+                                    <i class="bi bi-x-circle me-1"></i>Absent
+                                </button>
+                                <button type="button" class="btn-attendance attendance-btn" data-status="leave"
+                                    title="Mark as Leave">
+                                    <i class="bi bi-umbrella me-1"></i>Leave
+                                </button>
+                            </div>
+                            <input type="hidden" name="facilitator_attendance" class="attendance-input" value="">
+                        </form>
+                        
+                        <!-- SUCCESS MESSAGE DIV (Correctly placed) -->
+                        <div class="alert alert-success alert-dismissible fade show d-none mt-3 mb-0 success-message py-2" role="alert">
+                            <i class="bi bi-check-circle me-2"></i>
+                            <small class="success-text">Attendance saved!</small>
+                            <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% elif is_sunday %}
+                        <div class="text-center py-2 bg-light rounded border">
+                            <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Attendance lock on Sundays.</small>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info mt-3 mb-0 py-2">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <small>
+                                {% if session.is_calendar_event %}
+                                    <strong>{{ session.holiday_name|default:"Holiday" }}</strong>: 
+                                    {{ session.holiday_notes|default:"No sessions scheduled today." }}
+                                {% else %}
+                                    No session scheduled for today.
+                                {% endif %}
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="card shadow-sm border-0 bg-light">
+        <div class="card-body py-5">
+捉
+card shadow-sm">
+        <div class="card-body">
+            <div class="empty-state">
+                <i class="bi bi-inbox"></i>
+                <p class="mb-0">No sessions scheduled for today</p>
+                <small class="text-muted">Check back later for today's sessions</small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- SESSION STATUS MODAL -->
+<div class="modal fade" id="sessionStatusModal" tabindex="-1" aria-labelledby="sessionStatusModalLabel">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sessionStatusModalLabel">Change Session Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="sessionStatusContent">
+                    <p class="text-muted">Loading options...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="applySessionStatusBtn">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- GROUPING MODAL -->
+<div class="modal fade" id="groupingModal" tabindex="-1" aria-labelledby="groupingModalLabel">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="groupingModalLabel">Change Grouping for Today</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="groupingOptionsContainer" class="grouping-options-list">
+                    <p class="text-muted">Loading options...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="applyGroupingBtn">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden CSRF token - always available for JS fetch calls -->
+<form id="csrfForm" style="display:none;">{% csrf_token %}</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // ── TOP-LEVEL GROUP MANAGEMENT ────────────────────────────
+        // CSRF token from hidden form (always available even with no session forms)
+        const csrfToken = document.querySelector('#csrfForm [name=csrfmiddlewaretoken]').value;
+
+        let groupingModal = new bootstrap.Modal(document.getElementById('groupingModal'));
+
+        document.getElementById('manageGroupBtn').addEventListener('click', function () {
+            loadAllGroupingOptions();
+        });
+
+        // Load session status options
+        function loadSessionStatusOptions(status) {
+            const container = document.getElementById('sessionStatusContent');
+
+            if (status === 'curriculum') {
+                container.innerHTML = `
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Curriculum Session</strong> - Keep this class as a curriculum session
+                </div>
+                <p class="mb-3"><strong>Select classes to apply:</strong></p>
+                <div class="class-selection-list">
+                    ${generateClassCheckboxes()}
+                </div>
+            `;
+            } else if (status === 'office_work') {
+                container.innerHTML = `
+                <div class="alert alert-warning mb-3">
+                    <i class="bi bi-briefcase me-2"></i>
+                    <strong>Office Work</strong> - Mark this class as office work (no session today)
+                </div>
+                <p class="mb-3"><strong>Select classes to mark as office work:</strong></p>
+                <div class="class-selection-list">
+                    ${generateClassCheckboxes()}
+                </div>
+            `;
+            } else if (status === 'skip_next_day') {
+                container.innerHTML = `
+                <div class="alert alert-primary mb-3">
+                    <i class="bi bi-arrow-right me-2"></i>
+                    <strong>Skip to Next Day</strong> - Move this session to tomorrow
+                </div>
+                <p class="mb-3"><strong>Select classes to skip to next day:</strong></p>
+                <div class="class-selection-list">
+                    ${generateClassCheckboxes()}
+                </div>
+            `;
+            }
+        }
+
+        // Generate class checkboxes
+        function generateClassCheckboxes() {
+            const sessions = document.querySelectorAll('.session-item');
+            let html = '';
+
+            sessions.forEach((item, index) => {
+                const className = item.querySelector('.session-info h5')?.textContent || 'Unknown';
+                const classId = item.getAttribute('data-class-id') || index;
+
+                html += `
+                <div class="form-check mb-2">
+                    <input class="form-check-input session-class-checkbox" type="checkbox" id="class_${classId}" value="${classId}">
+                    <label class="form-check-label" for="class_${classId}">
+                        ${className}
+                    </label>
+                </div>
+            `;
+            });
+
+            return html || '<p class="text-muted">No classes available</p>';
+        }
+
+        // Apply session status
+        document.getElementById('applySessionStatusBtn').addEventListener('click', function () {
+            const selectedClasses = Array.from(document.querySelectorAll('.session-class-checkbox:checked'))
+                .map(checkbox => checkbox.value);
+
+            if (selectedClasses.length === 0) {
+                alert('Please select at least one class');
+                return;
+            }
+
+            const applyBtn = this;
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Applying...';
+
+            const formData = new FormData();
+            formData.append('status', currentSessionStatus);
+            selectedClasses.forEach(classId => formData.append('class_ids', classId));
+
+            fetch('/facilitator/update-session-status/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        sessionStatusModal.hide();
+                        const successMsg = document.createElement('div');
+                        successMsg.className = 'alert alert-success alert-dismissible fade show';
+                        successMsg.innerHTML = `
+                    <strong>✅ Success!</strong> ${data.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                        document.body.insertBefore(successMsg, document.body.firstChild);
+
+                        setTimeout(() => {
+                            window.location.reload(true);
+                        }, 2000);
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to update session status'));
+                        applyBtn.disabled = false;
+                        applyBtn.innerHTML = 'Apply';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error updating session status: ' + error.message);
+                    applyBtn.disabled = false;
+                    applyBtn.innerHTML = 'Apply';
+                });
+        });
+
+        // Handle attendance button clicks
+        document.querySelectorAll('.attendance-btn').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+
+                const form = this.closest('.attendance-form');
+                const status = this.dataset.status;
+                const sessionId = form.dataset.sessionId;
+                const input = form.querySelector('.attendance-input');
+
+                input.value = status;
+
+                const buttons = form.querySelectorAll('.attendance-btn');
+                buttons.forEach(b => b.disabled = true);
+                this.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Saving...';
+
+                const formData = new FormData(form);
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const successMsg = form.closest('.session-item').querySelector('.success-message');
+                            successMsg.classList.remove('d-none');
+
+                            const item = form.closest('.session-item');
+                            item.classList.remove('present', 'absent', 'leave');
+                            item.classList.add(status);
+
+                            const badge = item.querySelector('.status-badge');
+                            const statusTexts = {
+                                'present': '✅ Present',
+                                'absent': '❌ Absent',
+                                'leave': '🏖️ Leave'
+                            };
+                            const statusClasses = {
+                                'present': 'status-present',
+                                'absent': 'status-absent',
+                                'leave': 'status-leave'
+                            };
+
+                            badge.textContent = statusTexts[status];
+                            badge.className = 'status-badge ' + statusClasses[status];
+
+                            setTimeout(() => {
+                                successMsg.classList.add('d-none');
+                            }, 3000);
+                        } else {
+                            alert('Error: ' + (data.message || 'Failed to save attendance'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error saving attendance. Please try again.');
+                    })
+                    .finally(() => {
+                        buttons.forEach(b => {
+                            b.disabled = false;
+                            const status = b.dataset.status;
+                            const statusIcons = {
+                                'present': '<i class="bi bi-check-circle me-1"></i>Present',
+                                'absent': '<i class="bi bi-x-circle me-1"></i>Absent',
+                                'leave': '<i class="bi bi-umbrella me-1"></i>Leave'
+                            };
+                            b.innerHTML = statusIcons[status];
+                        });
+                    });
+            });
+        });
+
+        // ── Load ALL classes for top-level grouping modal ──────────
+        function loadAllGroupingOptions() {
+            const container = document.getElementById('groupingOptionsContainer');
+            container.innerHTML = '<p class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Loading your classes...</p>';
+
+            // Collect all class IDs from the page's session items
+            const sessionItems = document.querySelectorAll('[data-class-id]');
+            if (sessionItems.length === 0) {
+                container.innerHTML = '<p class="text-muted">No classes found for today.</p>';
+                return;
+            }
+
+            // Use the first class to call the grouping options API
+            const firstClassId = sessionItems[0].dataset.classId;
+            fetch(`/facilitator/grouping-options/${firstClassId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        container.innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
+                        return;
+                    }
+
+                    // Build list: current class + all options = all classes
+                    const currentClass = data.current_class;
+                    const allClasses = [
+                        { id: currentClass.id, class_id: currentClass.id, label: currentClass.name, is_current: true },
+                        ...data.options.map(o => ({ id: o.id, class_id: o.class_id, label: o.label, is_current: false }))
+                    ];
+
+                    // Detect which classes are currently grouped today
+                    const groupedBadges = document.querySelectorAll('.badge.bg-info');
+                    const currentlyGrouped = groupedBadges.length > 0; // at least one is grouped
+
+                    let html = `
+                        <p class="mb-1"><strong>Select all classes to group together today:</strong></p>
+                        <p class="text-muted small mb-3">Check two or more classes to create a daily group. Uncheck all and save to remove the group.</p>
+                    `;
+
+                    allClasses.forEach((cls, index) => {
+                        html += `
+                        <div class="grouping-option d-flex align-items-center">
+                            <input type="checkbox" name="grouping_classes" id="gc_${index}"
+                                   value="${cls.class_id}" class="form-check-input me-2" style="width:18px;height:18px;">
+                            <label for="gc_${index}" class="mb-0 w-100">${cls.label}</label>
+                        </div>`;
+                    });
+
+                    container.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    container.innerHTML = '<p class="text-danger">Error loading class options.</p>';
+                });
+        }
+
+        // Apply/Clear Grouping
+        document.getElementById('applyGroupingBtn').addEventListener('click', function () {
+            const selectedClasses = Array.from(document.querySelectorAll('input[name="grouping_classes"]:checked'))
+                .map(checkbox => checkbox.value);
+
+            const applyBtn = this;
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Applying...';
+
+            // If fewer than 2 classes selected, clear grouping for all
+            const isReset = selectedClasses.length < 2;
+            const url = isReset ? '/facilitator/clear-grouping/' : '/facilitator/apply-grouping/';
+
+            // Use first page class as anchor for clearing; first selected as primary for grouping
+            const firstPageClassId = document.querySelectorAll('[data-class-id]')[0]?.dataset.classId;
+            const payload = isReset
+                ? { class_section_id: firstPageClassId }
+                : {
+                    primary_class_id: selectedClasses[0],
+                    secondary_class_ids: selectedClasses.slice(1)
+                };
+
+            fetch(url, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        groupingModal.hide();
+                        const successMsg = document.createElement('div');
+                        successMsg.className = 'alert alert-success alert-dismissible fade show fixed-top m-3';
+                        successMsg.style.zIndex = "9999";
+                        successMsg.innerHTML = `
+                    <strong>✅ Success!</strong> ${data.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                        document.body.appendChild(successMsg);
+
+                        setTimeout(() => {
+                            window.location.reload(true);
+                        }, 1500);
+                    } else {
+                        alert('Error: ' + (data.error || 'Operation failed'));
+                        applyBtn.disabled = false;
+                        applyBtn.innerHTML = 'Apply';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error applying changes: ' + error.message);
+                    applyBtn.disabled = false;
+                    applyBtn.innerHTML = 'Apply';
+                });
+        });
+
+        // Direct Clear All Button
+        document.getElementById('clearAllGroupsBtn').addEventListener('click', function () {
+            if (!confirm('Are you sure? This will remove ALL group links (past and present) for your classes to ensure a clean start.')) return;
+
+            const btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Clearing...';
+
+            const firstClassId = document.querySelectorAll('[data-class-id]')[0]?.dataset.classId;
+
+            fetch('/facilitator/clear-grouping/', {
+                method: 'POST',
+                body: JSON.stringify({ class_section_id: firstClassId }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Success! All stale grouping data cleared.');
+                        window.location.reload(true);
+                    } else {
+                        alert(data.error || 'Failed to clear');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-trash me-1"></i>Clear All Groupings';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error clearing: ' + error.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-trash me-1"></i>Clear All Groupings';
+                });
+        });
+    });
+</script>
+{% endblock %}

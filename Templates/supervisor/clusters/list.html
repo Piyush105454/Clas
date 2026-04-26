@@ -1,0 +1,70 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-900">Clusters/Areas</h2>
+      <p class="text-sm text-gray-500 mt-1">Manage school clusters and zones</p>
+    </div>
+    <a href="{% url 'cluster_create' %}"
+       class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm text-sm font-medium">
+      <span class="material-symbols-outlined text-[18px]">add</span>
+      <span>Create Cluster</span>
+    </a>
+  </div>
+
+  <!-- Clusters Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for cluster in clusters %}
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900">{{ cluster.name }}</h3>
+          <p class="text-sm text-gray-600 mt-1">{{ cluster.district }}, {{ cluster.state }}</p>
+        </div>
+        <span class="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+          {{ cluster.school_count }} schools
+        </span>
+      </div>
+
+      {% if cluster.description %}
+      <p class="text-sm text-gray-600 mb-4">{{ cluster.description }}</p>
+      {% endif %}
+
+      <div class="flex gap-2 pt-4 border-t border-gray-100">
+        <a href="{% url 'cluster_detail' cluster.id %}"
+           class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs font-medium">
+          <span class="material-symbols-outlined text-[16px]">info</span>
+          <span>View</span>
+        </a>
+        <a href="{% url 'cluster_edit' cluster.id %}"
+           class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 text-xs font-medium">
+          <span class="material-symbols-outlined text-[16px]">edit</span>
+          <span>Edit</span>
+        </a>
+        <form method="post" action="{% url 'cluster_delete' cluster.id %}" style="display: inline;" onsubmit="return confirm('Delete this cluster?');">
+          {% csrf_token %}
+          <button type="submit" class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 text-xs font-medium">
+            <span class="material-symbols-outlined text-[16px]">delete</span>
+            <span>Delete</span>
+          </button>
+        </form>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-span-full text-center py-12 bg-blue-50 border border-blue-200 rounded-lg">
+      <span class="material-symbols-outlined text-gray-300 text-6xl mb-3 block">location_on</span>
+      <p class="text-gray-600 font-medium">No clusters created yet</p>
+      <a href="{% url 'cluster_create' %}" class="text-blue-600 hover:text-blue-700 text-sm font-medium mt-2 inline-block">
+        Create your first cluster →
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+
+{% endblock %}

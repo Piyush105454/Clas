@@ -1,0 +1,172 @@
+{% extends "facilitator/shared/base.html" %}
+{% load static %}
+
+{% block title %}{{ school.name }} - Classes{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="{% url 'facilitator_schools_list' %}">My Schools</a>
+                            </li>
+                            <li class="breadcrumb-item active">{{ school.name }}</li>
+                        </ol>
+                    </nav>
+                    <h2 class="mb-0">
+                        <i class="fas fa-school me-2"></i>
+                        {{ school.name }}
+                    </h2>
+                    <p class="text-muted mb-0">
+                        <i class="fas fa-map-marker-alt me-1"></i>
+                        {{ school.block }}, {{ school.district }} | UDISE: {{ school.udise }}
+                    </p>
+                </div>
+                <div>
+                    {% if school.address %}
+                    <a href="https://www.google.com/maps/search/{{ school.address|urlencode }}" target="_blank" rel="noopener noreferrer"
+                       class="btn btn-info me-2">
+                        <i class="fas fa-map-location-dot me-1"></i>
+                        View on Map
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'facilitator_students_list' %}?school={{ school.id }}" 
+                       class="btn btn-primary">
+                        <i class="fas fa-users me-1"></i>
+                        View All Students
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="grade" class="form-label">Filter by Grade Level</label>
+                            <select name="grade" id="grade" class="form-select">
+                                <option value="">All Grades</option>
+                                {% for grade in grade_levels %}
+                                    <option value="{{ grade }}" {% if selected_grade == grade %}selected{% endif %}>
+                                        Grade {{ grade }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button type="submit" class="btn btn-outline-primary me-2">
+                                <i class="fas fa-filter me-1"></i>
+                                Apply Filter
+                            </button>
+                            <a href="{% url 'facilitator_school_detail' school.id %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i>
+                                Clear
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Classes List -->
+            {% if not filtered_classes %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    {% if selected_grade %}
+                        No classes found for Grade {{ selected_grade }} in this school.
+                    {% else %}
+                        No classes found in this school.
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="row">
+                    {% for item in filtered_classes %}
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <h5 class="card-title mb-0">
+                                            <i class="fas fa-chalkboard-teacher text-success me-2"></i>
+                                            Class {{ item.class_section.display_name }}
+                                        </h5>
+                                        <span class="badge bg-primary">{{ item.class_section.academic_year }}</span>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <p class="text-muted mb-1">
+                                            <i class="fas fa-layer-group me-1"></i>
+                                            Grade Level: {{ item.class_section.class_level }}
+                                        </p>
+                                        {% if item.class_section.section %}
+                                            <p class="text-muted mb-0">
+                                                <i class="fas fa-tag me-1"></i>
+                                                Section: {{ item.class_section.section }}
+                                            </p>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="text-center mb-3">
+                                        <h4 class="text-primary mb-0">{{ item.enrollment_count }}</h4>
+                                        <small class="text-muted">Enrolled Students</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="card-footer bg-transparent">
+                                    <div class="d-grid gap-2">
+                                        <a href="{% url 'facilitator_students_list' %}?class={{ item.class_section.id }}" 
+                                           class="btn btn-primary btn-sm">
+                                            <i class="fas fa-users me-1"></i>
+                                            View Students ({{ item.enrollment_count }})
+                                        </a>
+                                        <div class="btn-group" role="group">
+                                            <a href="{% url 'facilitator_student_create' %}?class={{ item.class_section.id }}" 
+                                               class="btn btn-outline-success btn-sm">
+                                                <i class="fas fa-plus me-1"></i>
+                                                Add Student
+                                            </a>
+                                            <a href="{% url 'facilitator_classes' %}" 
+                                               class="btn btn-outline-info btn-sm">
+                                                <i class="fas fa-calendar-alt me-1"></i>
+                                                Sessions
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-submit form when grade filter changes
+        const gradeSelect = document.getElementById('grade');
+        if (gradeSelect) {
+            gradeSelect.addEventListener('change', function() {
+                this.form.submit();
+            });
+        }
+        
+        // Add hover effects to cards
+        const cards = document.querySelectorAll('.card');
+        cards.forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.classList.add('shadow');
+            });
+            card.addEventListener('mouseleave', function() {
+                this.classList.remove('shadow');
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,446 @@
+{% extends 'admin/shared/base.html' %}
+{% block content %}
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+
+<div class="space-y-6">
+
+  <!-- MAP VIEW TOGGLE -->
+  <div class="flex gap-2 justify-end mb-4">
+    <button id="listViewBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors">
+      <span class="material-symbols-outlined inline align-middle mr-1">list</span> List View
+    </button>
+    <button id="mapViewBtn" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+      <span class="material-symbols-outlined inline align-middle mr-1">map</span> Map View
+    </button>
+  </div>
+
+  <!-- MAP CONTAINER (Hidden by default) -->
+  <div id="mapContainer" class="hidden bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden" style="height: 600px;">
+    <div id="map" class="w-full h-full"></div>
+  </div>
+
+  <!-- LIST VIEW CONTAINER -->
+  <div id="listView" class="space-y-6">
+
+  <!-- TOP BAR -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+
+      <div class="lg:col-span-3">
+        <h4 class="text-xl font-bold text-gray-900">Schools List</h4>
+        <p class="text-sm text-gray-500 mt-1">
+          <span id="schoolCount">{{ schools|length }}</span> schools
+          <span id="refreshIndicator" class="hidden ml-2 text-blue-600">
+            <span class="animate-spin inline-block w-3 h-3 border border-blue-600 border-t-transparent rounded-full"></span>
+            Refreshing...
+          </span>
+        </p>
+      </div>
+
+      <div class="lg:col-span-4">
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">search</span>
+          <input id="searchInput"
+                 type="text"
+                 class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                 placeholder="Search by name, area, status...">
+        </div>
+      </div>
+
+      <div class="lg:col-span-2">
+        <select class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <option selected>All Roles</option>
+          <option>Admin</option>
+          <option>Supervisor</option>
+          <option>Facilitator</option>
+        </select>
+      </div>
+
+      <div class="lg:col-span-3 flex gap-3">
+        <a href="{% url 'add_school' %}"
+           class="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm text-sm font-medium">
+          <span class="material-symbols-outlined text-[20px]">add</span>
+          Add School
+        </a>
+
+        <button onclick="openAssignModal()"
+                class="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-medium">
+          <span class="material-symbols-outlined text-[20px]">person_add</span>
+          Assign
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- GRID -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+
+    {% for school in schools %}
+    <div class="school-card bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition" 
+         data-name="{{ school.name|lower }}" 
+         data-status="{{ school.status }}">
+      <div class="p-6 flex flex-col h-full text-center">
+
+        <div class="mb-4">
+          <div class="w-14 h-14 mx-auto rounded-full bg-blue-100 text-blue-600 flex justify-center items-center">
+            <span class="material-symbols-outlined text-3xl">school</span>
+          </div>
+        </div>
+
+        <h6 class="text-base font-semibold text-gray-900 mb-2">{{ school.name }}</h6>
+
+        <span class="inline-flex px-3 py-1 rounded-full text-xs font-medium mb-4
+          {% if school.status == 1 %} bg-green-100 text-green-800
+          {% else %} bg-red-100 text-red-800{% endif %}">
+          {{ school.get_status_display }}
+        </span>
+
+        <div class="text-sm text-gray-600 space-y-2 mb-6">
+          <div class="flex justify-center gap-2"><span class="material-symbols-outlined text-[18px]">group</span> Students: <strong>{{ school.total_students|default:0 }}</strong></div>
+          <div class="flex justify-center gap-2"><span class="material-symbols-outlined text-[18px]">person</span> Facilitators: <strong>{{ school.active_facilitators|default:0 }}</strong></div>
+          <div class="flex justify-center gap-2"><span class="material-symbols-outlined text-[18px]">class</span> Classes: <strong>{{ school.total_classes|default:0 }}</strong></div>
+        </div>
+
+        <div class="mt-auto flex gap-2">
+
+          <a href="{% url 'school_detail' school.id %}"
+             class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">
+            <span class="material-symbols-outlined text-[18px]">settings</span> Manage
+          </a>
+
+          <div class="relative">
+            <button onclick="toggleDropdown('{{ school.id }}', event)"
+                    class="w-10 h-10 flex justify-center items-center border border-gray-300 rounded-lg hover:bg-gray-50">
+              <span class="material-symbols-outlined text-[20px]">more_vert</span>
+            </button>
+
+            <div id="dropdown-{{ school.id }}" class="hidden absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow z-10">
+              <button onclick="openAssignModal('{{ school.id }}')" class="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex gap-2">
+                <span class="material-symbols-outlined text-[18px]">person_add</span> Assign Facilitator
+              </button>
+              <button onclick="openDeleteModal('{{ school.id }}','{{ school.name|escapejs }}')"
+                      class="w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex gap-2">
+                <span class="material-symbols-outlined text-[18px]">delete</span> Delete
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+    {% empty %}
+      <div class="col-span-full text-center p-8 bg-blue-50 border rounded-lg">
+        <span class="material-symbols-outlined text-6xl text-blue-400 mb-4">school</span>
+        <p class="text-blue-800 font-medium">No schools found</p>
+      </div>
+    {% endfor %}
+  </div>
+  </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+
+<!-- DELETE MODAL -->
+<div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeDeleteModal()"></div>
+
+  <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <form method="post" id="deleteForm">{% csrf_token %}
+      <div class="px-6 py-4 border-b"><h5 class="font-semibold text-lg">Delete School</h5></div>
+
+      <div class="px-6 py-4">
+        Are you sure you want to delete <strong id="deleteSchoolName"></strong>?
+      </div>
+
+      <div class="px-6 py-4 bg-gray-50 flex gap-3 rounded-b-xl">
+        <button type="button" onclick="closeDeleteModal()" class="flex-1 border rounded-lg px-4 py-2">Cancel</button>
+        <button type="submit" class="flex-1 bg-red-600 text-white rounded-lg px-4 py-2">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ASSIGN MODAL -->
+<div id="assignModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeAssignModal()"></div>
+
+  <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <form method="post" action="{% url 'assign_school_facilitator' %}" id="assignForm">{% csrf_token %}
+      <div class="px-6 py-4 border-b flex justify-between">
+        <h5 class="font-semibold text-lg">Assign Facilitator</h5>
+        <button type="button" onclick="closeAssignModal()">×</button>
+      </div>
+
+      <div class="px-6 py-4 space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Facilitator</label>
+          {{ form.facilitator }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">School</label>
+          {{ form.school }}
+        </div>
+      </div>
+
+      <div class="px-6 py-4 bg-gray-50 flex gap-3 rounded-b-xl">
+        <button type="button" onclick="closeAssignModal()" class="flex-1 border rounded-lg px-4 py-2">Cancel</button>
+        <button type="submit" class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2">Assign</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<script>
+// MAP AND VIEW TOGGLE LOGIC
+let map = null;
+let markers = [];
+
+const schoolsData = [
+  {% for school in schools %}
+  {
+    id: "{{ school.id|escapejs }}",
+    name: "{{ school.name|escapejs }}",
+    district: "{{ school.district|escapejs|default:'' }}",
+    lat: {{ school.latitude|default:28.7041 }},
+    lng: {{ school.longitude|default:77.1025 }},
+    students: {{ school.total_students|default:0 }},
+    facilitators: {{ school.active_facilitators|default:0 }},
+    classes: {{ school.total_classes|default:0 }},
+    status: {{ school.status }}
+  }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+];
+
+function initMap() {
+  if (map) return;
+  
+  // Center on Madhya Pradesh or general India
+  map = L.map('map').setView([23.2599, 77.4126], 6);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+  
+  schoolsData.forEach(school => {
+    const marker = L.marker([school.lat, school.lng], {
+      icon: L.icon({
+        iconUrl: `data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 32' fill='%233b82f6'%3e%3cpath d='M12 0C5.4 0 0 5.4 0 12c0 8 12 20 12 20s12-12 12-20c0-6.6-5.4-12-12-12zm0 16c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z'/%3e%3c/svg%3e`,
+        iconSize: [32, 40],
+        iconAnchor: [16, 40],
+        popupAnchor: [0, -40]
+      })
+    }).addTo(map);
+    
+    const popupContent = `
+      <div style="width: 260px;">
+        <div style="background: ${school.status ? '#3b82f6' : '#ef4444'}; color: white; padding: 10px; border-radius: 8px 8px 0 0; margin: -10px -10px 10px -10px;">
+          <h6 style="margin: 0; font-weight: 700;">${school.name}</h6>
+          <p style="margin: 2px 0 0 0; font-size: 0.75rem; opacity: 0.9;">${school.district}</p>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+          <div style="text-align: center; padding: 5px; background: #f3f4f6; border-radius: 4px;">
+            <div style="font-weight: 700; color: #3b82f6;">${school.students}</div>
+            <div style="font-size: 0.7rem; color: #6b7280;">Students</div>
+          </div>
+          <div style="text-align: center; padding: 5px; background: #f3f4f6; border-radius: 4px;">
+            <div style="font-weight: 700; color: #10b981;">${school.facilitators}</div>
+            <div style="font-size: 0.7rem; color: #6b7280;">Facilitators</div>
+          </div>
+        </div>
+        <a href="/admin/schools/${school.id}/" 
+           style="display: block; text-align: center; background: #3b82f6; color: white; padding: 8px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem;">
+           View Details →
+        </a>
+      </div>
+    `;
+    
+    marker.bindPopup(popupContent);
+    markers.push(marker);
+  });
+}
+
+document.getElementById('mapViewBtn').addEventListener('click', () => {
+  document.getElementById('listView').classList.add('hidden');
+  document.getElementById('mapContainer').classList.remove('hidden');
+  document.getElementById('listViewBtn').classList.replace('bg-blue-600', 'border');
+  document.getElementById('listViewBtn').classList.replace('text-white', 'text-gray-700');
+  document.getElementById('mapViewBtn').classList.replace('border', 'bg-blue-600');
+  document.getElementById('mapViewBtn').classList.replace('text-gray-700', 'text-white');
+  
+  setTimeout(() => {
+    initMap();
+    if (map) map.invalidateSize();
+  }, 100);
+});
+
+document.getElementById('listViewBtn').addEventListener('click', () => {
+  document.getElementById('listView').classList.remove('hidden');
+  document.getElementById('mapContainer').classList.add('hidden');
+  document.getElementById('listViewBtn').classList.replace('border', 'bg-blue-600');
+  document.getElementById('listViewBtn').classList.replace('text-gray-700', 'text-white');
+  document.getElementById('mapViewBtn').classList.replace('bg-blue-600', 'border');
+  document.getElementById('mapViewBtn').classList.replace('text-white', 'text-gray-700');
+});
+
+// IMPROVED SEARCH AND FILTER
+document.getElementById("searchInput").addEventListener("input", e => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll(".school-card").forEach(card => {
+    const name = card.getAttribute("data-name") || "";
+    const matches = name.includes(q);
+    card.parentElement.classList.toggle("hidden", !matches);
+  });
+});
+
+function toggleDropdown(id, event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById(`dropdown-${id}`);
+  document.querySelectorAll('[id^="dropdown-"]').forEach(d => {
+    if (d !== dropdown) d.classList.add("hidden");
+  });
+  dropdown.classList.toggle("hidden");
+}
+
+document.addEventListener("click", e => {
+  if (!e.target.closest('[id^="dropdown-"]') && !e.target.closest('[onclick^="toggleDropdown"]')) {
+    document.querySelectorAll('[id^="dropdown-"]').forEach(d => d.classList.add("hidden"));
+  }
+});
+
+function openDeleteModal(id, name) {
+  document.getElementById("deleteSchoolName").textContent = name;
+  document.getElementById("deleteForm").action = `/admin/schools/${id}/delete/`;
+  document.getElementById("deleteModal").classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeDeleteModal() {
+  document.getElementById("deleteModal").classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+function openAssignModal(schoolId = null) {
+  document.getElementById("assignModal").classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  if (schoolId) {
+    const schoolSelect = document.querySelector('#assignForm [name="school"]');
+    if (schoolSelect) {
+      schoolSelect.value = schoolId;
+    }
+  }
+}
+
+function closeAssignModal() {
+  document.getElementById("assignModal").classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+// Handle form submissions with real-time updates
+document.getElementById("deleteForm").addEventListener("submit", function(e) {
+  // Show loading state
+  const submitBtn = this.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.textContent = "Deleting...";
+  submitBtn.disabled = true;
+  
+  // Show refresh indicator
+  showRefreshIndicator();
+});
+
+document.getElementById("assignForm").addEventListener("submit", function(e) {
+  // Show loading state
+  const submitBtn = this.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.textContent = "Assigning...";
+  submitBtn.disabled = true;
+  
+  // Show refresh indicator
+  showRefreshIndicator();
+});
+
+function showRefreshIndicator() {
+  const indicator = document.getElementById('refreshIndicator');
+  if (indicator) {
+    indicator.classList.remove('hidden');
+  }
+}
+
+function hideRefreshIndicator() {
+  const indicator = document.getElementById('refreshIndicator');
+  if (indicator) {
+    indicator.classList.add('hidden');
+  }
+}
+
+// Auto-refresh page after successful operations
+window.addEventListener('pageshow', function(event) {
+  // Check if we came back from a form submission
+  if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
+    // Refresh the page to show updated data
+    window.location.reload();
+  }
+});
+
+// Check for success/error messages and refresh if needed
+document.addEventListener("DOMContentLoaded", () => {
+  // Style the form elements
+  document.querySelectorAll("#assignModal select").forEach(s =>
+    s.className = "w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  );
+  
+  // Check for messages indicating successful operations
+  const messages = document.querySelectorAll('.alert, .message, [class*="success"], [class*="error"]');
+  if (messages.length > 0) {
+    // If there are messages, it means an operation was performed
+    // Clear any cached data by adding a timestamp to future requests
+    const timestamp = Date.now();
+    const currentUrl = new URL(window.location);
+    if (!currentUrl.searchParams.has('_refresh')) {
+      currentUrl.searchParams.set('_refresh', timestamp);
+      window.history.replaceState({}, '', currentUrl);
+    }
+  }
+});
+
+// Add visual feedback for actions
+function showNotification(message, type = 'success') {
+  const notification = document.createElement('div');
+  notification.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white ${
+    type === 'success' ? 'bg-green-500' : 'bg-red-500'
+  }`;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
+}
+
+// Monitor for successful operations
+const originalFetch = window.fetch;
+window.fetch = function(...args) {
+  return originalFetch.apply(this, args).then(response => {
+    if (response.ok && (response.url.includes('/delete/') || response.url.includes('/assign'))) {
+      // Successful operation, show notification
+      showNotification('Operation completed successfully!');
+      
+      // Refresh page after a short delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }
+    return response;
+  });
+};
+</script>
+
+{% endblock %}

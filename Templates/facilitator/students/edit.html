@@ -1,0 +1,402 @@
+{% extends "facilitator/shared/base.html" %}
+{% load static %}
+
+{% block title %}Edit {{ object.full_name }} - Facilitator Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="{% url 'facilitator_students_list' %}">Students</a>
+                            </li>
+                            <li class="breadcrumb-item active">Edit {{ object.full_name }}</li>
+                        </ol>
+                    </nav>
+                    <h2 class="mb-0">
+                        <i class="fas fa-user-edit me-2"></i>
+                        Edit Student: {{ object.full_name }}
+                    </h2>
+                    <p class="text-muted mb-0">Update student information and class assignment</p>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-user me-1"></i>
+                                Student Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" id="studentForm">
+                                {% csrf_token %}
+                                
+                                <!-- Student Basic Information -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="{{ form.full_name.id_for_label }}" class="form-label">
+                                            Full Name <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.full_name }}
+                                        {% if form.full_name.errors %}
+                                            <div class="text-danger small">{{ form.full_name.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="{{ form.enrollment_number.id_for_label }}" class="form-label">
+                                            Enrollment Number <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.enrollment_number }}
+                                        {% if form.enrollment_number.errors %}
+                                            <div class="text-danger small">{{ form.enrollment_number.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="{{ form.gender.id_for_label }}" class="form-label">
+                                            Gender <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.gender }}
+                                        {% if form.gender.errors %}
+                                            <div class="text-danger small">{{ form.gender.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Current Enrollment Info -->
+                                {% if current_enrollment %}
+                                    <div class="alert alert-info">
+                                        <h6>Current Enrollment</h6>
+                                        <p class="mb-1">
+                                            <strong>School:</strong> {{ current_enrollment.school.name }}<br>
+                                            <strong>Class:</strong> {{ current_enrollment.class_section.display_name }}<br>
+                                            <strong>Enrolled:</strong> {{ current_enrollment.start_date|date:"M d, Y" }}
+                                        </p>
+                                    </div>
+                                {% endif %}
+
+                                <!-- Class Assignment -->
+                                <hr class="my-4">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-chalkboard-teacher me-1"></i>
+                                    Update Class Assignment
+                                </h6>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="school" class="form-label">
+                                            School <span class="text-danger">*</span>
+                                        </label>
+                                        <select name="school" id="school" class="form-select" required>
+                                            <option value="">Select School</option>
+                                            {% for school in schools %}
+                                                <option value="{{ school.id }}" 
+                                                        {% if current_enrollment and school.id == current_enrollment.school.id %}selected{% endif %}>
+                                                    {{ school.name }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                        {% if current_enrollment %}
+                                            <small class="text-muted">Current: {{ current_enrollment.school.name }}</small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="class_section" class="form-label">
+                                            Class Section <span class="text-danger">*</span>
+                                        </label>
+                                        <select name="class_section" id="class_section" class="form-select" required>
+                                            <option value="">Select School First</option>
+                                            {% comment %}
+                                            Fallback: Include all class sections with data attributes for school filtering
+                                            {% endcomment %}
+                                            {% for class_section in class_sections %}
+                                                <option value="{{ class_section.id }}" 
+                                                        data-school="{{ class_section.school.id }}"
+                                                        style="display: none;"
+                                                        {% if current_enrollment and class_section.id == current_enrollment.class_section.id %}selected{% endif %}>
+                                                    {{ class_section.display_name }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                        {% if current_enrollment %}
+                                            <small class="text-muted">Current: {{ current_enrollment.class_section.display_name }}</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Hidden data for JavaScript fallback -->
+                                <script type="application/json" id="classData">
+                                    {
+                                        "classes": [
+                                            {% for class_section in class_sections %}
+                                            {
+                                                "id": "{{ class_section.id }}",
+                                                "school_id": "{{ class_section.school.id }}",
+                                                "display_name": "{{ class_section.display_name }}",
+                                                "class_level": "{{ class_section.class_level }}",
+                                                "section": "{{ class_section.section|default:'' }}"
+                                            }{% if not forloop.last %},{% endif %}
+                                            {% endfor %}
+                                        ]
+                                    }
+                                </script>
+
+                                <!-- Form Actions -->
+                                <div class="d-flex justify-content-between">
+                                    <a href="{% url 'facilitator_students_list' %}" class="btn btn-secondary">
+                                        <i class="fas fa-arrow-left me-1"></i>
+                                        Cancel
+                                    </a>
+                                    <div>
+                                        <a href="{% url 'facilitator_student_detail' object.id %}" class="btn btn-info me-2">
+                                            <i class="fas fa-eye me-1"></i>
+                                            View Details
+                                        </a>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-save me-1"></i>
+                                            Update Student
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Student Details
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <strong>Student ID:</strong><br>
+                                <code>{{ object.id }}</code>
+                            </div>
+                            
+                            {% if current_enrollment %}
+                                <div class="mb-3">
+                                    <strong>Enrollment Status:</strong><br>
+                                    <span class="badge bg-success">Active</span>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <strong>Academic Year:</strong><br>
+                                    {{ current_enrollment.class_section.academic_year }}
+                                </div>
+                            {% endif %}
+                            
+                            <div class="alert alert-warning">
+                                <h6>Important Notes</h6>
+                                <ul class="mb-0 small">
+                                    <li>Changing the class will move the student to a new class</li>
+                                    <li>Enrollment history will be preserved</li>
+                                    <li>You can only assign to schools you manage</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-tools me-1"></i>
+                                Quick Actions
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'facilitator_student_detail' object.id %}" class="btn btn-outline-info btn-sm">
+                                    <i class="fas fa-chart-line me-1"></i>
+                                    View Attendance
+                                </a>
+                                <a href="{% url 'facilitator_students_list' %}" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-list me-1"></i>
+                                    All Students
+                                </a>
+                                {% if current_enrollment %}
+                                    <a href="{% url 'facilitator_students_list' %}?class={{ current_enrollment.class_section.id }}" 
+                                       class="btn btn-outline-secondary btn-sm">
+                                        <i class="fas fa-users me-1"></i>
+                                        Classmates
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const schoolSelect = document.getElementById('school');
+        const classSelect = document.getElementById('class_section');
+        
+        // Get class data from JSON script tag (fallback)
+        const classDataElement = document.getElementById('classData');
+        let classData = [];
+        try {
+            classData = JSON.parse(classDataElement.textContent).classes;
+        } catch (e) {
+            console.warn('Could not parse class data:', e);
+        }
+        
+        // Add Bootstrap classes to form fields
+        document.querySelectorAll('input, select').forEach(field => {
+            field.classList.add('form-control');
+        });
+        document.querySelectorAll('select').forEach(field => {
+            field.classList.remove('form-control');
+            field.classList.add('form-select');
+        });
+        
+        // Fallback function using local data
+        function loadClassesFallback(schoolId, selectedClassId = null) {
+            classSelect.innerHTML = '<option value="">Select Class</option>';
+            
+            const schoolClasses = classData.filter(cls => cls.school_id === schoolId);
+            
+            if (schoolClasses.length === 0) {
+                classSelect.innerHTML = '<option value="">No classes available</option>';
+                return;
+            }
+            
+            schoolClasses.forEach(classSection => {
+                const option = document.createElement('option');
+                option.value = classSection.id;
+                option.textContent = classSection.display_name;
+                
+                if (selectedClassId && String(classSection.id) === String(selectedClassId)) {
+                    option.selected = true;
+                    console.log('Selected class (fallback):', classSection.display_name, 'ID:', classSection.id);
+                }
+                
+                classSelect.appendChild(option);
+            });
+        }
+        
+        // Load classes for initially selected school
+        function loadClasses(schoolId, selectedClassId = null) {
+            if (!schoolId) {
+                classSelect.innerHTML = '<option value="">Select School First</option>';
+                return;
+            }
+            
+            classSelect.innerHTML = '<option value="">Loading...</option>';
+            classSelect.disabled = true;
+            
+            // Try AJAX first, fallback to local data if it fails
+            fetch(`{% url 'facilitator_ajax_school_classes' %}?school_id=${schoolId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    classSelect.innerHTML = '<option value="">Select Class</option>';
+                    
+                    if (data.error) {
+                        console.error('Server error:', data.error);
+                        throw new Error(data.error);
+                    } else if (data.classes && data.classes.length > 0) {
+                        data.classes.forEach(classSection => {
+                            const option = document.createElement('option');
+                            option.value = classSection.id;
+                            option.textContent = `${classSection.class_level}${classSection.section || ''} (${classSection.display_name || classSection.class_level + (classSection.section || '')})`;
+                            
+                            // Set selected if this matches the current enrollment
+                            if (selectedClassId && String(classSection.id) === String(selectedClassId)) {
+                                option.selected = true;
+                                console.log('Selected class:', classSection.display_name, 'ID:', classSection.id);
+                            }
+                            
+                            classSelect.appendChild(option);
+                        });
+                    } else {
+                        classSelect.innerHTML = '<option value="">No classes available</option>';
+                    }
+                    
+                    classSelect.disabled = false;
+                })
+                .catch(error => {
+                    console.error('AJAX failed, using fallback:', error);
+                    // Use fallback method
+                    loadClassesFallback(schoolId, selectedClassId);
+                    classSelect.disabled = false;
+                });
+        }
+        
+        // Load classes for initially selected school on page load
+        const initialSchoolId = schoolSelect.value;
+        const initialClassId = '{% if current_enrollment %}{{ current_enrollment.class_section.id }}{% endif %}';
+        
+        console.log('Initial school ID:', initialSchoolId);
+        console.log('Initial class ID:', initialClassId);
+        
+        // Debug: Show current enrollment info
+        {% if current_enrollment %}
+        console.log('Current enrollment school ID:', '{{ current_enrollment.school.id }}');
+        console.log('Current enrollment class ID:', '{{ current_enrollment.class_section.id }}');
+        console.log('Current enrollment class name:', '{{ current_enrollment.class_section.display_name }}');
+        {% else %}
+        console.log('No current enrollment found');
+        {% endif %}
+        
+        if (initialSchoolId && initialClassId) {
+            // Load classes and set the selected class
+            loadClasses(initialSchoolId, initialClassId);
+        } else if (initialSchoolId) {
+            // Just load classes without selection
+            loadClasses(initialSchoolId);
+        } else {
+            // No school selected, show default message
+            classSelect.innerHTML = '<option value="">Select School First</option>';
+        }
+        
+        // Handle school selection change
+        schoolSelect.addEventListener('change', function() {
+            loadClasses(this.value);
+        });
+        
+        // Form validation
+        const form = document.getElementById('studentForm');
+        form.addEventListener('submit', function(e) {
+            const requiredFields = form.querySelectorAll('[required]');
+            let isValid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    field.classList.add('is-invalid');
+                    isValid = false;
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+                alert('Please fill in all required fields.');
+            }
+        });
+    });
+</script>
+{% endblock %}

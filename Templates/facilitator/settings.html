@@ -1,0 +1,135 @@
+{% extends 'facilitator/shared/base.html' %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="container">
+        <!-- Page Header -->
+        <div class="mb-4">
+            <h1 class="h2 fw-bold text-dark">Settings</h1>
+            <p class="text-muted">Manage your facilitator account and preferences</p>
+        </div>
+
+        <!-- Settings Grid -->
+        <div class="row">
+            
+            <!-- Account Settings -->
+            <div class="col-lg-8 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0 fw-bold">Account Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Profile Information -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">Profile Information</h6>
+                            <div class="mb-3">
+                                <label class="form-label fw-medium">Full Name</label>
+                                <input type="text" class="form-control" value="{{ request.user.full_name }}" disabled>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-medium">Email Address</label>
+                                <input type="email" class="form-control" value="{{ request.user.email }}" disabled>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-medium">Role</label>
+                                <input type="text" class="form-control" value="{{ request.user.role.name }}" disabled>
+                            </div>
+                        </div>
+
+                        <!-- Preferences -->
+                        <div class="border-top pt-4 mb-4">
+                            <h6 class="fw-bold mb-3">Preferences</h6>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="notif1" checked>
+                                <label class="form-check-label" for="notif1">
+                                    Email notifications for session updates
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="notif2" checked>
+                                <label class="form-check-label" for="notif2">
+                                    Email notifications for attendance records
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="notif3">
+                                <label class="form-check-label" for="notif3">
+                                    Weekly performance summary
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Security -->
+                        <div class="border-top pt-4">
+                            <h6 class="fw-bold mb-3">Security</h6>
+                            <button class="btn btn-primary">
+                                Change Password
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Info -->
+            <div class="col-lg-4 mb-4">
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0 fw-bold">Account Info</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="p-3 bg-primary bg-opacity-10 rounded mb-3">
+                            <p class="text-muted small mb-1">Account Type</p>
+                            <p class="fw-bold text-primary">Facilitator</p>
+                        </div>
+
+                        <div class="p-3 bg-success bg-opacity-10 rounded mb-3">
+                            <p class="text-muted small mb-1">Status</p>
+                            <p class="fw-bold text-success">Active</p>
+                        </div>
+
+                        <div class="p-3 bg-light rounded mb-3">
+                            <p class="text-muted small mb-1">Member Since</p>
+                            <p class="fw-bold text-dark">{{ request.user.created_at|date:"M d, Y" }}</p>
+                        </div>
+
+                        <div class="p-3 bg-light rounded">
+                            <p class="text-muted small mb-1">Last Login</p>
+                            <p class="fw-bold text-dark">{{ request.user.last_login|date:"M d, Y H:i"|default:"Never" }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Session Management -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm border-primary">
+                    <div class="card-header bg-primary bg-opacity-10 border-primary">
+                        <h5 class="mb-0 fw-bold text-primary">Session Management</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Sign out from your current session or all active sessions.
+                        </p>
+                        <a href="{% url 'logout' %}" class="btn btn-primary">
+                            <i class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;">logout</i>
+                            Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+</div>
+
+<style>
+    .form-control:disabled {
+        background-color: #f8f9fa;
+        color: #6c757d;
+    }
+</style>
+
+{% endblock %}

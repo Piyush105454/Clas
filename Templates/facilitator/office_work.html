@@ -1,0 +1,238 @@
+{% extends "facilitator/shared/base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold mb-1">Office Work Attendance</h2>
+                    <p class="text-muted mb-0">Mark your office work attendance for today</p>
+                </div>
+                <a href="{% url 'facilitator_classes' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Classes
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Date -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-calendar-event text-primary" style="font-size: 2rem;"></i>
+                        <div class="ms-3">
+                            <p class="text-muted mb-0">Today's Date</p>
+                            <h5 class="mb-0">{{ today|date:"l, F j, Y" }}</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Office Work Status -->
+    {% if office_work_today %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-light border-bottom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-building me-2"></i>Office Work Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <p class="text-muted mb-1">Status</p>
+                            <h6 class="mb-0">
+                                {% if office_work_today.attendance %}
+                                    {% if office_work_today.attendance.status == 'present' %}
+                                        <span class="badge bg-success">Present</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Absent</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary">Not Marked</span>
+                                {% endif %}
+                            </h6>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <p class="text-muted mb-1">Last Updated</p>
+                            <h6 class="mb-0">
+                                {% if office_work_today.attendance %}
+                                    {{ office_work_today.attendance.updated_at|date:"M d, Y H:i" }}
+                                {% else %}
+                                    Not yet marked
+                                {% endif %}
+                            </h6>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mark Attendance Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-light border-bottom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-pencil-square me-2"></i>Mark Your Attendance
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{% url 'facilitator_mark_office_work' %}" id="officeWorkForm">
+                        {% csrf_token %}
+                        
+                        <input type="hidden" name="calendar_date_id" value="{{ office_work_today.calendar_date.id }}">
+                        
+                        <!-- Status Selection -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Attendance Status</label>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="status" id="presentRadio" 
+                                               value="present" 
+                                               {% if office_work_today.attendance.status == 'present' %}checked{% endif %}>
+                                        <label class="form-check-label" for="presentRadio">
+                                            <i class="bi bi-check-circle text-success me-2"></i>
+                                            <strong>Present</strong>
+                                            <p class="text-muted small mb-0">I am present for office work today</p>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="status" id="absentRadio" 
+                                               value="absent"
+                                               {% if office_work_today.attendance.status == 'absent' %}checked{% endif %}>
+                                        <label class="form-check-label" for="absentRadio">
+                                            <i class="bi bi-x-circle text-danger me-2"></i>
+                                            <strong>Absent</strong>
+                                            <p class="text-muted small mb-0">I am absent today</p>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Remarks -->
+                        <div class="mb-4">
+                            <label for="remarksTextarea" class="form-label fw-bold">Remarks (Optional)</label>
+                            <textarea class="form-control" id="remarksTextarea" name="remarks" rows="3" 
+                                      placeholder="Add any remarks or notes about your office work today...">{% if office_work_today.attendance %}{{ office_work_today.attendance.remarks }}{% endif %}</textarea>
+                            <small class="text-muted">Maximum 500 characters</small>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-lg me-2"></i>Save Attendance
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-info border-0" role="alert">
+                <div class="d-flex">
+                    <i class="bi bi-info-circle me-3" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <h6 class="alert-heading mb-1">Office Work Information</h6>
+                        <p class="mb-0">
+                            Please mark your attendance for office work today. You can update your status at any time 
+                            during the day. Your attendance will be recorded and visible to your supervisor.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-check-label {
+        cursor: pointer;
+        padding: 1rem;
+        border: 2px solid #e9ecef;
+        border-radius: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .form-check-input:checked + .form-check-label {
+        border-color: #0d6efd;
+        background-color: #f0f6ff;
+    }
+
+    .form-check-input {
+        cursor: pointer;
+        margin-top: 0.5rem;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('officeWorkForm');
+        
+        // Set default to present if nothing is selected
+        const statusRadios = document.querySelectorAll('input[name="status"]');
+        if (![...statusRadios].some(r => r.checked)) {
+            document.getElementById('presentRadio').checked = true;
+        }
+
+        // Form submission
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const status = document.querySelector('input[name="status"]:checked').value;
+            const remarks = document.getElementById('remarksTextarea').value;
+            
+            if (!status) {
+                alert('Please select your attendance status');
+                return;
+            }
+
+            // Submit the form
+            form.submit();
+        });
+    });
+</script>
+
+{% else %}
+<!-- No Office Work Today -->
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-warning border-0" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle me-3" style="font-size: 2rem;"></i>
+                    <div>
+                        <h5 class="alert-heading mb-1">No Office Work Today</h5>
+                        <p class="mb-0">
+                            There is no office work scheduled for today. Please check back later or contact your supervisor.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <a href="{% url 'facilitator_classes' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Classes
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends 'supervisor/shared/base.html' %}
+{% block content %}
+
+<div class="space-y-6">
+
+  <!-- TOP BAR -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+
+      <div class="lg:col-span-3">
+        <h4 class="text-xl font-bold text-gray-900">Users List</h4>
+        <p class="text-sm text-gray-500 mt-1">
+          <span id="userCount">{{ users|length }}</span> users
+        </p>
+      </div>
+
+      <div class="lg:col-span-4">
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">search</span>
+          <input id="searchInput"
+                 type="text"
+                 class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                 placeholder="Search by name, email...">
+        </div>
+      </div>
+
+      <div class="lg:col-span-2">
+        <select id="roleFilter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <option value="">All Roles</option>
+          {% for role in roles %}
+            <option value="{{ role.id }}" {% if selected_role == role.id|stringformat:"s" %}selected{% endif %}>{{ role.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="lg:col-span-3">
+        <a href="{% url 'supervisor_user_create' %}"
+           class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm text-sm font-medium">
+          <span class="material-symbols-outlined text-[20px]">person_add</span>
+          Create User
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Role</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {% for user in users %}
+          <tr class="user-row hover:bg-gray-50 transition-colors" data-name="{{ user.full_name|lower }}" data-email="{{ user.email|lower }}" data-role="{{ user.role.id }}">
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm">
+                  {{ user.full_name|first|upper }}
+                </div>
+                <span class="text-sm font-medium text-gray-900">{{ user.full_name }}</span>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ user.email }}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {{ user.role.name }}
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium 
+                {% if user.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                {% if user.is_active %}Active{% else %}Inactive{% endif %}
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <div class="flex gap-2">
+                <a href="{% url 'supervisor_user_edit' user.id %}"
+                   class="inline-flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">
+                  <span class="material-symbols-outlined text-[18px]">edit</span>
+                  Edit
+                </a>
+                <button onclick="openDeleteModal('{{ user.id }}','{{ user.full_name|escapejs }}')"
+                        class="inline-flex items-center justify-center gap-2 px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 text-sm font-medium">
+                  <span class="material-symbols-outlined text-[18px]">delete</span>
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="px-6 py-8 text-center">
+              <span class="material-symbols-outlined text-gray-300 text-4xl mb-2">inbox</span>
+              <p class="text-sm text-gray-500">No users found</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeDeleteModal()"></div>
+
+  <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <form method="post" id="deleteForm">{% csrf_token %}
+      <div class="px-6 py-4 border-b"><h5 class="font-semibold text-lg">Delete User</h5></div>
+
+      <div class="px-6 py-4">
+        Are you sure you want to delete <strong id="deleteUserName"></strong>?
+      </div>
+
+      <div class="px-6 py-4 bg-gray-50 flex gap-3 rounded-b-xl">
+        <button type="button" onclick="closeDeleteModal()" class="flex-1 border rounded-lg px-4 py-2">Cancel</button>
+        <button type="submit" class="flex-1 bg-red-600 text-white rounded-lg px-4 py-2">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById("searchInput").addEventListener("input", e => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll(".user-row").forEach(row => {
+    const name = row.getAttribute("data-name");
+    const email = row.getAttribute("data-email");
+    const matches = name.includes(q) || email.includes(q);
+    row.parentElement.classList.toggle("hidden", !matches);
+  });
+});
+
+document.getElementById("roleFilter").addEventListener("change", e => {
+  const roleId = e.target.value;
+  document.querySelectorAll(".user-row").forEach(row => {
+    const userRole = row.getAttribute("data-role");
+    const matches = !roleId || userRole === roleId;
+    row.parentElement.classList.toggle("hidden", !matches);
+  });
+});
+
+function openDeleteModal(id, name) {
+  document.getElementById("deleteUserName").textContent = name;
+  document.getElementById("deleteForm").action = `/supervisor/users/${id}/delete/`;
+  document.getElementById("deleteModal").classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeDeleteModal() {
+  document.getElementById("deleteModal").classList.add("hidden");
+  document.body.style.overflow = "";
+}
+</script>
+
+{% endblock %}
