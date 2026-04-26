@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Ping heartbeat endpoint
         run: |
-          curl -X GET https://clas-bqai.onrender.com/heartbeat/ \
+          curl -X GET https://test-clas.wazireducationsociety.org/heartbeat/ \
             -H "User-Agent: GitHub-Actions-Heartbeat" \
             -w "\nStatus: %{http_code}\n" \
             -v
