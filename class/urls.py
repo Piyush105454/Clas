@@ -5,7 +5,7 @@ from .views_auth import (
 )
 from .pwa_views import (
     # PWA views
-    offline, service_worker, manifest,
+    offline, service_worker, manifest, offline_sync, resource_prioritization,
 )
 from .supervisor_views import (
     # Admin-accessible wrappers for supervisor views
@@ -237,6 +237,8 @@ urlpatterns = [
     # Manifest is now served as static file (static/manifest.json) via Nginx
     path("service-worker.js", service_worker, name="service_worker"),
     path("manifest.json", manifest, name="manifest"),
+    path("offline-sync.js", offline_sync, name="offline_sync"),
+    path("resource-prioritization.js", resource_prioritization, name="resource_prioritization"),
     path("offline/", offline, name="offline"),
 
     # ======================

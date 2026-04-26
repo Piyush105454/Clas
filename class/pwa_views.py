@@ -78,6 +78,34 @@ def manifest(request):
 
 
 @require_http_methods(["GET"])
+@csrf_exempt
+@pwa_exempt
+def offline_sync(request):
+    """Serve offline sync script with proper headers."""
+    path = os.path.join(settings.BASE_DIR, 'static', 'offline-sync.js')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return HttpResponse(content, content_type='application/javascript; charset=utf-8')
+    except FileNotFoundError:
+        return HttpResponse('Script not found', status=404)
+
+
+@require_http_methods(["GET"])
+@csrf_exempt
+@pwa_exempt
+def resource_prioritization(request):
+    """Serve resource prioritization script with proper headers."""
+    path = os.path.join(settings.BASE_DIR, 'static', 'resource-prioritization.js')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return HttpResponse(content, content_type='application/javascript; charset=utf-8')
+    except FileNotFoundError:
+        return HttpResponse('Script not found', status=404)
+
+
+@require_http_methods(["GET"])
 def offline(request):
     """
     Serve offline fallback page when user navigates to uncached routes while offline.

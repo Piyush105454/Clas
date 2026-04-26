@@ -119,8 +119,9 @@ class Enrollment(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        if not self.school and self.class_section:
-            self.school = self.class_section.school
+        if not hasattr(self, 'school_id') or self.school_id is None:
+            if self.class_section_id:
+                self.school = self.class_section.school
         super().save(*args, **kwargs)
 
     def __str__(self):
