@@ -211,12 +211,12 @@ class PWAScriptsIntegrationTestCase(TestCase):
     
     def test_offline_sync_script_exists(self):
         """Test that offline sync script is accessible."""
-        response = self.client.get('/static/offline-sync.js')
+        response = self.client.get('/offline-sync.js')
         self.assertEqual(response.status_code, 200)
     
     def test_offline_sync_script_has_sync_manager(self):
         """Test that offline sync script has SyncManager class."""
-        response = self.client.get('/static/offline-sync.js')
+        response = self.client.get('/offline-sync.js')
         content = response.content.decode()
         
         self.assertIn('OfflineSyncManager', content)
@@ -225,12 +225,12 @@ class PWAScriptsIntegrationTestCase(TestCase):
     
     def test_resource_prioritization_script_exists(self):
         """Test that resource prioritization script is accessible."""
-        response = self.client.get('/static/resource-prioritization.js')
+        response = self.client.get('/resource-prioritization.js')
         self.assertEqual(response.status_code, 200)
     
     def test_resource_prioritization_script_has_prioritizer(self):
         """Test that resource prioritization script has Prioritizer class."""
-        response = self.client.get('/static/resource-prioritization.js')
+        response = self.client.get('/resource-prioritization.js')
         content = response.content.decode()
         
         self.assertIn('ResourcePrioritizer', content)
