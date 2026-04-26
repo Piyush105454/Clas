@@ -32,6 +32,7 @@ def reverse_remove_indexes(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('class', '0041_update_plannedsession_constraints'),

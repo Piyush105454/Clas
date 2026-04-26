@@ -44,6 +44,7 @@ def reverse_safe_add_indexes(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('class', '0028_grouped_session_support'),
