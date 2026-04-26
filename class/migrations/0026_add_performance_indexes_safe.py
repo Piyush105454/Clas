@@ -52,6 +52,7 @@ def reverse_safe_add_indexes(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('class', '0026c_add_facilitator_attendance'),
