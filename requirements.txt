@@ -1,0 +1,63 @@
+# Core Django
+Django>=5.1,<5.2
+
+# PostgreSQL database adapter
+psycopg2-binary>=2.9.9
+
+# Image processing (for ImageField, uploads, etc.)
+Pillow>=10.3.0
+
+# Static files handling (important for production like Vercel, Heroku)
+whitenoise>=6.7.0
+
+# Production WSGI server
+gunicorn>=22.0.0
+
+# Environment variable management
+python-dotenv>=1.0.1
+
+# Optional but recommended for advanced security / auth
+django-environ>=0.10.0
+
+# Optional: Django extensions for dev & debug
+django-extensions>=3.4.0
+
+# Optional: CORS handling for APIs
+django-cors-headers>=4.0.0
+
+# Optional: Widget Tweaks for form rendering
+django-widget-tweaks>=1.4.12
+
+# openpyxl for Excel file handling
+openpyxl>=3.1.2
+
+# tailwindcss ,tailwind loading for django 
+django-tailwind>=3.6.2
+django-browser-reload>=1.2.4
+
+# Testing libraries
+pytest>=7.4.0
+pytest-django>=4.5.2
+hypothesis>=6.82.0
+
+# Performance monitoring and optimization
+psutil>=5.9.0  # System and process monitoring
+django-debug-toolbar>=4.2.0  # Debug toolbar for development
+django-silk>=5.0.4  # Request profiling
+redis>=4.6.0  # Redis for caching (optional)
+django-redis>=5.3.0  # Django Redis cache backend
+django-cachalot>=2.6.1  # ORM query caching
+django-compressor>=4.4  # Static file compression
+
+# CSS and frontend optimization
+django-pipeline>=3.0.0  # Asset pipeline for CSS/JS optimization
+django-htmlmin>=0.11.0  # HTML minification
+beautifulsoup4>=4.12.0  # HTML parsing for optimization
+
+# Reports and PDF generation
+reportlab>=4.0.0
+pandas>=2.0.0
+
+# Machine Learning
+scikit-learn>=1.3.0
+nltk>=3.8.0

@@ -59,6 +59,7 @@ diag_dups.py
 
 # Debug output files
 *.txt
+!requirements.txt
 chachi_*.txt
 reproduction_*.txt
 deep_debug_*.txt
