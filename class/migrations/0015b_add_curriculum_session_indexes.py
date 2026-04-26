@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('class', '0001_initial'),  # Replace with your actual last migration
+        ('class', '0015_add_curriculum_session_models'),
     ]
 
     operations = [
