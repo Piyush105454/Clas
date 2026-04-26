@@ -10,40 +10,4 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveIndex(
-            model_name='actualsession',
-            name='class_actua_planned_f63c56_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='actualsession',
-            name='class_actua_date_057acb_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='actualsession',
-            name='class_actua_facilit_6e7ef2_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='calendardate',
-            name='class_calen_calenda_626d2f_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='calendardate',
-            name='class_calen_date_ty_1cd455_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='calendardate',
-            name='class_calen_calenda_ee83b5_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='plannedsession',
-            name='class_plann_grouped_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='studentperformance',
-            name='class_studen_student_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='studentperformance',
-            name='class_studen_class_s_idx',
-        ),
     ]
