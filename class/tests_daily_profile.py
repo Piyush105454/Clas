@@ -43,7 +43,8 @@ class DailyProfileServiceTests(TestCase):
         # Create school
         self.school = School.objects.create(
             name='Test School',
-            location='Test Location',
+            udise='UDISE001',
+            district='Test District',
             state='Test State'
         )
         
@@ -216,7 +217,8 @@ class DailyProfileViewTests(TestCase):
         # Create school
         self.school = School.objects.create(
             name='Test School',
-            location='Test Location',
+            udise='UDISE001',
+            district='Test District',
             state='Test State'
         )
         

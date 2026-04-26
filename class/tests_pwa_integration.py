@@ -61,6 +61,7 @@ class PWATemplateIntegrationTestCase(TestCase):
         if response.status_code == 200:
             content = response.content.decode()
             self.assertIn('theme-color', content)
+            self.assertIn('mobile-web-app-capable', content)
             self.assertIn('apple-mobile-web-app-capable', content)
     
     def test_admin_template_has_service_worker_registration(self):
@@ -167,12 +168,12 @@ class PWAServiceWorkerIntegrationTestCase(TestCase):
     
     def test_service_worker_file_exists(self):
         """Test that Service Worker file is accessible."""
-        response = self.client.get('/static/service-worker.js')
+        response = self.client.get('/service-worker.js')
         self.assertEqual(response.status_code, 200)
     
     def test_service_worker_has_install_event(self):
         """Test that Service Worker has install event."""
-        response = self.client.get('/static/service-worker.js')
+        response = self.client.get('/service-worker.js')
         content = response.content.decode()
         
         self.assertIn('install', content)
@@ -180,21 +181,21 @@ class PWAServiceWorkerIntegrationTestCase(TestCase):
     
     def test_service_worker_has_activate_event(self):
         """Test that Service Worker has activate event."""
-        response = self.client.get('/static/service-worker.js')
+        response = self.client.get('/service-worker.js')
         content = response.content.decode()
         
         self.assertIn('activate', content)
     
     def test_service_worker_has_fetch_event(self):
         """Test that Service Worker has fetch event."""
-        response = self.client.get('/static/service-worker.js')
+        response = self.client.get('/service-worker.js')
         content = response.content.decode()
         
         self.assertIn('fetch', content)
     
     def test_service_worker_has_cache_names(self):
         """Test that Service Worker defines cache names."""
-        response = self.client.get('/static/service-worker.js')
+        response = self.client.get('/service-worker.js')
         content = response.content.decode()
         
         self.assertIn('CACHE_NAMES', content)
