@@ -7,6 +7,7 @@ def remove_duplicate_indexes(apps, schema_editor):
     """Safely remove all duplicate indexes that already exist in database"""
     duplicate_indexes = [
         'enroll_stud_active_idx',
+        'enroll_active_sch_idx',
         'attend_stud_date_idx',
         'attend_cls_date_idx',
         'attend_sch_date_idx',
@@ -15,6 +16,17 @@ def remove_duplicate_indexes(apps, schema_editor):
         'asess_date_stat_idx',
         'asess_facil_date_idx',
         'asess_stat_date_idx',
+        'caldate_cal_date_idx',
+        'caldate_type_date_idx',
+        'caldate_sch_date_idx',
+        'perf_stud_subj_idx',
+        'perf_cls_subj_idx',
+        'facsch_active_sch_idx',
+        'facsch_facil_active_idx',
+        'suslog_sess_facil_idx',
+        'suslog_facil_ts_idx',
+        'culog_curr_facil_idx',
+        'culog_facil_ts_idx',
     ]
     
     with schema_editor.connection.cursor() as cursor:
