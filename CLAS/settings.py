@@ -149,10 +149,10 @@ DATABASES = {
     'default': env.db('DATABASE_URL', default='DATABASE_URL_REMOVED')
 }
 
-# Ensure OPTIONS are handled for Neon
+# Ensure OPTIONS are handled for Neon/CI
 if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     DATABASES['default']['OPTIONS'] = {
-        'sslmode': 'require',
+        'sslmode': env('DB_SSLMODE', default='require'),
         'connect_timeout': 10,
         'options': '-c statement_timeout=60000'
     }

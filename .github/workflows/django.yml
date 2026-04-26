@@ -33,6 +33,7 @@ jobs:
 
     env:
       DATABASE_URL: postgres://postgres:password@localhost:5432/clas_db
+      DB_SSLMODE: disable
       SECRET_KEY: ci-secret-key-for-testing
       DEBUG: True
       ALLOWED_HOSTS: '*'
