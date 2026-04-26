@@ -110,8 +110,14 @@ class DailyProfileServiceTests(TestCase):
     
     def _get_or_create_role(self, role_name):
         """Helper to get or create a role"""
-        from django.contrib.auth.models import Group
-        role, _ = Group.objects.get_or_create(name=role_name)
+        from .models import Role
+        role_map = {
+            'ADMIN': 0,
+            'SUPERVISOR': 1,
+            'FACILITATOR': 2
+        }
+        role_id = role_map.get(role_name.upper(), 1)
+        role, _ = Role.objects.get_or_create(id=role_id, defaults={"name": role_name})
         return role
     
     def test_get_daily_profile_returns_all_data(self):
@@ -223,8 +229,14 @@ class DailyProfileViewTests(TestCase):
     
     def _get_or_create_role(self, role_name):
         """Helper to get or create a role"""
-        from django.contrib.auth.models import Group
-        role, _ = Group.objects.get_or_create(name=role_name)
+        from .models import Role
+        role_map = {
+            'ADMIN': 0,
+            'SUPERVISOR': 1,
+            'FACILITATOR': 2
+        }
+        role_id = role_map.get(role_name.upper(), 1)
+        role, _ = Role.objects.get_or_create(id=role_id, defaults={"name": role_name})
         return role
     
     def test_daily_profile_page_loads(self):
@@ -275,7 +287,8 @@ class DailyProfileViewTests(TestCase):
         user = User.objects.create_user(
             email='user@test.com',
             password='testpass123',
-            full_name='Test User'
+            full_name='Test User',
+            role=self._get_or_create_role('FACILITATOR')
         )
         
         self.client.login(email='user@test.com', password='testpass123')

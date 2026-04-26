@@ -20,6 +20,9 @@ import json
     CACHES={
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        },
+        'sessions': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         }
     }
 )

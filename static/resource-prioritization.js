@@ -5,6 +5,7 @@
 
 class ResourcePrioritizer {
   constructor() {
+    this.criticalAssets = ['/', '/offline/', '/static/css/main.css'];
     this.init();
   }
 

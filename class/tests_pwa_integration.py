@@ -13,6 +13,7 @@ Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
+from .models import Role
 import json
 
 User = get_user_model()
@@ -23,6 +24,9 @@ User = get_user_model()
     CACHES={
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        },
+        'sessions': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         }
     }
 )
@@ -32,10 +36,11 @@ class PWATemplateIntegrationTestCase(TestCase):
     def setUp(self):
         self.client = Client()
         # Create a test user
+        admin_role, _ = Role.objects.get_or_create(id=0, defaults={'name': 'Admin'})
         self.user = User.objects.create_user(
             email='test@example.com',
             password='testpass123',
-            role='admin'
+            role=admin_role
         )
     
     def test_admin_template_has_manifest_link(self):
