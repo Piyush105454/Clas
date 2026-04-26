@@ -42,22 +42,6 @@ class Migration(migrations.Migration):
             name='actualsession',
             options={'verbose_name': 'Actual Session'},
         ),
-        migrations.RemoveIndex(
-            model_name='actualsession',
-            name='asess_sess_stat_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='actualsession',
-            name='asess_date_stat_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='actualsession',
-            name='asess_facil_date_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='actualsession',
-            name='asess_stat_date_idx',
-        ),
         migrations.DeleteModel(
             name='SessionTemplate',
         ),
