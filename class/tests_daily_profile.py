@@ -64,6 +64,7 @@ class DailyProfileServiceTests(TestCase):
         
         # Create students
         self.students = []
+        self.enrollments = []
         for i in range(5):
             student = Student.objects.create(
                 full_name=f'Student {i}',
@@ -72,11 +73,13 @@ class DailyProfileServiceTests(TestCase):
             self.students.append(student)
             
             # Enroll student
-            Enrollment.objects.create(
+            enrollment = Enrollment.objects.create(
                 student=student,
                 class_section=self.class_section,
+                start_date=timezone.now().date(),
                 is_active=True
             )
+            self.enrollments.append(enrollment)
         
         # Create planned session
         self.planned_session = PlannedSession.objects.create(
@@ -90,23 +93,23 @@ class DailyProfileServiceTests(TestCase):
         self.actual_session = ActualSession.objects.create(
             planned_session=self.planned_session,
             facilitator=self.facilitator,
-            session_date=self.today,
-            status='completed'
+            date=self.today,
+            status=1 # Conducted
         )
         
         # Create attendance records
-        for i, student in enumerate(self.students[:3]):  # 3 present, 2 absent
+        for i, enrollment in enumerate(self.enrollments[:3]):  # 3 present, 2 absent
             Attendance.objects.create(
                 actual_session=self.actual_session,
-                student=student,
-                status='present'
+                enrollment=enrollment,
+                status=1 # Present
             )
         
-        for student in self.students[3:]:  # 2 absent
+        for enrollment in self.enrollments[3:]:  # 2 absent
             Attendance.objects.create(
                 actual_session=self.actual_session,
-                student=student,
-                status='absent'
+                enrollment=enrollment,
+                status=2 # Absent
             )
     
     def _get_or_create_role(self, role_name):
