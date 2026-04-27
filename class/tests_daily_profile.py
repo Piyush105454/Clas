@@ -81,6 +81,9 @@ class DailyProfileServiceTests(TestCase):
             )
             self.enrollments.append(enrollment)
         
+        # Clear auto-generated sessions from signal to avoid unique constraint violation
+        PlannedSession.objects.filter(class_section=self.class_section).delete()
+        
         # Create planned session
         self.planned_session = PlannedSession.objects.create(
             class_section=self.class_section,
