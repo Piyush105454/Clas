@@ -19,6 +19,8 @@ class PWAAuthBypassMiddleware(MiddlewareMixin):
         '/service-worker.js',
         '/manifest.json',
         '/offline/',
+        '/offline-sync.js',
+        '/resource-prioritization.js',
         '/static/manifest.json',
         '/static/icons/',
     ]

@@ -114,6 +114,8 @@ class URLAccessControlMiddleware(MiddlewareMixin):
         '/offline/', 
         '/manifest.json', 
         '/service-worker.js',
+        '/offline-sync.js',
+        '/resource-prioritization.js',
         '/heartbeat/',
         '/no_permission/',  # Error page must be accessible by all roles
     ]
