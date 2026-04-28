@@ -64,28 +64,33 @@ class DailyProfileService:
             'planned_session__class_section__school'
         ).order_by('date')
         
-        session_list = []
+        # Group sessions by grouped_session_id to combine attendance correctly
+        grouped_sessions_map = {}
+        single_sessions = []
+        
         for session in sessions:
-            # Count DISTINCT students to avoid duplicates (Fixes 244% attendance math error)
-            attendance_count = session.attendances.filter(status=1).values('student_id').distinct().count()
-            
-            # Smart Enrollment Detection:
-            # If session is grouped (shared across classes), count unique students from ALL sections.
             pinned_planned = session.planned_session
             if pinned_planned and pinned_planned.grouped_session_id:
-                # Grouped Session: Count students in all classes sharing this grouped_session_id
-                enrolled_count = Enrollment.objects.filter(
-                    class_section__planned_sessions__grouped_session_id=pinned_planned.grouped_session_id,
-                    is_active=True
-                ).values('student').distinct().count()
+                group_id = pinned_planned.grouped_session_id
+                if group_id not in grouped_sessions_map:
+                    grouped_sessions_map[group_id] = []
+                grouped_sessions_map[group_id].append(session)
             else:
-                # Single Session: Count students in the specific class section
-                enrolled_count = Enrollment.objects.filter(
-                    class_section=pinned_planned.class_section,
-                    is_active=True
-                ).count() if pinned_planned else 0
+                single_sessions.append(session)
+                
+        session_list = []
+        
+        # Handle single sessions
+        for session in single_sessions:
+            pinned_planned = session.planned_session
             
-            # Math safety: Ensure present <= enrolled and rates are capped at 100%
+            attendance_count = session.attendances.filter(status=1).values('student_id').distinct().count()
+            
+            enrolled_count = Enrollment.objects.filter(
+                class_section=pinned_planned.class_section,
+                is_active=True
+            ).count() if pinned_planned else 0
+            
             if attendance_count > enrolled_count:
                 enrolled_count = attendance_count
                 
@@ -104,6 +109,69 @@ class DailyProfileService:
                 'attendance_rate': attendance_rate,
                 'school': pinned_planned.class_section.school.name if pinned_planned else "N/A",
             })
+            
+        # Handle grouped sessions
+        for group_id, group_sessions in grouped_sessions_map.items():
+            rep_session = group_sessions[0]
+            rep_planned = rep_session.planned_session
+            
+            # Combine classes for display (e.g. "1 - A, 2 - A, 3 - A")
+            classes = [f"{s.planned_session.class_section.class_level} - {s.planned_session.class_section.section}" for s in group_sessions if s.planned_session]
+            class_section_str = ", ".join(sorted(set(classes)))
+            
+            # Get distinct student_ids across all sessions in this group
+            student_ids = set()
+            for s in group_sessions:
+                s_ids = s.attendances.filter(status=1).values_list('student_id', flat=True)
+                student_ids.update(s_ids)
+            attendance_count = len(student_ids)
+            
+            enrolled_count = Enrollment.objects.filter(
+                class_section__planned_sessions__grouped_session_id=group_id,
+                is_active=True
+            ).values('student').distinct().count()
+            
+            if attendance_count > enrolled_count:
+                enrolled_count = attendance_count
+                
+            attendance_rate = 0
+            if enrolled_count > 0:
+                attendance_rate = round((attendance_count / enrolled_count) * 100)
+                attendance_rate = min(100, attendance_rate)
+                
+            # Generate individual class breakdown
+            class_breakdown = []
+            for s in group_sessions:
+                if not s.planned_session:
+                    continue
+                s_class_name = f"{s.planned_session.class_section.class_level} - {s.planned_session.class_section.section}"
+                s_present = s.attendances.filter(status=1).values('student_id').distinct().count()
+                s_enrolled = Enrollment.objects.filter(class_section=s.planned_session.class_section, is_active=True).count()
+                if s_present > s_enrolled:
+                    s_enrolled = s_present
+                s_absent = max(0, s_enrolled - s_present)
+                class_breakdown.append({
+                    'class_name': s_class_name,
+                    'present': s_present,
+                    'absent': s_absent,
+                    'enrolled': s_enrolled
+                })
+            class_breakdown.sort(key=lambda x: x['class_name'])
+                
+            session_list.append({
+                'id': str(rep_session.id),
+                'name': rep_planned.title or f"Session {rep_planned.day_number}" if rep_planned else "Grouped Session",
+                'class_section': class_section_str,
+                'status': rep_session.status or 'completed',
+                'students_present': attendance_count,
+                'students_enrolled': enrolled_count,
+                'attendance_rate': attendance_rate,
+                'school': rep_planned.class_section.school.name if rep_planned else "N/A",
+                'class_breakdown': class_breakdown,
+            })
+            
+        # Sort so it's consistent
+        session_list.sort(key=lambda x: x['class_section'])
         
         return session_list
     

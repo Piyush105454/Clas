@@ -1117,17 +1117,22 @@ def today_session(request, class_section_id):
         })
 
     # Redirect to primary if grouped via persistent ID
-    if planned_session.grouped_session_id:
+    if planned_session.grouped_session_id and not request.GET.get('redirected'):
         has_session_today = ActualSession.objects.filter(planned_session=planned_session, date=today).exists()
         if has_session_today:
+            # Consistently order by class_section_id to avoid alternating primaries
             primary = PlannedSession.objects.filter(
                 grouped_session_id=planned_session.grouped_session_id,
                 day_number=planned_session.day_number
-            ).select_related('class_section').order_by('id').first()
+            ).select_related('class_section').order_by('class_section_id').first()
             if primary and primary.class_section.id != class_section.id:
                 from django.urls import reverse
                 url = reverse('facilitator_class_today_session', kwargs={'class_section_id': primary.class_section.id})
-                query = request.GET.urlencode()
+                
+                # Preserve existing query parameters and add redirected=true
+                query_dict = request.GET.copy()
+                query_dict['redirected'] = 'true'
+                query = query_dict.urlencode()
                 if query:
                     url += f"?{query}"
                 return redirect(url)
