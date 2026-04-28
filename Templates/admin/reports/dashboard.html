@@ -1076,48 +1076,20 @@
         // Load initial data immediately - no delay
         loadTabData('students');
 
-        // Setup date range toggle
-        document.querySelector('select[name="date_range"]').addEventListener('change', function () {
-            const customRange = document.getElementById('customDateRange');
-            if (this.value === 'custom') {
-                customRange.classList.remove('hidden');
-            } else {
-                customRange.classList.add('hidden');
-            }
-        });
-
-        // Setup school change to load classes with debouncing - reduced debounce time
-        let schoolChangeTimeout;
-        document.querySelector('select[name="school_id"]').addEventListener('change', function () {
-            const schoolId = this.value;
-            const classSelect = document.querySelector('select[name="class_id"]');
-
-            clearTimeout(schoolChangeTimeout);
-            schoolChangeTimeout = setTimeout(() => {
-                if (schoolId) {
-                    classSelect.innerHTML = '<option value="">Loading classes...</option>';
-                    classSelect.disabled = true;
-
-                    fetch(`/admin/reports/classes/${schoolId}/`)
-                        .then(response => response.json())
-                        .then(classes => {
-                            classSelect.innerHTML = '<option value="">All Classes</option>';
-                            classes.forEach(cls => {
-                                classSelect.innerHTML += `<option value="${cls.id}">${cls.name}</option>`;
-                            });
-                            classSelect.disabled = false;
-                        })
-                        .catch(error => {
-                            console.error('Error loading classes:', error);
-                            classSelect.innerHTML = '<option value="">Error loading classes</option>';
-                            classSelect.disabled = false;
-                        });
-                } else {
-                    classSelect.innerHTML = '<option value="">All Classes</option>';
-                    classSelect.disabled = false;
+        // Setup date range toggle with null check
+        const dateRangeSelect = document.querySelector('select[name="date_range"]');
+        if (dateRangeSelect) {
+            dateRangeSelect.addEventListener('change', function () {
+                const customRange = document.getElementById('customDateRange');
+                if (customRange) {
+                    if (this.value === 'custom') {
+                        customRange.classList.remove('hidden');
+                    } else {
+                        customRange.classList.add('hidden');
+                    }
                 }
-            }, 200); // Reduced debounce to 200ms
-        });
+            });
+        }
     });
 </script>
 {% endblock %}

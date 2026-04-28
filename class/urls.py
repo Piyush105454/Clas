@@ -24,7 +24,7 @@ from .views import (
     # Admin – users & setup
     users_view, add_user, edit_user, delete_user, create_user_ajax,
     schools, add_school, edit_school, delete_school, school_detail,
-    class_sections_list, class_section_add, edit_class_section, class_section_delete, admin_bulk_add_classes, admin_bulk_create_classes,
+    class_sections_list, class_section_add, edit_class_section, class_section_delete,
     assign_facilitator, admin_sessions_filter,
 )
 from .reports_views import (
@@ -138,11 +138,6 @@ from .views import (
     planned_session_edit,
     planned_session_delete,
     planned_session_import,
-    initialize_class_sessions,
-    delete_all_class_sessions,
-    bulk_delete_sessions,
-    bulk_initialize_school_sessions,
-    bulk_delete_school_sessions,
     api_class_sessions_lazy,
     download_sample_csv,
     toggle_facilitator_assignment,
@@ -359,8 +354,8 @@ urlpatterns = [
     # Classes (ADMIN)
     # ======================
     path("admin/classes/", class_sections_list, name="class_sections_list"),
-    path("admin/classes/bulk-add/", admin_bulk_add_classes, name="admin_bulk_add_classes"),
-    path("admin/classes/bulk-create/", admin_bulk_create_classes, name="admin_bulk_create_classes"),
+    path("admin/classes/bulk-add/", supervisor_bulk_add_classes, name="admin_bulk_add_classes"),
+    path("admin/classes/bulk-create/", supervisor_class_bulk_create, name="admin_bulk_create_classes"),
     path(
         "admin/schools/<uuid:school_id>/classes/",
         class_sections_list,
@@ -563,35 +558,10 @@ path(
     planned_session_import,
     name="planned_session_import"
 ),
-    path(
-        "admin/schools/<uuid:school_id>/bulk-delete-sessions/",
-        bulk_delete_school_sessions,
-        name="bulk_delete_school_sessions"
-    ),
-    path(
-        "admin/class/<uuid:class_section_id>/sessions/initialize/",
-        initialize_class_sessions,
-        name="initialize_class_sessions"
-    ),
-path(
-    "admin/classes/<uuid:class_section_id>/sessions/delete-all/",
-    delete_all_class_sessions,
-    name="delete_all_class_sessions"
-),
-path(
-    "admin/schools/<uuid:school_id>/bulk-initialize-sessions/",
-    bulk_initialize_school_sessions,
-    name="bulk_initialize_school_sessions"
-),
 path(
     "api/classes/<uuid:class_section_id>/sessions/",
     api_class_sessions_lazy,
     name="api_class_sessions_lazy"
-),
-path(
-    "admin/classes/<uuid:class_section_id>/planned-sessions/bulk-delete/",
-    bulk_delete_sessions,
-    name="bulk_delete_sessions"
 ),
     path(
         "admin/download-sample-csv/",
@@ -719,10 +689,6 @@ path(
     path("admin/curriculum-sessions/<uuid:session_id>/delete/", admin_curriculum_session_delete, name="admin_curriculum_session_delete"),
     path("admin/curriculum-sessions/<uuid:session_id>/preview/", admin_curriculum_session_preview, name="admin_curriculum_session_preview"),
     
-    # ======================
-    # Class Session Initialization
-    # ======================
-    path("admin/initialize-class-sessions-global/", initialize_class_sessions, name="initialize_class_sessions_global"),
     
     # ======================
     # Facilitator Student Management (New)
