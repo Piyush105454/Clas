@@ -1187,37 +1187,15 @@ def today_session(request, class_section_id):
         session_type = "single"
         combined_class_name = class_section.display_name
         
-    # [FIX] Automatically create ActualSession if it doesn't exist for TODAY
-    # This ensures Step 3 & 4 work immediately without needing a manual "Start Session" click.
-    # We do this for both single and grouped sessions.
+    # [FIX] Do NOT automatically create ActualSession on page view.
+    # We only fetch it if it exists. If it doesn't, the page stays "Virtual"
+    # until the teacher marks a step or starts attendance.
     if not actual_session or actual_session.date != today:
-        try:
-            from .session_management import SessionStatusManager
-            # Start the current class session
-            actual_session = SessionStatusManager.conduct_session(
-                planned_session=planned_session,
-                facilitator=request.user,
-                remarks=f"Automatic session start ({session_type} session)"
-            )
-            
-            # If it's a grouped session (ACTIVE today), also auto-start for all other classes in the group
-            if is_grouped and planned_session.grouped_session_id:
-                other_grouped_planned = PlannedSession.objects.filter(
-                    grouped_session_id=planned_session.grouped_session_id,
-                    day_number=planned_session.day_number,
-                    class_section__in=grouped_classes
-                ).exclude(id=planned_session.id)
-                
-                for other_ps in other_grouped_planned:
-                    SessionStatusManager.conduct_session(
-                        planned_session=other_ps,
-                        facilitator=request.user,
-                        remarks=f"Automatic grouped session start - initiated by {class_section.display_name} (Daily Active Sync)"
-                    )
-            
-            logger.info(f"Automatically created ActualSession(s) for {session_type} session starting with class {class_section.id}")
-        except Exception as e:
-            logger.error(f"Failed to auto-create ActualSession(s): {e}")
+        actual_session = ActualSession.objects.filter(
+            planned_session=planned_session,
+            date=today,
+            facilitator=request.user
+        ).first()
 
     if request.GET.get('mode') == 'attendance' and actual_session:
         return redirect('mark_attendance', actual_session_id=actual_session.id)
@@ -4733,13 +4711,13 @@ def api_dashboard_recent_sessions(request):
             'planned_session',
             'facilitator', 
             'planned_session__class_section__school'
-        ).order_by('-created_at')[:limit]
+        ).order_by('-date', '-created_at')[:limit]
         
         sessions_data = []
         for session in recent_sessions:
             sessions_data.append({
                 'id': str(session.id),
-                'topic': session.planned_session.topic if session.planned_session else 'N/A',
+                'topic': session.planned_session.title if session.planned_session else 'N/A',
                 'class_section': str(session.planned_session.class_section) if session.planned_session else 'N/A',
                 'school': session.planned_session.class_section.school.name if session.planned_session and session.planned_session.class_section else 'N/A',
                 'facilitator': session.facilitator.full_name if session.facilitator else 'N/A',
@@ -4755,8 +4733,8 @@ def api_dashboard_recent_sessions(request):
             'last_updated': timezone.now().isoformat()
         }
         
-        # Cache for 2 minutes
-        cache.set(cache_key, response_data, 120)
+        # Cache for 30 seconds only (more live)
+        cache.set(cache_key, response_data, 30)
         
         response = JsonResponse(response_data)
         response['Cache-Control'] = 'max-age=120'
@@ -6026,21 +6004,26 @@ def save_teacher_feedback(request):
         
         actual_session = get_object_or_404(ActualSession, id=actual_session_id)
         
-        # ✅ BACKEND PREREQUISITE CHECK: Steps 1-5 must be completed
+        # ✅ BACKEND PREREQUISITE CHECK: Steps 1-4 must be completed
         from .models import SessionStepStatus
+        from .session_management import get_grouped_classes_for_session
         from django.utils import timezone
         
         # Session date should be the date of the actual session
         session_date = actual_session.date
         planned_session = actual_session.planned_session
         
-        # Check if all steps 1-4 are completed in the database (Step 5 is now optional/later)
+        # [FIX] GROUP-AWARE STEP CHECK:
+        # For grouped sessions, check if steps were completed by ANY member of the group
+        group_members = get_grouped_classes_for_session(planned_session, session_date)
+        
         completed_step_numbers = SessionStepStatus.objects.filter(
-            planned_session=planned_session,
+            planned_session__class_section__in=group_members,
+            planned_session__day_number=planned_session.day_number,
             session_date=session_date,
             step_number__in=[1, 2, 3, 4],
             is_completed=True
-        ).values_list('step_number', flat=True)
+        ).values_list('step_number', flat=True).distinct()
         
         missing_steps = [s for s in [1, 2, 3, 4] if s not in completed_step_numbers]
         

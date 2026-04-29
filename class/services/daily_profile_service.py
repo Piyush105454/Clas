@@ -54,121 +54,143 @@ class DailyProfileService:
         }
     
     def _get_sessions(self) -> List[Dict[str, Any]]:
-        """Get all sessions for the selected date"""
+        """Get all sessions for the selected date - PURE ACTIVE GROUPING"""
+        from ..session_management import get_grouped_classes_for_session
+        
+        # [FIX] STRICT SCHOOL FILTERING
+        # Only show sessions for schools the facilitator is actually assigned to
+        from ..models import FacilitatorSchool, SessionStatus, Attendance, SessionStepStatus
+        from django.db.models import Exists, OuterRef
+        
+        assigned_school_ids = FacilitatorSchool.objects.filter(
+            facilitator=self.facilitator,
+            is_active=True
+        ).values_list('school_id', flat=True)
+        
+        # Fast subqueries using Exists
+        has_attendance = Attendance.objects.filter(actual_session_id=OuterRef('id'))
+        has_steps = SessionStepStatus.objects.filter(
+            planned_session_id=OuterRef('planned_session_id'),
+            session_date=OuterRef('date')
+        )
+        
         sessions = ActualSession.objects.filter(
             facilitator=self.facilitator,
-            date=self.selected_date
+            date=self.selected_date,
+            planned_session__class_section__school_id__in=assigned_school_ids
+        ).filter(
+            Q(status__in=[SessionStatus.CONDUCTED, SessionStatus.CANCELLED, SessionStatus.HOLIDAY]) |
+            Exists(has_attendance) |
+            Exists(has_steps)
         ).select_related(
             'planned_session',
             'planned_session__class_section',
             'planned_session__class_section__school'
-        ).order_by('date')
+        ).distinct()
         
-        # Group sessions by grouped_session_id to combine attendance correctly
-        grouped_sessions_map = {}
-        single_sessions = []
-        
-        for session in sessions:
-            pinned_planned = session.planned_session
-            if pinned_planned and pinned_planned.grouped_session_id:
-                group_id = pinned_planned.grouped_session_id
-                if group_id not in grouped_sessions_map:
-                    grouped_sessions_map[group_id] = []
-                grouped_sessions_map[group_id].append(session)
-            else:
-                single_sessions.append(session)
-                
+        processed_session_ids = set()
         session_list = []
         
-        # Handle single sessions
-        for session in single_sessions:
+        # Sort sessions by day_number to find a consistent "representative" for a group
+        sorted_sessions = list(sessions)
+        
+        for session in sorted_sessions:
+            if session.id in processed_session_ids:
+                continue
+                
             pinned_planned = session.planned_session
-            
-            attendance_count = session.attendances.filter(status=1).values('student_id').distinct().count()
-            
-            enrolled_count = Enrollment.objects.filter(
-                class_section=pinned_planned.class_section,
-                is_active=True
-            ).count() if pinned_planned else 0
-            
-            if attendance_count > enrolled_count:
-                enrolled_count = attendance_count
+            if not pinned_planned:
+                continue
                 
-            attendance_rate = 0
-            if enrolled_count > 0:
-                attendance_rate = round((attendance_count / enrolled_count) * 100)
-                attendance_rate = min(100, attendance_rate)
+            # Determine if this session is part of an ACTIVE group today
+            group_members = get_grouped_classes_for_session(pinned_planned, self.selected_date)
+            is_actively_grouped = len(group_members) > 1
             
-            session_list.append({
-                'id': str(session.id),
-                'name': pinned_planned.title or f"Session {pinned_planned.day_number}" if pinned_planned else "General Session",
-                'class_section': f"{pinned_planned.class_section.class_level} - {pinned_planned.class_section.section}" if pinned_planned else "N/A",
-                'status': session.status or 'completed',
-                'students_present': attendance_count,
-                'students_enrolled': enrolled_count,
-                'attendance_rate': attendance_rate,
-                'school': pinned_planned.class_section.school.name if pinned_planned else "N/A",
-            })
-            
-        # Handle grouped sessions
-        for group_id, group_sessions in grouped_sessions_map.items():
-            rep_session = group_sessions[0]
-            rep_planned = rep_session.planned_session
-            
-            # Combine classes for display (e.g. "1 - A, 2 - A, 3 - A")
-            classes = [f"{s.planned_session.class_section.class_level} - {s.planned_session.class_section.section}" for s in group_sessions if s.planned_session]
-            class_section_str = ", ".join(sorted(set(classes)))
-            
-            # Get distinct student_ids across all sessions in this group
-            student_ids = set()
-            for s in group_sessions:
-                s_ids = s.attendances.filter(status=1).values_list('student_id', flat=True)
-                student_ids.update(s_ids)
-            attendance_count = len(student_ids)
-            
-            enrolled_count = Enrollment.objects.filter(
-                class_section__planned_sessions__grouped_session_id=group_id,
-                is_active=True
-            ).values('student').distinct().count()
-            
-            if attendance_count > enrolled_count:
-                enrolled_count = attendance_count
+            if is_actively_grouped:
+                # Group sessions by active members (ignore historical grouped_session_id)
+                # We find all sessions today that belong to the active group members
+                group_sessions = [s for s in sorted_sessions if 
+                                 s.planned_session.class_section in group_members]
                 
-            attendance_rate = 0
-            if enrolled_count > 0:
-                attendance_rate = round((attendance_count / enrolled_count) * 100)
-                attendance_rate = min(100, attendance_rate)
+                # Combine classes for display
+                classes = [f"{s.planned_session.class_section.class_level} - {s.planned_session.class_section.section}" for s in group_sessions]
+                class_section_str = ", ".join(sorted(set(classes)))
                 
-            # Generate individual class breakdown
-            class_breakdown = []
-            for s in group_sessions:
-                if not s.planned_session:
-                    continue
-                s_class_name = f"{s.planned_session.class_section.class_level} - {s.planned_session.class_section.section}"
-                s_present = s.attendances.filter(status=1).values('student_id').distinct().count()
-                s_enrolled = Enrollment.objects.filter(class_section=s.planned_session.class_section, is_active=True).count()
-                if s_present > s_enrolled:
-                    s_enrolled = s_present
-                s_absent = max(0, s_enrolled - s_present)
-                class_breakdown.append({
-                    'class_name': s_class_name,
-                    'present': s_present,
-                    'absent': s_absent,
-                    'enrolled': s_enrolled
+                # Use the session with the highest day_number or specific title for the group name
+                day_numbers = sorted(list(set([s.planned_session.day_number for s in group_sessions if s.planned_session])))
+                if len(day_numbers) == 1:
+                    group_name = pinned_planned.title or f"Day {day_numbers[0]}"
+                else:
+                    group_name = f"Mixed Session (Days {', '.join(map(str, day_numbers))})"
+                
+                # Get distinct student_ids across all sessions in this active group
+                student_ids = set()
+                for s in group_sessions:
+                    # Try cached student_id first for performance, fallback to enrollment
+                    s_ids = s.attendances.filter(status=1).values_list('student_id', flat=True)
+                    if not s_ids:
+                        s_ids = s.attendances.filter(status=1).values_list('enrollment__student_id', flat=True)
+                    student_ids.update(s_ids)
+                attendance_count = len(student_ids)
+                
+                # Enrolled count for active group members
+                enrolled_count = Enrollment.objects.filter(
+                    class_section__in=group_members,
+                    is_active=True
+                ).values('student_id').distinct().count()
+                
+                # Individual class breakdown
+                class_breakdown = []
+                for s in group_sessions:
+                    s_class_name = f"{s.planned_session.class_section.class_level} - {s.planned_session.class_section.section}"
+                    s_present = s.attendances.filter(status=1).values('student_id').distinct().count()
+                    if s_present == 0:
+                        s_present = s.attendances.filter(status=1).values('enrollment__student_id').distinct().count()
+                    
+                    s_enrolled = Enrollment.objects.filter(class_section=s.planned_session.class_section, is_active=True).count()
+                    class_breakdown.append({
+                        'class_name': s_class_name,
+                        'present': s_present,
+                        'enrolled': max(s_present, s_enrolled)
+                    })
+                
+                session_list.append({
+                    'id': str(session.id),
+                    'name': group_name,
+                    'class_section': class_section_str,
+                    'status': session.status or 'completed',
+                    'students_present': attendance_count,
+                    'students_enrolled': max(attendance_count, enrolled_count),
+                    'attendance_rate': round((attendance_count / max(1, enrolled_count)) * 100) if enrolled_count > 0 else 0,
+                    'school': pinned_planned.class_section.school.name,
+                    'class_breakdown': class_breakdown,
                 })
-            class_breakdown.sort(key=lambda x: x['class_name'])
                 
-            session_list.append({
-                'id': str(rep_session.id),
-                'name': rep_planned.title or f"Session {rep_planned.day_number}" if rep_planned else "Grouped Session",
-                'class_section': class_section_str,
-                'status': rep_session.status or 'completed',
-                'students_present': attendance_count,
-                'students_enrolled': enrolled_count,
-                'attendance_rate': attendance_rate,
-                'school': rep_planned.class_section.school.name if rep_planned else "N/A",
-                'class_breakdown': class_breakdown,
-            })
+                # Mark all group sessions as processed
+                for gs in group_sessions:
+                    processed_session_ids.add(gs.id)
+            else:
+                # Single session
+                attendance_count = session.attendances.filter(status=1).values('student_id').distinct().count()
+                if attendance_count == 0:
+                     attendance_count = session.attendances.filter(status=1).values('enrollment__student_id').distinct().count()
+                
+                enrolled_count = Enrollment.objects.filter(
+                    class_section=pinned_planned.class_section,
+                    is_active=True
+                ).count()
+                
+                session_list.append({
+                    'id': str(session.id),
+                    'name': pinned_planned.title or f"Day {pinned_planned.day_number}",
+                    'class_section': f"{pinned_planned.class_section.class_level} - {pinned_planned.class_section.section}",
+                    'status': session.status or 'completed',
+                    'students_present': attendance_count,
+                    'students_enrolled': max(attendance_count, enrolled_count),
+                    'attendance_rate': round((attendance_count / max(1, enrolled_count)) * 100) if enrolled_count > 0 else 0,
+                    'school': pinned_planned.class_section.school.name,
+                })
+                processed_session_ids.add(session.id)
             
         # Sort so it's consistent
         session_list.sort(key=lambda x: x['class_section'])
@@ -274,9 +296,13 @@ class DailyProfileService:
         all_feedback = []
         
         # 1. Facilitator Feedback (SessionFeedback)
+        # Use timezone-aware date range for filtering to avoid warnings
+        start_of_day = timezone.make_aware(datetime.combine(self.selected_date, datetime.min.time()))
+        end_of_day = timezone.make_aware(datetime.combine(self.selected_date, datetime.max.time()))
+        
         facilitator_feedback = SessionFeedback.objects.filter(
             actual_session__facilitator=self.facilitator,
-            feedback_date__date=self.selected_date
+            feedback_date__range=(start_of_day, end_of_day)
         ).select_related(
             'actual_session',
             'actual_session__planned_session',
@@ -302,9 +328,10 @@ class DailyProfileService:
             })
         
         # 2. Student Feedback
+        # Use timezone-aware date range for submitted_at
         student_feedback = StudentFeedback.objects.filter(
             actual_session_id__in=sessions,
-            submitted_at__date=self.selected_date
+            submitted_at__range=(start_of_day, end_of_day)
         ).select_related(
             'actual_session',
             'actual_session__planned_session',

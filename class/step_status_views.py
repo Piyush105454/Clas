@@ -78,6 +78,43 @@ def save_step_status(request):
                 }
             )
             
+            # [FIX] AUTO-START ACTUAL SESSION ON ACTION
+            # If a step is completed today, ensure the ActualSession exists
+            if is_completed and str(session_date) == str(timezone.now().date()):
+                from .session_management import SessionStatusManager, get_grouped_classes_for_session
+                from .models import ActualSession
+                
+                # Check if session already exists
+                actual_exists = ActualSession.objects.filter(
+                    planned_session=planned_session,
+                    date=session_date,
+                    facilitator=request.user
+                ).exists()
+                
+                if not actual_exists:
+                    # Start it!
+                    actual_session = SessionStatusManager.conduct_session(
+                        planned_session=planned_session,
+                        facilitator=request.user,
+                        remarks=f"Session started by marking Step {step_number} complete"
+                    )
+                    
+                    # Handle grouping - if this class is in an active group today, start them all
+                    group_members = get_grouped_classes_for_session(planned_session, session_date)
+                    if len(group_members) > 1 and planned_session.grouped_session_id:
+                        other_grouped_planned = PlannedSession.objects.filter(
+                            grouped_session_id=planned_session.grouped_session_id,
+                            day_number=planned_session.day_number,
+                            class_section__in=group_members
+                        ).exclude(id=planned_session.id)
+                        
+                        for other_ps in other_grouped_planned:
+                            SessionStatusManager.conduct_session(
+                                planned_session=other_ps,
+                                facilitator=request.user,
+                                remarks=f"Grouped session started by {planned_session.class_section.display_name} action"
+                            )
+            
             # [GROUP SYNC] If this class is part of a group today, sync status to others
             from .session_management import get_grouped_classes_for_session
             from .models import ActualSession
