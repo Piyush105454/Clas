@@ -496,7 +496,25 @@ def get_sessions_report_data(filters, date_filter, offset=0, limit=20):
         class_ids = filters.get('class_id')
         if class_ids:
             queryset = queryset.filter(planned_session__class_section_id__in=class_ids)
+
+        # [FIX] GHOST FILTER: Exclude "Pending" sessions that have zero activity
+        from .models import SessionStatus, Attendance, SessionStepStatus
+        from django.db.models import Exists, OuterRef
         
+        # Fast subqueries using Exists
+        has_attendance = Attendance.objects.filter(actual_session_id=OuterRef('id'))
+        has_steps = SessionStepStatus.objects.filter(
+            planned_session_id=OuterRef('planned_session_id'),
+            session_date=OuterRef('date')
+        )
+        
+        # Only show Pending sessions if they have attendance or steps recorded
+        queryset = queryset.filter(
+            Q(status__in=[SessionStatus.CONDUCTED, SessionStatus.CANCELLED, SessionStatus.HOLIDAY]) |
+            Exists(has_attendance) |
+            Exists(has_steps)
+        ).distinct()
+
         sessions = queryset.order_by('-date')[offset : offset + limit]
         
         sessions_data = []
