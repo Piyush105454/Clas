@@ -655,22 +655,25 @@ class SessionStatusManager:
                 actual_session.save()
 
                 # 2. Handle Grouped Sessions (Sync status across the group)
+                # CRITICAL: Only sync if they share a valid, non-None grouped_session_id
                 planned_session = actual_session.planned_session
                 today = actual_session.date
                 group_members = get_grouped_classes_for_session(planned_session, today)
                 
-                # If grouped, find other actual sessions for the SAME DATE and GROUP
                 if len(group_members) > 1 and planned_session.grouped_session_id:
                     other_actuals = ActualSession.objects.filter(
                         date=today,
-                        planned_session__grouped_session_id=planned_session.grouped_session_id
+                        planned_session__grouped_session_id=planned_session.grouped_session_id,
+                        planned_session__day_number=planned_session.day_number,
+                        planned_session__class_section__in=group_members
                     ).exclude(id=actual_session.id)
                     
-                    other_actuals.update(
+                    updated_count = other_actuals.update(
                         status=SessionStatus.CONDUCTED,
                         status_changed_by=facilitator,
-                        status_change_reason='Teacher feedback submitted (Group Sync)'
+                        status_change_reason=f'Teacher feedback submitted (Group Sync - Day {planned_session.day_number})'
                     )
+                    logger.info(f"Synced CONDUCTED status to {updated_count} other sessions in group")
 
                 # 3. Update Progress Tracker & Invalidate Cache for ALL members
                 for cls in group_members:

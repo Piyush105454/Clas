@@ -14,7 +14,7 @@ from .models import (
     ClassSection, PlannedSession, SessionBulkTemplate, 
     Attendance, StudentQuiz, StudentAttendanceSummary, AttendanceStatus,
     FacilitatorAttendanceSummary, FacilitatorSchool, ActualSession, SessionStatus,
-    FeedbackAnalytics
+    FeedbackAnalytics, Enrollment
 )
 from .session_management import SessionBulkManager
 
@@ -110,42 +110,72 @@ def trigger_growth_analysis_on_quiz(sender, instance, created, **kwargs):
 
 def recount_student_attendance(enrollment):
     """Recalculate complete summary for a student (Safe but slower)"""
-    # Safety check: If enrollment is being deleted, don't recount
-    if not enrollment or not Enrollment.objects.filter(id=enrollment.id).exists():
+    # Use the bulk version for better performance
+    bulk_recount_attendance([enrollment.id if hasattr(enrollment, 'id') else enrollment])
+
+def bulk_recount_attendance(enrollment_ids):
+    """
+    High-performance bulk recount for multiple enrollments.
+    Uses aggregate queries to update StudentAttendanceSummary in bulk.
+    """
+    if not enrollment_ids:
         return
 
     try:
-        from django.db.models import Count
+        from django.db.models import Count, Q
+        from django.utils import timezone
         
-        # We only update if the summary already exists OR if we are not in a deletion
-        summary = StudentAttendanceSummary.objects.filter(enrollment=enrollment).first()
-        
-        if not summary:
-            # If it doesn't exist, only create it if the enrollment still exists
-            if not Enrollment.objects.filter(id=enrollment.id).exists():
-                return
-            summary = StudentAttendanceSummary(enrollment=enrollment)
-        
-        stats = Attendance.objects.filter(enrollment=enrollment).values('status').annotate(
-            count=Count('id')
+        # 1. Get all stats in one query
+        stats_list = Attendance.objects.filter(
+            enrollment_id__in=enrollment_ids
+        ).values('enrollment_id').annotate(
+            present=Count('id', filter=Q(status=AttendanceStatus.PRESENT)),
+            absent=Count('id', filter=Q(status=AttendanceStatus.ABSENT)),
+            leave=Count('id', filter=Q(status=AttendanceStatus.LEAVE))
         )
         
-        # Reset
-        summary.present_count = 0
-        summary.absent_count = 0
-        summary.leave_count = 0
+        stats_map = {s['enrollment_id']: s for s in stats_list}
+        now = timezone.now()
         
-        for s in stats:
-            if s['status'] == AttendanceStatus.PRESENT:
-                summary.present_count = s['count']
-            elif s['status'] == AttendanceStatus.ABSENT:
-                summary.absent_count = s['count']
-            elif s['status'] == AttendanceStatus.LEAVE:
-                summary.leave_count = s['count']
+        # 2. Update or create summaries
+        summaries_to_update = []
+        summaries_to_create = []
         
-        summary.save()
+        existing_summaries = {
+            s.enrollment_id: s 
+            for s in StudentAttendanceSummary.objects.filter(enrollment_id__in=enrollment_ids)
+        }
+        
+        for eid in enrollment_ids:
+            stats = stats_map.get(eid, {'present': 0, 'absent': 0, 'leave': 0})
+            
+            if eid in existing_summaries:
+                summary = existing_summaries[eid]
+                summary.present_count = stats['present']
+                summary.absent_count = stats['absent']
+                summary.leave_count = stats['leave']
+                summary.last_marked_at = now
+                summaries_to_update.append(summary)
+            else:
+                summaries_to_create.append(StudentAttendanceSummary(
+                    enrollment_id=eid,
+                    present_count=stats['present'],
+                    absent_count=stats['absent'],
+                    leave_count=stats['leave'],
+                    last_marked_at=now
+                ))
+        
+        # 3. Execute DB changes
+        if summaries_to_create:
+            StudentAttendanceSummary.objects.bulk_create(summaries_to_create)
+        if summaries_to_update:
+            StudentAttendanceSummary.objects.bulk_update(
+                summaries_to_update, 
+                fields=['present_count', 'absent_count', 'leave_count', 'last_marked_at']
+            )
+            
     except Exception as e:
-        logger.error(f"Error recounting student attendance: {e}")
+        logger.error(f"Error in bulk_recount_attendance: {e}")
 
 
 @receiver(post_save, sender=Attendance)
