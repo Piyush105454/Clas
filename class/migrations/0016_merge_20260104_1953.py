@@ -6,7 +6,6 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('class', '0015b_add_curriculum_session_indexes'),
         ('class', '0015_add_curriculum_session_models'),
     ]
 

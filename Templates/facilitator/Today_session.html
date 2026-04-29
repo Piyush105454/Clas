@@ -2,7 +2,105 @@
 {% load static %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/today_session.css' %}?v=3.6">
+<link rel="stylesheet" href="{% static 'css/today_session.css' %}?v=4.0">
+<style>
+  /* MISSION CRITICAL CSS - Inlined to prevent production breakage */
+  .step-flow-container {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    padding: 10px 5px !important;
+    -webkit-overflow-scrolling: touch !important;
+    background: #f8f9fa !important;
+    border-radius: 10px !important;
+    margin-bottom: 15px !important;
+    border: 1px solid #e9ecef !important;
+  }
+  
+  .step-item {
+    flex-shrink: 0 !important;
+    min-width: 70px !important;
+  }
+  
+  .step-btn {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    padding: 8px 4px !important;
+    border: 2px solid #dee2e6 !important;
+    background: white !important;
+    border-radius: 12px !important;
+    position: relative !important;
+    transition: all 0.2s ease !important;
+    min-height: 55px !important;
+  }
+
+  .step-number {
+    font-size: 1rem !important;
+    font-weight: 800 !important;
+    color: #495057 !important;
+  }
+
+  .step-label {
+    font-size: 0.6rem !important;
+    text-transform: uppercase !important;
+    font-weight: 700 !important;
+    color: #6c757d !important;
+    margin-top: 2px !important;
+  }
+
+  .step-check {
+    position: absolute !important;
+    top: -8px !important;
+    right: -8px !important;
+    background: #198754 !important;
+    color: white !important;
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 50% !important;
+    display: none; /* Controlled by JS/Class */
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.8rem !important;
+    border: 2px solid white !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    z-index: 5 !important;
+  }
+
+  .step-btn.completed-step {
+    background: #e8f5e9 !important;
+    border-color: #198754 !important;
+  }
+  
+  .step-btn.completed-step .step-number {
+    color: #198754 !important;
+  }
+
+  .step-btn.current-step {
+    background: #fff3e0 !important;
+    border-color: #ff9800 !important;
+    box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.2) !important;
+  }
+
+  .step-arrow {
+    color: #adb5bd !important;
+    font-weight: bold !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Hide scrollbar for cleaner look */
+  .step-flow-container::-webkit-scrollbar {
+    display: none;
+  }
+  .step-flow-container {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -499,7 +597,8 @@
             async function determineCompletedStepsFromDatabase() {
               // ALWAYS start with backend-detected steps (Step 3, 4, etc.)
               let completedSteps = determineCompletedStepsFromBackend();
-              const today = new Date().toISOString().split('T')[0];
+              // Use server-provided date for consistency (local date, not UTC)
+              const sessionDate = '{{ actual_session.date|date:"Y-m-d"|default:"" }}' || '{{ today_date|date:"Y-m-d" }}';
               const plannedSessionId = '{{ planned_session.id|default:"" }}';
 
               console.log('🔍 determineCompletedStepsFromDatabase - starting with backend steps:', completedSteps);
@@ -511,7 +610,8 @@
 
               try {
                 // Load all persistent step statuses from database
-                const stepsFromServer = await stepStatusAPI.getStepStatuses(plannedSessionId, today);
+                // Load all persistent step statuses from database using consistent date
+                const stepsFromServer = await stepStatusAPI.getStepStatuses(plannedSessionId, sessionDate);
                 
                 if (stepsFromServer) {
                   // Check each step 1-7
@@ -537,10 +637,10 @@
             // Determine which steps are completed based on backend data (FALLBACK)
             function determineCompletedStepsFromBackend() {
               const completedSteps = [];
-              const today = new Date().toISOString().split('T')[0];
-              const classId = '{{ class_section.id }}'; // Get current class ID
+              const sessionDate = '{{ actual_session.date|date:"Y-m-d"|default:"" }}' || '{{ today_date|date:"Y-m-d" }}';
+              const classId = '{{ class_section.id }}'; 
 
-              console.log('🔍 determineCompletedStepsFromBackend - classId:', classId, 'today:', today);
+              console.log('🔍 determineCompletedStepsFromBackend - classId:', classId, 'sessionDate:', sessionDate);
 
               // Find the parent container with session/class/date identifiers
               // This ensures we're reading data for the CURRENT class/day, not old data
@@ -556,14 +656,14 @@
                 // Still check localStorage as fallback
                 const step2_date = localStorage.getItem(`step2_completed_date_${classId}`);
                 const step2_completed = localStorage.getItem(`step2_completed_${classId}`);
-                if (step2_date === today && step2_completed === 'true') {
+                if (step2_date === sessionDate && step2_completed === 'true') {
                   completedSteps.push(2);
                   console.log('✅ Step 2 (Preparation) - from localStorage');
                 }
 
                 const step5_date = localStorage.getItem(`step5_completed_date_${classId}`);
                 const step5_completed = localStorage.getItem(`step5_completed_${classId}`);
-                if (step5_date === today && step5_completed === 'true') {
+                if (step5_date === sessionDate && step5_completed === 'true') {
                   completedSteps.push(5);
                   console.log('✅ Step 5 (Upload) - from localStorage');
                 }
@@ -571,73 +671,64 @@
                 return completedSteps;
               }
 
-              console.log('✅ Data container found - reading backend state');
-
-              // Step 1: Lesson Plan - check if lesson plan was uploaded
-              const lessonPlanUploaded = dataContainer.querySelector('[data-lesson-plan-uploaded]');
-              if (lessonPlanUploaded && lessonPlanUploaded.getAttribute('data-lesson-plan-uploaded') === 'true') {
+              console.log('✅ Data container found - reading backend state from attributes');
+ 
+              // Step 1: Lesson Plan
+              if (dataContainer.getAttribute('data-lesson-plan-uploaded') === 'true') {
                 completedSteps.push(1);
                 console.log('✅ Step 1 (Lesson Plan) - uploaded');
               }
-
-              // Step 2: Preparation - check if preparation checklist was saved (from backend)
-              const preparationSaved = dataContainer.querySelector('[data-preparation-saved]');
-              if (preparationSaved && preparationSaved.getAttribute('data-preparation-saved') === 'true') {
+ 
+              // Step 2: Preparation
+              if (dataContainer.getAttribute('data-preparation-saved') === 'true') {
                 completedSteps.push(2);
-                console.log('✅ Step 2 (Preparation) - saved (from backend)');
+                console.log('✅ Step 2 (Preparation) - saved');
               } else {
-                // Check localStorage for same-day persistence (class-specific) - only if backend doesn't have it
                 const step2_date = localStorage.getItem(`step2_completed_date_${classId}`);
                 const step2_completed = localStorage.getItem(`step2_completed_${classId}`);
-                if (step2_date === today && step2_completed === 'true') {
+                if (step2_date === sessionDate && step2_completed === 'true') {
                   completedSteps.push(2);
-                  console.log('✅ Step 2 (Preparation) - from localStorage (same-day persistence)');
+                  console.log('✅ Step 2 (Preparation) - from localStorage');
                 }
               }
-
-              // Step 3: Conduct - check if actual session exists TODAY
-              const conductSaved = dataContainer.querySelector('[data-conduct-saved]');
-              if (conductSaved && conductSaved.getAttribute('data-conduct-saved') === 'true') {
+ 
+              // Step 3: Conduct
+              if (dataContainer.getAttribute('data-conduct-saved') === 'true') {
                 completedSteps.push(3);
-                console.log('✅ Step 3 (Conduct) - session created today');
+                console.log('✅ Step 3 (Conduct) - conducted');
               }
-
-              // Step 4: Attendance - check if attendance was marked
-              const attendanceMarked = dataContainer.querySelector('[data-attendance-marked]');
-              if (attendanceMarked && attendanceMarked.getAttribute('data-attendance-marked') === 'true') {
+ 
+              // Step 4: Attendance
+              if (dataContainer.getAttribute('data-attendance-marked') === 'true') {
                 completedSteps.push(4);
                 console.log('✅ Step 4 (Attendance) - marked');
               }
-
-              // Step 5: Upload - check if facilitator task was completed (from backend)
-              const taskCompleted = dataContainer.querySelector('[data-task-completed]');
-              if (taskCompleted && taskCompleted.getAttribute('data-task-completed') === 'true') {
+ 
+              // Step 5: Upload
+              if (dataContainer.getAttribute('data-task-completed') === 'true') {
                 completedSteps.push(5);
-                console.log('✅ Step 5 (Upload) - completed (from backend)');
+                console.log('✅ Step 5 (Upload) - task completed');
               } else {
-                // Check localStorage for same-day persistence (class-specific) - only if backend doesn't have it
                 const step5_date = localStorage.getItem(`step5_completed_date_${classId}`);
                 const step5_completed = localStorage.getItem(`step5_completed_${classId}`);
-                if (step5_date === today && step5_completed === 'true') {
+                if (step5_date === sessionDate && step5_completed === 'true') {
                   completedSteps.push(5);
-                  console.log('✅ Step 5 (Upload) - from localStorage (same-day persistence)');
+                  console.log('✅ Step 5 (Upload) - from localStorage');
                 }
               }
-
-              // Step 6: Feedback - check if feedback was saved
-              const feedbackSaved = dataContainer.querySelector('[data-feedback-saved]');
-              if (feedbackSaved && feedbackSaved.getAttribute('data-feedback-saved') === 'true') {
+ 
+              // Step 6: Feedback
+              if (dataContainer.getAttribute('data-feedback-saved') === 'true') {
                 completedSteps.push(6);
-                console.log('✅ Step 6 (Feedback) - saved');
+                console.log('✅ Step 6 (Feedback) - feedback saved');
               }
-
-              // Step 7: Reward - check if reward was given
-              const rewardGiven = dataContainer.querySelector('[data-reward-given]');
-              if (rewardGiven && rewardGiven.getAttribute('data-reward-given') === 'true') {
+ 
+              // Step 7: Reward
+              if (dataContainer.getAttribute('data-reward-given') === 'true') {
                 completedSteps.push(7);
-                console.log('✅ Step 7 (Reward) - given');
+                console.log('✅ Step 7 (Reward) - reward given');
               }
-
+ 
               // Save to localStorage for fallback
               localStorage.setItem('completedSteps', JSON.stringify(completedSteps));
 
@@ -942,7 +1033,7 @@
                 selector: `.step-btn[data-step="${step}"]`,
                 currentClasses: stepBtn ? stepBtn.className : 'N/A',
                 plannedSessionId: plannedSessionId,
-                sessionDate: today
+                sessionDate: sessionDate
               });
 
               if (stepBtn) {
@@ -2729,56 +2820,24 @@
 <!-- These are used by JavaScript to determine which steps are completed -->
 <!-- IMPORTANT: These are class-specific and day-specific to prevent stale data -->
 <!-- MOVED OUTSIDE OF HIDDEN DIV TO ENSURE IT'S ALWAYS ACCESSIBLE -->
-<div style="display: none;" data-session-id="{{ actual_session.id|default:'none' }}"
-  data-class-id="{{ class_section.id|default:'none' }}" data-date="{{ today|date:'Y-m-d' }}">
-  <!-- Step 1: Lesson Plan - check if any lesson plan was uploaded today -->
-  {% if lesson_plan_uploads %}
-  <div data-lesson-plan-uploaded="true"></div>
-  {% else %}
-  <div data-lesson-plan-uploaded="false"></div>
-  {% endif %}
+<div style="display: none;" id="sessionGroundTruth"
+  data-session-id="{{ actual_session.id|default:'none' }}"
+  data-planned-session-id="{{ planned_session.id|default:'' }}"
+  data-class-id="{{ class_section.id|default:'none' }}"
+  data-date="{{ actual_session.date|date:'Y-m-d'|default:today_date|date:'Y-m-d' }}"
+  data-lesson-plan-uploaded="{% if lesson_plan_uploads %}true{% else %}false{% endif %}"
+  data-preparation-saved="{% if preparation_checklist %}true{% else %}false{% endif %}"
+  data-conduct-saved="{% if actual_session and actual_session.is_conduct_completed %}true{% else %}false{% endif %}"
+  data-attendance-marked="{% if attendance_marked %}true{% else %}false{% endif %}"
+  data-task-completed="{% if facilitator_task_completed %}true{% else %}false{% endif %}"
+  data-feedback-saved="{% if session_feedback %}true{% else %}false{% endif %}"
+  data-reward-given="{% if reward_given or session_rewards %}true{% else %}false{% endif %}">
 
-  <!-- Step 2: Preparation - check if preparation checklist was saved TODAY -->
-  {% if preparation_checklist and is_today %}
-  <div data-preparation-saved="true"></div>
-  {% else %}
-  <div data-preparation-saved="false"></div>
-  {% endif %}
 
-  <!-- Step 3: Conduct - Completed if session exists today (auto-started or manual) -->
-  {% if actual_session and is_today %}
-  <div data-conduct-saved="true"></div>
-  {% else %}
-  <div data-conduct-saved="false"></div>
-  {% endif %}
 
-  <!-- Step 4: Attendance - check if attendance was marked -->
-  {% if attendance_marked %}
-  <div data-attendance-marked="true"></div>
-  {% else %}
-  <div data-attendance-marked="false"></div>
-  {% endif %}
 
-  <!-- Step 5: Upload/Task - check if facilitator task was completed -->
-  {% if facilitator_task_completed %}
-  <div data-task-completed="true"></div>
-  {% else %}
-  <div data-task-completed="false"></div>
-  {% endif %}
 
-  <!-- Step 6: Feedback - check if feedback was saved -->
-  {% if session_feedback %}
-  <div data-feedback-saved="true"></div>
-  {% else %}
-  <div data-feedback-saved="false"></div>
-  {% endif %}
 
-  <!-- Step 7: Reward - check if reward was given -->
-  {% if reward_given %}
-  <div data-reward-given="true"></div>
-  {% else %}
-  <div data-reward-given="false"></div>
-  {% endif %}
 </div>
 
 <!-- CANCEL SESSION MODAL -->

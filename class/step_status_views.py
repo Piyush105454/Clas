@@ -64,7 +64,7 @@ def save_step_status(request):
                 'error': f'Planned session {planned_session_id} not found'
             }, status=404)
         
-        # Create or update the step status
+        # Create or update the step status for the primary session
         with transaction.atomic():
             step_status, created = SessionStepStatus.objects.update_or_create(
                 planned_session=planned_session,
@@ -77,11 +77,37 @@ def save_step_status(request):
                     'completed_at': timezone.now() if is_completed else None,
                 }
             )
-        
-        logger.info(
-            f"Step {step_number} status saved for session {planned_session_id} on {session_date} "
-            f"(completed={is_completed}) by {request.user.email}"
-        )
+            
+            # [GROUP SYNC] If this class is part of a group today, sync status to others
+            from .session_management import get_grouped_classes_for_session
+            from .models import ActualSession
+            
+            # Find any actual session for this planned session today to get the group context
+            # (Step status is logically tied to a specific day of execution)
+            group_members = get_grouped_classes_for_session(planned_session, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
+            
+            if len(group_members) > 1 and planned_session.grouped_session_id:
+                # Sync to other classes in the group that share the same grouped_session_id
+                # This ensures we don't bleed into unrelated single classes (where ID is None)
+                other_planned_sessions = PlannedSession.objects.filter(
+                    grouped_session_id=planned_session.grouped_session_id,
+                    day_number=planned_session.day_number,
+                    class_section__in=group_members
+                ).exclude(id=planned_session.id)
+                
+                for other_ps in other_planned_sessions:
+                    SessionStepStatus.objects.update_or_create(
+                        planned_session=other_ps,
+                        session_date=session_date,
+                        step_number=step_number,
+                        defaults={
+                            'is_completed': is_completed,
+                            'step_content': step_content,
+                            'facilitator': request.user,
+                            'completed_at': step_status.completed_at,
+                        }
+                    )
+                logger.info(f"Step {step_number} synced to {other_planned_sessions.count()} other sessions in group")
         
         return JsonResponse({
             'success': True,
@@ -240,9 +266,26 @@ def clear_step_status(request):
                     step_number=step_number,
                 )
                 step_status.mark_incomplete()
+                
+                # [GROUP SYNC] Clear for other group members
+                from .session_management import get_grouped_classes_for_session
+                group_members = get_grouped_classes_for_session(planned_session, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
+                
+                if len(group_members) > 1 and planned_session.grouped_session_id:
+                    other_planned_sessions = PlannedSession.objects.filter(
+                        grouped_session_id=planned_session.grouped_session_id,
+                        day_number=planned_session.day_number
+                    ).exclude(id=planned_session.id)
+                    
+                    SessionStepStatus.objects.filter(
+                        planned_session__in=other_planned_sessions,
+                        session_date=session_date,
+                        step_number=step_number
+                    ).update(is_completed=False, completed_at=None)
+                
                 logger.info(
                     f"Cleared step {step_number} for session {planned_session_id} on {session_date} "
-                    f"by {request.user.email}"
+                    f"by {request.user.email} (Group synced)"
                 )
             else:
                 # Clear all steps
@@ -250,9 +293,25 @@ def clear_step_status(request):
                     planned_session=planned_session,
                     session_date=session_date,
                 ).update(is_completed=False, completed_at=None)
+                
+                # [GROUP SYNC] Clear all for other group members
+                from .session_management import get_grouped_classes_for_session
+                group_members = get_grouped_classes_for_session(planned_session, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
+                
+                if len(group_members) > 1 and planned_session.grouped_session_id:
+                    other_planned_sessions = PlannedSession.objects.filter(
+                        grouped_session_id=planned_session.grouped_session_id,
+                        day_number=planned_session.day_number
+                    ).exclude(id=planned_session.id)
+                    
+                    SessionStepStatus.objects.filter(
+                        planned_session__in=other_planned_sessions,
+                        session_date=session_date
+                    ).update(is_completed=False, completed_at=None)
+
                 logger.info(
                     f"Cleared all steps for session {planned_session_id} on {session_date} "
-                    f"by {request.user.email}"
+                    f"by {request.user.email} (Group synced)"
                 )
         
         return JsonResponse({

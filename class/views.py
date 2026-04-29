@@ -1059,8 +1059,11 @@ def today_session(request, class_section_id):
         if calendar_entry.date_type in ['holiday', 'office_work']:
             return redirect('facilitator_today_session_calendar')
         
-        # If it's a grouped session, redirect to primary if we aren't it
-        if calendar_entry.date_type == 'session' and calendar_entry.class_sections.count() > 1:
+        # If it's a grouped session, redirect to primary ONLY IF we are a member of that group
+        is_member = (calendar_entry.class_section == class_section or 
+                     (calendar_entry.class_sections.exists() and class_section in calendar_entry.class_sections.all()))
+        
+        if calendar_entry.date_type == 'session' and is_member and calendar_entry.class_sections.count() > 1:
             primary_class = calendar_entry.class_sections.first()
             if primary_class.id != class_section.id:
                 from django.urls import reverse
@@ -1116,31 +1119,28 @@ def today_session(request, class_section_id):
             "error_message": "No sessions available. Please contact admin."
         })
 
-    # Redirect to primary if grouped via persistent ID
-    if planned_session.grouped_session_id and not request.GET.get('redirected'):
-        has_session_today = ActualSession.objects.filter(planned_session=planned_session, date=today).exists()
-        if has_session_today:
-            # Consistently order by class_section_id to avoid alternating primaries
-            primary = PlannedSession.objects.filter(
-                grouped_session_id=planned_session.grouped_session_id,
-                day_number=planned_session.day_number
-            ).select_related('class_section').order_by('class_section_id').first()
-            if primary and primary.class_section.id != class_section.id:
-                from django.urls import reverse
-                url = reverse('facilitator_class_today_session', kwargs={'class_section_id': primary.class_section.id})
-                
-                # Preserve existing query parameters and add redirected=true
-                query_dict = request.GET.copy()
-                query_dict['redirected'] = 'true'
-                query = query_dict.urlencode()
-                if query:
-                    url += f"?{query}"
-                return redirect(url)
-
-    # 3. LOG PROGRESS
-    # Grouped classes detection (uses cache internally)
+    # Step 3: Determine if we are grouped TODAY (Active grouping only)
     grouped_classes = get_grouped_classes_for_session(planned_session, today)
     is_grouped = len(grouped_classes) > 1
+
+    # Redirect to primary ONLY if grouped TODAY via active calendar/grouping
+    if is_grouped and not request.GET.get('redirected'):
+        # Consistently order by class_section_id to avoid alternating primaries
+        primary_class = sorted(grouped_classes, key=lambda c: str(c.id))[0]
+        
+        if primary_class.id != class_section.id:
+            from django.urls import reverse
+            url = reverse('facilitator_class_today_session', kwargs={'class_section_id': primary_class.id})
+            
+            # Preserve existing query parameters and add redirected=true
+            query_dict = request.GET.copy()
+            query_dict['redirected'] = 'true'
+            query = query_dict.urlencode()
+            if query:
+                url += f"?{query}"
+            return redirect(url)
+
+    # 3. LOG PROGRESS
     grouped_session_id = planned_session.grouped_session_id
 
     progress, created = ClassSessionProgress.objects.get_or_create(
@@ -1176,8 +1176,6 @@ def today_session(request, class_section_id):
     
     actual_session = planned_session.actual_sessions.order_by("-date").first()
     
-    # Grouped classes detection (uses cache internally)
-    grouped_classes = get_grouped_classes_for_session(planned_session, today)
     if len(grouped_classes) > 1:
         session_type = "grouped"
         try:
@@ -1202,18 +1200,19 @@ def today_session(request, class_section_id):
                 remarks=f"Automatic session start ({session_type} session)"
             )
             
-            # If it's a grouped session, also auto-start for all other classes in the group
-            if session_type == "grouped" and planned_session.grouped_session_id:
+            # If it's a grouped session (ACTIVE today), also auto-start for all other classes in the group
+            if is_grouped and planned_session.grouped_session_id:
                 other_grouped_planned = PlannedSession.objects.filter(
                     grouped_session_id=planned_session.grouped_session_id,
-                    day_number=planned_session.day_number
+                    day_number=planned_session.day_number,
+                    class_section__in=grouped_classes
                 ).exclude(id=planned_session.id)
                 
                 for other_ps in other_grouped_planned:
                     SessionStatusManager.conduct_session(
                         planned_session=other_ps,
                         facilitator=request.user,
-                        remarks=f"Automatic grouped session start - initiated by {class_section.display_name}"
+                        remarks=f"Automatic grouped session start - initiated by {class_section.display_name} (Daily Active Sync)"
                     )
             
             logger.info(f"Automatically created ActualSession(s) for {session_type} session starting with class {class_section.id}")
@@ -1277,49 +1276,35 @@ def today_session(request, class_section_id):
     # Get lesson plan uploads for this session
     # For grouped sessions, get uploads from ANY grouped session (they all share the same lesson plan)
     try:
-        if planned_session.grouped_session_id:
-            # Get uploads from any session in the group
-            grouped_session_ids = PlannedSession.objects.filter(
-                grouped_session_id=planned_session.grouped_session_id,
+        if is_grouped:
+            # Get uploads from any session in the active group
+            grouped_session_ids = [ps.id for ps in PlannedSession.objects.filter(
+                class_section__in=grouped_classes,
                 day_number=planned_session.day_number
-            ).values_list('id', flat=True)
+            )]
             
             # Get all uploads from TODAY ONLY and deduplicate by file name
             from datetime import timedelta, datetime
             
             today = timezone.localdate()
-            tomorrow = today + timedelta(days=1)
-            today_start = timezone.make_aware(datetime.combine(today, datetime.min.time()))
-            tomorrow_start = timezone.make_aware(datetime.combine(tomorrow, datetime.min.time()))
-            
-            all_uploads = LessonPlanUpload.objects.filter(
-                planned_session_id__in=grouped_session_ids,
-                facilitator=request.user,
-                upload_date__gte=today_start,
-                upload_date__lt=tomorrow_start
-            ).order_by('-upload_date')
-            
-            # Deduplicate: keep only the most recent upload for each unique file
-            seen_files = {}
-            lesson_plan_uploads = []
-            for upload in all_uploads:
-                if upload.file_name not in seen_files:
-                    seen_files[upload.file_name] = True
-                    lesson_plan_uploads.append(upload)
-        else:
-            # Single session - get uploads for this session only - MUST BE FROM TODAY
-            from datetime import timedelta, datetime
-            
-            today = timezone.localdate()
-            tomorrow = today + timedelta(days=1)
-            today_start = timezone.make_aware(datetime.combine(today, datetime.min.time()))
-            tomorrow_start = timezone.make_aware(datetime.combine(tomorrow, datetime.min.time()))
+        # [ACTIVE GROUPING ONLY]
+        if is_grouped and planned_session.grouped_session_id:
+            # Get uploads for the primary session of the active group for today
+            primary_session = PlannedSession.objects.filter(
+                grouped_session_id=planned_session.grouped_session_id,
+                day_number=planned_session.day_number,
+                class_section__in=grouped_classes
+            ).order_by('id').first()
             
             lesson_plan_uploads = LessonPlanUpload.objects.filter(
+                planned_session=primary_session or planned_session,
+                upload_date=today # Only show today's uploads for grouped sessions
+            ).order_by('-upload_date')
+        else:
+            # Single session - get uploads for this session only - PERMANENT (not just today)
+            lesson_plan_uploads = LessonPlanUpload.objects.filter(
                 planned_session=planned_session,
-                facilitator=request.user,
-                upload_date__gte=today_start,
-                upload_date__lt=tomorrow_start
+                facilitator=request.user
             ).order_by('-upload_date')
     except Exception as e:
         logger.error(f"Error getting lesson plan uploads: {e}")
@@ -1339,17 +1324,26 @@ def today_session(request, class_section_id):
     # Get preparation checklist for this session (ANY date, not just today)
     # This ensures data persists across page refreshes
     try:
-        preparation_checklist = SessionPreparationChecklist.objects.filter(
-            planned_session=planned_session,
-            facilitator=request.user
-        ).order_by('-preparation_start_time').first()  # Get most recent
+        # Get preparation checklist
+        # Only aggregate across multiple sessions if they are actively grouped TODAY
+        if is_grouped:
+            # Get from any session in the active group
+            grouped_session_ids = [ps.id for ps in PlannedSession.objects.filter(
+                class_section__in=grouped_classes,
+                day_number=planned_session.day_number
+            )]
+            preparation_checklist = SessionPreparationChecklist.objects.filter(
+                planned_session_id__in=grouped_session_ids
+            ).first()
+        else:
+            preparation_checklist = SessionPreparationChecklist.objects.filter(
+                planned_session=planned_session,
+                facilitator=request.user
+            ).order_by('-preparation_start_time').first()  # Get most recent
         
-        # If preparation exists and is from today, mark as saved
-        if preparation_checklist and preparation_checklist.preparation_start_time:
-            prep_date = preparation_checklist.preparation_start_time.date()
-            if prep_date != today:
-                # Preparation is from a previous day, don't show as completed
-                preparation_checklist = None
+        # If preparation exists for this planned session, it's valid regardless of date
+        # (Allows preparing the night before)
+        pass
     except Exception as e:
         logger.error(f"Error getting preparation checklist: {e}")
         preparation_checklist = None
@@ -1394,6 +1388,22 @@ def today_session(request, class_section_id):
             from django.db.models import Count, Q
             # Primary indicator is the boolean flag
             attendance_saved = actual_session.attendance_marked
+            
+            # If actively grouped TODAY, check if ANY session in the group has attendance marked
+            if is_grouped:
+                grouped_session_ids = [ps.id for ps in PlannedSession.objects.filter(
+                    class_section__in=grouped_classes,
+                    day_number=planned_session.day_number
+                )]
+                
+                if not attendance_saved:
+                    # STRICT: Only check attendance for other classes in the ACTIVE group for the SAME DAY
+                    attendance_saved = ActualSession.objects.filter(
+                        planned_session_id__in=grouped_session_ids,
+                        planned_session__day_number=planned_session.day_number, # Added strict day check
+                        date=today,
+                        attendance_marked=True
+                    ).exists()
             
             # Fetch stats for display
             stats = Attendance.objects.filter(actual_session=actual_session).aggregate(
@@ -1880,21 +1890,35 @@ def mark_attendance(request, actual_session_id):
         if enrollments_to_delete:
             Attendance.objects.filter(id__in=enrollments_to_delete).delete()
 
-        # [CRITICAL] Trigger Summary & Growth Updates (Bypass bulk signal limitation)
-        # We do this for all affected enrollments to ensure reports are accurate
-        from .signals import recount_student_attendance
-        from .services.student_growth_service import StudentGrowthAnalysisService
+        # [CRITICAL] Trigger Summary Updates (Bypass bulk signal limitation)
+        # Only trigger for students whose attendance was actually modified
+        processed_enrollment_ids = set()
+        for att in attendance_to_create:
+            processed_enrollment_ids.add(att.enrollment_id)
+        for att in attendance_to_update:
+            processed_enrollment_ids.add(att.enrollment_id)
         
-        for enrollment in enrollments:
-            try:
-                recount_student_attendance(enrollment)
-                StudentGrowthAnalysisService.update_growth_analysis(enrollment)
-            except Exception as trigger_err:
-                logger.error(f"Post-Attendance Trigger Error for {enrollment.id}: {trigger_err}")
+        # We also need to find enrollments for deleted attendance records
+        if enrollments_to_delete:
+            deleted_enrollment_ids = Attendance.objects.filter(
+                id__in=enrollments_to_delete
+            ).values_list('enrollment_id', flat=True)
+            for eid in deleted_enrollment_ids:
+                processed_enrollment_ids.add(eid)
 
-        # [SINGLE SESSION LINK] Mark only the current session as marked
-        session.attendance_marked = True
-        session.save(update_fields=['attendance_marked'])
+        from .signals import bulk_recount_attendance
+        
+        # Performance: Bulk recount all affected students in 2 queries instead of N
+        if processed_enrollment_ids:
+            try:
+                bulk_recount_attendance(list(processed_enrollment_ids))
+            except Exception as trigger_err:
+                logger.error(f"Post-Attendance Bulk Trigger Error: {trigger_err}")
+
+        # [GROUPED FIX] Mark ALL involved sessions as marked
+        for sess in involved_sessions:
+            sess.attendance_marked = True
+            sess.save(update_fields=['attendance_marked'])
 
         return saved_count, updated_count, skipped_count
 
@@ -1923,18 +1947,24 @@ def mark_attendance(request, actual_session_id):
                 "enrollments": enrollments
             })
 
-        # ✅ Bulk Attendance Fetch (CRITICAL OPTIMIZATION)
+        # ✅ [MULTI-SESSION LINK FIX]
+        # We only find ActualSessions for classes that are part of today's group.
+        # This prevents 'leaking' attendance to other single classes that happen to 
+        # have a None grouped_session_id.
+        other_sessions = ActualSession.objects.filter(
+            planned_session__class_section__in=grouped_classes,
+            date=session.date
+        ).select_related('planned_session')
+        
+        session_map = {session.planned_session.class_section_id: session}
+        for s in other_sessions:
+            session_map[s.planned_session.class_section_id] = s
+            
+        # Bulk Attendance Fetch for ALL sessions in the group
         attendance_map = {
             a.enrollment_id: a
-            for a in Attendance.objects.filter(actual_session=session)
+            for a in Attendance.objects.filter(actual_session__in=session_map.values())
         }
-
-        # ✅ [SINGLE SESSION LINK] 
-        # The user wants ALL records linked to ONE session today for this group.
-        # We map EVERY class in the group to the current 'session' object.
-        session_map = {}
-        for cls in grouped_classes:
-            session_map[cls.id] = session
 
         for enrollment in all_enrollments:
             # Important: find attendance record for the specific session this class belongs to
@@ -5137,12 +5167,17 @@ def upload_lesson_plan(request):
         from .models import LessonPlanUpload
         from django.utils import timezone
         
-        # Determine target session (primary if grouped)
+        # Determine target session (primary if ACTIVELY grouped today)
         target_session = planned_session
-        if planned_session.grouped_session_id:
+        
+        from .session_management import get_grouped_classes_for_session
+        grouped_classes = get_grouped_classes_for_session(planned_session, timezone.now().date())
+        
+        if len(grouped_classes) > 1 and planned_session.grouped_session_id:
             primary_session = PlannedSession.objects.filter(
                 grouped_session_id=planned_session.grouped_session_id,
-                day_number=planned_session.day_number
+                day_number=planned_session.day_number,
+                class_section__in=grouped_classes
             ).order_by('id').first()
             if primary_session:
                 target_session = primary_session
@@ -5735,11 +5770,16 @@ def api_session_state(request):
         ).first()
         
         # Get lesson plan uploads
-        # For grouped sessions, also check the primary session
+        # For grouped sessions, also check other sessions in the active group
         upload_sessions = [planned_session]
-        if planned_session.grouped_session_id:
+        
+        # [ACTIVE GROUPING ONLY] Check for active grouping today
+        from .session_management import get_grouped_classes_for_session
+        grouped_classes = get_grouped_classes_for_session(planned_session, timezone.now().date())
+        
+        if len(grouped_classes) > 1:
             primary_session = PlannedSession.objects.filter(
-                grouped_session_id=planned_session.grouped_session_id,
+                class_section__in=grouped_classes,
                 day_number=planned_session.day_number
             ).order_by('id').first()
             if primary_session and primary_session.id != planned_session.id:
