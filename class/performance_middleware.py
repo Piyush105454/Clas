@@ -94,8 +94,14 @@ class ResponseCompressionMiddleware(MiddlewareMixin):
         if response.get('Content-Encoding'):
             return response
         
-        # Don't compress small responses
-        if len(response.content) < 1024:
+        # Don't compress small responses or streaming responses (like FileResponse)
+        if getattr(response, 'streaming', False):
+            return response
+            
+        try:
+            if len(response.content) < 1024:
+                return response
+        except AttributeError:
             return response
         
         # Compress text-based content

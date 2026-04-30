@@ -1550,142 +1550,114 @@
                         input.click();
                       };
 
-                      input.onchange = function () {
+                      input.onchange = async function () {
                         if (!this.files[0]) return;
                         const file = this.files[0];
-                        console.log('File selected:', file.name);
+                        console.log('File selected:', file.name, 'Size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
 
                         const resultDiv = document.getElementById('uploadResult');
                         const sessionIdInput = document.querySelector('input[name="planned_session_id"]');
 
                         if (!sessionIdInput) {
-                          console.error('❌ planned_session_id input not found');
                           resultDiv.innerHTML = '<div class="alert alert-danger">Error: Session ID not found</div>';
                           return;
                         }
 
                         const sessionId = sessionIdInput.value;
-                        console.log('Session ID:', sessionId);
+                        
+                        // [OPTIMIZATION] Image Compression for Mobile Speed
+                        resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-cog fa-spin me-2"></i>Optimizing image for fast upload...</div>';
+                        
+                        try {
+                            const compressedFile = await compressImage(file);
+                            console.log('Compressed size:', (compressedFile.size / 1024 / 1024).toFixed(2), 'MB');
+                            
+                            resultDiv.innerHTML = '<div class="alert alert-primary"><i class="fas fa-cloud-upload-alt fa-spin me-2"></i>Uploading (Fast Mode)...</div>';
 
-                        if (!sessionId) {
-                          console.error('❌ Session ID is empty');
-                          resultDiv.innerHTML = '<div class="alert alert-danger">Error: Session ID is empty</div>';
-                          return;
-                        }
+                            const formData = new FormData();
+                            formData.append('lesson_plan_file', compressedFile, file.name);
+                            formData.append('planned_session_id', sessionId);
 
-                        resultDiv.innerHTML = '<div class="alert alert-info">Uploading...</div>';
+                            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-                        const formData = new FormData();
-                        formData.append('lesson_plan_file', file);
-                        formData.append('planned_session_id', sessionId);
+                            const response = await fetch('/api/upload-lesson-plan/', {
+                              method: 'POST',
+                              body: formData,
+                              headers: { 'X-CSRFToken': csrfToken }
+                            });
 
-                        const csrfTokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
-                        if (!csrfTokenInput) {
-                          console.error('❌ CSRF token not found');
-                          resultDiv.innerHTML = '<div class="alert alert-danger">Error: CSRF token not found</div>';
-                          return;
-                        }
-
-                        const csrfToken = csrfTokenInput.value;
-                        console.log('CSRF Token found:', csrfToken ? 'Yes' : 'No');
-
-                        fetch('/api/upload-lesson-plan/', {
-                          method: 'POST',
-                          body: formData,
-                          headers: { 'X-CSRFToken': csrfToken }
-                        })
-                          .then(r => {
-                            console.log('Response status:', r.status);
-                            if (!r.ok) {
-                              return r.json().then(data => {
-                                throw new Error(`HTTP ${r.status}: ${data.error || r.statusText}`);
-                              }).catch(err => {
-                                throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-                              });
-                            }
-                            return r.json();
-                          })
-                          .then(data => {
-                            console.log('Response:', data);
+                            const data = await response.json();
+                            
                             if (data.success) {
-                              // Mark step 1 (Lesson Plan) as completed
                               markStepCompleted(1);
-
-                              const uploadTime = new Date().toLocaleString();
-
-                              // Clear localStorage cache for this session to force fresh data
-                              const cacheKey = `lesson_plan_${sessionId}`;
-                              localStorage.removeItem(cacheKey);
-
-                              // Clear all lesson plan related cache
-                              Object.keys(localStorage).forEach(key => {
-                                if (key.startsWith('lesson_plan_')) {
-                                  localStorage.removeItem(key);
-                                }
-                              });
-
-                              // Fetch latest upload to display (with cache busting)
+                              
+                              // Clear caches
                               const timestamp = new Date().getTime();
-                              fetch(`/api/get-lesson-plan-uploads/?planned_session_id=${sessionId}&t=${timestamp}`)
-                                .then(r => {
-                                  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                                  return r.json();
-                                })
-                                .then(uploadData => {
-                                  if (uploadData.success && uploadData.upload) {
-                                    const upload = uploadData.upload;
-                                    resultDiv.innerHTML = `
-                                                  <div class="alert alert-success">
-                                                      <strong>✅ Lesson Plan Uploaded!</strong>
-                                                      <ul class="mb-0 mt-2">
-                                                          <li><a href="${upload.file_url}" target="_blank">${upload.filename}</a> - ${upload.upload_date}</li>
-                                                      </ul>
-                                                  </div>
-                                              `;
-                                    console.log('✅ Displayed latest lesson plan upload');
-                                  } else {
-                                    throw new Error('No upload data returned');
-                                  }
-                                })
-                                .catch(err => {
-                                  console.error('Error fetching upload:', err);
-                                  // Fallback to showing just the current upload
-                                  resultDiv.innerHTML = `
-                                              <div class="alert alert-success">
-                                                  <strong>✅ Lesson Plan Uploaded!</strong>
-                                                  <ul class="mb-0 mt-2">
-                                                      <li><a href="/media/${data.file_name}" target="_blank">${data.file_name}</a> - ${uploadTime}</li>
-                                                  </ul>
-                                              </div>
-                                          `;
-                                });
+                              localStorage.removeItem(`lesson_plan_${sessionId}`);
+                              
+                              resultDiv.innerHTML = `
+                                <div class="alert alert-success">
+                                    <strong>✅ Uploaded & Replaced!</strong><br>
+                                    <small>The latest lesson plan has been saved successfully.</small>
+                                </div>
+                              `;
 
+                              // Immediate UI Refresh
                               document.getElementById('uploadCompletedSection').style.display = 'block';
-                              document.getElementById('lessonPlanUploadForm').style.display = 'none';
-
-                              // Refresh progress metrics immediately
-                              if (typeof updatePreparationProgress === 'function') {
-                                updatePreparationProgress();
-                              }
-
-                              // Refresh uploaded files list
-                              if (typeof refreshUploadedFilesList === 'function') {
-                                refreshUploadedFilesList();
-                              }
-
-                              // Reload session state after a short delay to get updated data
-                              setTimeout(() => {
-                                loadSessionState();
-                              }, 1000);
+                              
+                              // Force refresh the list of files
+                              if (typeof refreshUploadedFilesList === 'function') refreshUploadedFilesList();
+                              
+                              // Reload background state
+                              setTimeout(() => { loadSessionState(); }, 500);
                             } else {
-                              resultDiv.innerHTML = '<div class="alert alert-danger">Error: ' + (data.error || 'Unknown error') + '</div>';
+                              resultDiv.innerHTML = '<div class="alert alert-danger">Error: ' + (data.error || 'Upload failed') + '</div>';
                             }
-                          })
-                          .catch(err => {
-                            console.error('Upload error:', err);
-                            resultDiv.innerHTML = '<div class="alert alert-danger"><strong>Upload failed:</strong><br>' + err.message + '</div>';
-                          });
+                        } catch (err) {
+                            console.error('Upload process failed:', err);
+                            resultDiv.innerHTML = '<div class="alert alert-danger"><strong>Error:</strong> ' + err.message + '</div>';
+                        }
                       };
+
+                      // Helper function for compression
+                      async function compressImage(file) {
+                        return new Promise((resolve, reject) => {
+                          const reader = new FileReader();
+                          reader.readAsDataURL(file);
+                          reader.onload = event => {
+                            const img = new Image();
+                            img.src = event.target.result;
+                            img.onload = () => {
+                              const canvas = document.createElement('canvas');
+                              const MAX_WIDTH = 1200;
+                              const MAX_HEIGHT = 1600;
+                              let width = img.width;
+                              let height = img.height;
+
+                              if (width > height) {
+                                if (width > MAX_WIDTH) {
+                                  height *= MAX_WIDTH / width;
+                                  width = MAX_WIDTH;
+                                }
+                              } else {
+                                if (height > MAX_HEIGHT) {
+                                  width *= MAX_HEIGHT / height;
+                                  height = MAX_HEIGHT;
+                                }
+                              }
+                              canvas.width = width;
+                              canvas.height = height;
+                              const ctx = canvas.getContext('2d');
+                              ctx.drawImage(img, 0, 0, width, height);
+                              canvas.toBlob(blob => {
+                                resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                              }, 'image/jpeg', 0.7); // 70% quality
+                            };
+                            img.onerror = reject;
+                          };
+                          reader.onerror = reject;
+                        });
+                      }
                     }
 
                     if (document.readyState === 'loading') {
