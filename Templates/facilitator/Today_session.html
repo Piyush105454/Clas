@@ -1933,12 +1933,25 @@
                     completeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
                   }
 
-                  // Get actual_session_id from data attributes
-                  const sessionId = document.querySelector('[data-session-id]').getAttribute('data-session-id');
+                  // [FIX] BETTER SESSION ID DETECTION
+                  // Look for session ID in the data attribute or global context
+                  let sessionId = null;
+                  const sessionEl = document.querySelector('[data-session-id]');
+                  if (sessionEl) {
+                    sessionId = sessionEl.getAttribute('data-session-id');
+                  }
                   
-                  if (!sessionId || sessionId === 'none') {
+                  if (!sessionId || sessionId === 'none' || sessionId === '') {
+                    console.warn('⚠️ No session ID found in UI. Checking if it was started in background...');
+                    // Try to proceed - the backend will find it by planned_session_id if we provide it
+                    // But for this specific API, we'll try to find it in the DOM first
+                    const hiddenId = document.querySelector('input[name="actual_session_id"]')?.value;
+                    if (hiddenId) sessionId = hiddenId;
+                  }
+                  
+                  if (!sessionId || sessionId === 'none' || sessionId === '') {
                     console.error('❌ Cannot mark conduct complete: No actual session ID found');
-                    alert('Please start the session first by clicking "Conduct (Step 2)"');
+                    alert('Please ensure you have completed Step 1 and Step 2 first. If the error persists, please refresh the page.');
                     if (completeBtn) {
                       completeBtn.disabled = false;
                       completeBtn.innerHTML = originalHtml;
@@ -1954,7 +1967,8 @@
                       'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
                     },
                     body: JSON.stringify({
-                      actual_session_id: sessionId
+                      actual_session_id: sessionId,
+                      planned_session_id: '{{ planned_session.id }}'
                     })
                   })
                   .then(response => response.json())
