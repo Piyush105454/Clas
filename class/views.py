@@ -5697,7 +5697,30 @@ def api_mark_conduct_complete(request):
         if not actual_session_id:
             return JsonResponse({"success": False, "error": "actual_session_id required"}, status=400)
             
-        actual_session = get_object_or_404(ActualSession, id=actual_session_id)
+        # [FIX] FAIL-SAFE SESSION DETECTION
+        actual_session = ActualSession.objects.filter(id=actual_session_id).first()
+        
+        if not actual_session:
+            # Try to find by planned session and date if ID is invalid
+            from .session_management import SessionStatusManager
+            planned_session_id = data.get('planned_session_id')
+            if planned_session_id:
+                planned_session = get_object_or_404(PlannedSession, id=planned_session_id)
+                actual_session = ActualSession.objects.filter(
+                    planned_session=planned_session,
+                    date=timezone.now().date()
+                ).first()
+                
+                if not actual_session:
+                    # Auto-start it!
+                    actual_session = SessionStatusManager.conduct_session(
+                        planned_session=planned_session,
+                        facilitator=request.user,
+                        remarks="Auto-started via Mark Conduct Complete fail-safe"
+                    )
+            
+        if not actual_session:
+            return JsonResponse({"success": False, "error": "Actual session not found and could not be auto-started"}, status=404)
         
         # Verify facilitator access
         if not FacilitatorSchool.objects.filter(
