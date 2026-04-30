@@ -90,32 +90,30 @@ class ResponseCompressionMiddleware(MiddlewareMixin):
         if 'gzip' not in request.META.get('HTTP_ACCEPT_ENCODING', ''):
             return response
         
-        # Don't compress if already compressed
-        if response.get('Content-Encoding'):
+        # [STRICT SAFETY] Only compress text-based content
+        content_type = response.get('Content-Type', '').lower()
+        if not any(t in content_type for t in ['text/', 'json', 'javascript', 'xml']):
             return response
-        
-        # Don't compress small responses or streaming responses (like FileResponse)
+            
+        # [STRICT SAFETY] Skip streaming responses (FileResponse, etc.)
         if getattr(response, 'streaming', False):
             return response
             
         try:
+            # Don't compress small responses
             if len(response.content) < 1024:
                 return response
-        except AttributeError:
-            return response
-        
-        # Compress text-based content
-        if response.get('Content-Type', '').startswith(('text/', 'application/json', 'application/javascript')):
-            try:
-                gzip_buffer = io.BytesIO()
-                gzip_file = gzip.GzipFile(mode='wb', fileobj=gzip_buffer)
-                gzip_file.write(response.content)
-                gzip_file.close()
                 
-                response.content = gzip_buffer.getvalue()
-                response['Content-Encoding'] = 'gzip'
-                response['Content-Length'] = len(response.content)
-            except Exception:
-                pass
+            gzip_buffer = io.BytesIO()
+            gzip_file = gzip.GzipFile(mode='wb', fileobj=gzip_buffer)
+            gzip_file.write(response.content)
+            gzip_file.close()
+            
+            response.content = gzip_buffer.getvalue()
+            response['Content-Encoding'] = 'gzip'
+            response['Content-Length'] = len(response.content)
+        except (AttributeError, Exception):
+            # Fallback for any unexpected response types
+            pass
         
         return response
