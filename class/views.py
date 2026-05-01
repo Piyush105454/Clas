@@ -1267,13 +1267,11 @@ def today_session(request, class_section_id):
             today = timezone.localdate()
         # [OPTIMIZED] Get uploads for ANY of the grouped classes for this day
         # This ensures Step 1 stays green even if uploaded via a different class in the group
-        related_planned_sessions = PlannedSession.objects.filter(
-            class_section__in=grouped_classes,
-            day_number=planned_session.day_number
-        )
-        
+        # [SYNC FIX] Only fetch uploads from TODAY to ensure a fresh start each day
+        today = timezone.localdate()
         lesson_plan_uploads = LessonPlanUpload.objects.filter(
-            planned_session__in=related_planned_sessions
+            planned_session__in=related_planned_sessions,
+            upload_date=today
         ).order_by('-upload_date')
     except Exception as e:
         logger.error(f"Error getting lesson plan uploads: {e}")
@@ -1290,11 +1288,8 @@ def today_session(request, class_section_id):
             logger.error(f"Error getting session rewards: {e}")
             session_rewards = []
     
-    # Get preparation checklist for this session (ANY date, not just today)
-    # This ensures data persists across page refreshes
+    # Get preparation checklist for this session (TODAY ONLY)
     try:
-        # Get preparation checklist
-        # Only aggregate across multiple sessions if they are actively grouped TODAY
         if is_grouped:
             # Get from any session in the active group
             grouped_session_ids = [ps.id for ps in PlannedSession.objects.filter(
@@ -1302,17 +1297,15 @@ def today_session(request, class_section_id):
                 day_number=planned_session.day_number
             )]
             preparation_checklist = SessionPreparationChecklist.objects.filter(
-                planned_session_id__in=grouped_session_ids
+                planned_session_id__in=grouped_session_ids,
+                preparation_complete_time__date=today
             ).first()
         else:
             preparation_checklist = SessionPreparationChecklist.objects.filter(
                 planned_session=planned_session,
-                facilitator=request.user
-            ).order_by('-preparation_start_time').first()  # Get most recent
-        
-        # If preparation exists for this planned session, it's valid regardless of date
-        # (Allows preparing the night before)
-        pass
+                facilitator=request.user,
+                preparation_complete_time__date=today
+            ).order_by('-preparation_start_time').first()
     except Exception as e:
         logger.error(f"Error getting preparation checklist: {e}")
         preparation_checklist = None
@@ -5068,9 +5061,12 @@ def get_lesson_plan_uploads(request):
             day_number=planned_session.day_number
         )
         
-        # Get latest uploads for any of these related sessions
+        # [SYNC FIX] Only fetch uploads from TODAY to ensure a fresh start each day
+        today = timezone.now().date()
+        
         uploads = LessonPlanUpload.objects.filter(
-            planned_session__in=related_planned_sessions
+            planned_session__in=related_planned_sessions,
+            upload_date=today
         ).order_by('-upload_date')
         
         serialized_uploads = []
@@ -5810,17 +5806,20 @@ def api_session_state(request):
         
         uploads = LessonPlanUpload.objects.filter(
             planned_session__in=upload_sessions,
-            upload_date=timezone.now().date()  # IMPORTANT: Only today's uploads
-        ).values('id', 'lesson_plan_file', 'upload_date', 'facilitator__full_name').order_by('-upload_date')
+            upload_date=timezone.now().date()
+        ).order_by('-upload_date')
         
         uploads_list = []
         for upload in uploads:
+            # Use the same URL logic as get_lesson_plan_uploads
+            file_url = upload.direct_url if upload.direct_url else (upload.lesson_plan_file.url if upload.lesson_plan_file else "#")
+            
             uploads_list.append({
-                'id': str(upload['id']),
-                'filename': os.path.basename(upload['lesson_plan_file']),
-                'upload_date': upload['upload_date'].strftime('%Y-%m-%d %H:%M:%S'),
-                'uploaded_by': upload['facilitator__full_name'],
-                'file_url': f"/media/{upload['lesson_plan_file']}"
+                'id': str(upload.id),
+                'filename': upload.file_name,
+                'upload_date': upload.upload_date.strftime('%Y-%m-%d %H:%M:%S'),
+                'uploaded_by': upload.facilitator.full_name if upload.facilitator else "Unknown",
+                'file_url': file_url
             })
         
         # Get session feedback (only if actual session exists)
@@ -5894,11 +5893,13 @@ def api_session_state(request):
                 "facilitator": request.user.full_name,
             }
         
-        # Check preparation checklist via PlannedSession and Facilitator
+        # Check preparation checklist via PlannedSession and Facilitator (TODAY ONLY)
         from .models import SessionPreparationChecklist
+        today = timezone.now().date()
         has_linked_preparation = SessionPreparationChecklist.objects.filter(
             planned_session=planned_session,
-            facilitator=request.user
+            facilitator=request.user,
+            preparation_complete_time__date=today
         ).exists()
 
         return JsonResponse({
