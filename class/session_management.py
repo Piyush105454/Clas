@@ -240,7 +240,7 @@ class SessionSequenceCalculator:
                 planned_session__class_section=lookup_class,
                 status=SessionStatus.CONDUCTED,
                 planned_session__day_number__lte=150
-            ).count()
+            ).values('planned_session__day_number').distinct().count()
             
             target_day = standard_conducted_count + 1
             highest_completed_day = max(list(completed_days) + [0])
@@ -478,30 +478,27 @@ class SessionSequenceCalculator:
             curriculum_sessions = planned_sessions.filter(day_number__lte=150)
             metrics.total_sessions = curriculum_sessions.count()
             
-            # Step 2: Calculate counts only for standard curriculum
-            # (Exams / Day 999 are excluded from these badge metrics)
+            # Step 2: Calculate counts only for unique curriculum days
+            # This ensures that Conducted + Pending always equals Total Sessions (150)
+            # even if a session was repeated or multiple actual sessions exist for one day.
+            
             metrics.conducted_sessions = ActualSession.objects.filter(
                 planned_session__in=curriculum_sessions,
                 status=SessionStatus.CONDUCTED
-            ).count()
+            ).values('planned_session__day_number').distinct().count()
             
             metrics.cancelled_sessions = ActualSession.objects.filter(
                 planned_session__in=curriculum_sessions,
                 status=SessionStatus.CANCELLED
-            ).count()
+            ).values('planned_session__day_number').distinct().count()
             
             metrics.holiday_sessions = ActualSession.objects.filter(
                 planned_session__in=curriculum_sessions,
                 status=SessionStatus.HOLIDAY
-            ).count()
+            ).values('planned_session__day_number').distinct().count()
             
-            # Step 3: Calculate pending sessions accurately (Days 1-150 minus CONDUCTED days)
-            completed_days = ActualSession.objects.filter(
-                planned_session__in=curriculum_sessions,
-                status=SessionStatus.CONDUCTED
-            ).values_list('planned_session__day_number', flat=True).distinct().count()
-            
-            metrics.pending_sessions = metrics.total_sessions - completed_days
+            # Step 3: Pending sessions = Total - (Unique Conducted Days)
+            metrics.pending_sessions = metrics.total_sessions - metrics.conducted_sessions
             
             # Step 4: Calculate completion percentage
             completed_total = metrics.conducted_sessions + metrics.cancelled_sessions
