@@ -1020,11 +1020,28 @@
               }
             }
 
+            // Global state to prevent duplicate saves
+            const inProgressSteps = new Set();
+
             // Mark step as completed - Save to database AND update UI
             async function markStepCompleted(step) {
               const stepBtn = document.querySelector(`.step-btn[data-step="${step}"]`);
               const plannedSessionId = '{{ planned_session.id|default:"" }}';
               
+              // [OPTIMIZATION] Prevent duplicate saves if already in progress or already completed
+              if (inProgressSteps.has(step)) {
+                console.log(`⏳ Step ${step} save already in progress, skipping duplicate call`);
+                return;
+              }
+              
+              const isAlreadyDone = stepBtn && stepBtn.classList.contains('completed-step');
+              if (isAlreadyDone) {
+                console.log(`✅ Step ${step} already marked as completed, skipping save`);
+                // Still enforce workflow just in case
+                enforceWorkflowState();
+                return;
+              }
+
               // ✅ FIXED: Use the actual session date from database instead of client clock
               const sessionDate = '{{ actual_session.date|date:"Y-m-d"|default:"" }}' || new Date().toISOString().split('T')[0];
               
@@ -1051,13 +1068,32 @@
                   console.warn('⚠️ Checkmark element not found');
                 }
 
-                // Save to database
+                // Save to database and update session ID live
                 if (plannedSessionId && stepStatusAPI) {
                   try {
-                    await stepStatusAPI.markStepCompleted(plannedSessionId, sessionDate, step);
+                    inProgressSteps.add(step);
+                    const response = await stepStatusAPI.markStepCompleted(plannedSessionId, sessionDate, step);
                     console.log(`✅ Step ${step} saved to database for date ${sessionDate}`);
+                    
+                    // [LIVE UPDATE] If the server returned an actual_session_id, update the DOM
+                    if (response && response.actual_session_id) {
+                        const sessionId = response.actual_session_id;
+                        console.log(`📡 [LIVE] Updating Actual Session ID to: ${sessionId}`);
+                        
+                        // Update all elements tracking the session ID
+                        document.querySelectorAll('[data-session-id]').forEach(el => {
+                            el.setAttribute('data-session-id', sessionId);
+                        });
+                        
+                        // Also update hidden inputs if they exist
+                        document.querySelectorAll('input[name="actual_session_id"]').forEach(el => {
+                            el.value = sessionId;
+                        });
+                    }
                   } catch (error) {
                     console.error(`❌ Error saving step ${step} to database:`, error);
+                  } finally {
+                    inProgressSteps.delete(step);
                   }
                 }
 
@@ -1154,20 +1190,34 @@
                 return;
               }
 
-              const uploadResultDiv = document.getElementById('uploadResult');
-              if (!uploadResultDiv) {
-                console.warn('uploadResult div not found');
+              const uploadsList = document.getElementById('uploadedFilesList');
+              if (!uploadsList) {
+                console.warn('uploadedFilesList container not found');
                 return;
               }
 
-              let html = '<div class="alert alert-success"><strong>✅ Lesson Plans Uploaded:</strong><ul class="mb-0 mt-2">';
+              // Clear and populate the list
+              uploadsList.innerHTML = '';
               uploads.forEach(upload => {
-                html += `<li><a href="${upload.file_url}" target="_blank">${upload.filename}</a> - ${upload.upload_date}</li>`;
+                const item = document.createElement('div');
+                item.className = 'list-group-item px-3 py-3';
+                item.innerHTML = `
+                  <div class="d-flex justify-content-between align-items-center gap-2">
+                    <div class="overflow-hidden" style="min-width: 0;">
+                      <strong class="d-block text-truncate" title="${upload.filename}">${upload.filename}</strong>
+                      <small class="text-muted">Uploaded: ${upload.upload_date}</small>
+                    </div>
+                    <div class="flex-shrink-0">
+                      <a href="/api/view-lesson-plan/${upload.id}/" class="btn btn-sm btn-primary" target="_blank">
+                        <i class="fas fa-eye me-1"></i> View
+                      </a>
+                    </div>
+                  </div>
+                `;
+                uploadsList.appendChild(item);
               });
-              html += '</ul></div>';
 
-              uploadResultDiv.innerHTML = html;
-              console.log('✅ Restored lesson plan uploads:', uploads.length);
+              console.log('✅ Restored lesson plan uploads to list:', uploads.length);
             }
 
             function restoreFeedback(feedback) {
@@ -1531,6 +1581,11 @@
                 </form>
 
                 <div id="uploadResult" class="mt-2"></div>
+                
+                <!-- Persistent list for all uploaded files (Synced with S3) -->
+                <div id="uploadedFilesList" class="list-group mt-3">
+                  <!-- Files will be loaded here by refreshUploadedFilesList() -->
+                </div>
 
                 <script>
                   (function () {
@@ -1589,6 +1644,17 @@
                             const data = await response.json();
                             
                             if (data.success) {
+                              // [LIVE] Update UI immediately with the new filename
+                              const currentFileDisplay = document.querySelector('#uploadResult');
+                              if (currentFileDisplay) {
+                                  currentFileDisplay.innerHTML = `
+                                    <div class="alert alert-success">
+                                        <strong>✅ Uploaded: ${data.file_name}</strong><br>
+                                        <small>File successfully saved and replaced.</small>
+                                    </div>
+                                  `;
+                              }
+
                               markStepCompleted(1);
                               
                               // Clear caches
@@ -1605,8 +1671,10 @@
                               // Immediate UI Refresh
                               document.getElementById('uploadCompletedSection').style.display = 'block';
                               
-                              // Force refresh the list of files
-                              if (typeof refreshUploadedFilesList === 'function') refreshUploadedFilesList();
+                              // Force refresh the list of files (Global Sync)
+                              if (typeof window.refreshUploadedFilesList === 'function') {
+                                window.refreshUploadedFilesList();
+                              }
                               
                               // Reload background state
                               setTimeout(() => { loadSessionState(); }, 500);
@@ -1922,13 +1990,9 @@
                   }
                   
                   if (!sessionId || sessionId === 'none' || sessionId === '') {
-                    console.error('❌ Cannot mark conduct complete: No actual session ID found');
-                    alert('Please ensure you have completed Step 1 and Step 2 first. If the error persists, please refresh the page.');
-                    if (completeBtn) {
-                      completeBtn.disabled = false;
-                      completeBtn.innerHTML = originalHtml;
-                    }
-                    return;
+                    console.warn('⚠️ No session ID found in UI. Proceeding with planned_session_id fail-safe...');
+                    // We don't alert here anymore because the backend has a fail-safe to find/start the session
+                    sessionId = 'none'; 
                   }
 
                   // Call API to mark conduct complete in backend
@@ -1948,15 +2012,21 @@
                     if (data.success) {
                       console.log('✅ Step 3 (Conduct) - marked as complete in backend');
                       
-                      // Mark step 3 as completed in the UI
-                      const stepBtn = document.querySelector('.step-btn[data-step="3"]');
-                      if (stepBtn) {
-                        stepBtn.classList.add('completed-step');
-                        const checkmark = stepBtn.querySelector('.step-check');
-                        if (checkmark) {
-                          checkmark.style.display = 'flex';
-                        }
+                      // [LIVE UPDATE] Propagate the session ID to the rest of the UI
+                      if (data.actual_session_id) {
+                          const sessionId = data.actual_session_id;
+                          console.log(`📡 [LIVE] Updating Actual Session ID from Conduct: ${sessionId}`);
+                          document.querySelectorAll('[data-session-id]').forEach(el => el.setAttribute('data-session-id', sessionId));
+                          document.querySelectorAll('input[name="actual_session_id"]').forEach(el => el.value = sessionId);
+                          
+                          // [NEW] Trigger the visual unlock for the Attendance tab
+                          if (typeof unlockAttendanceUI === 'function') {
+                              unlockAttendanceUI(sessionId);
+                          }
                       }
+
+                      // Use our synchronized function to mark step 3
+                      markStepCompleted(3);
 
                       // Change button to green and disable it
                       const completeBtn = document.querySelector('button[onclick="markConductComplete()"]');
@@ -2069,17 +2139,41 @@
                   Next: Upload <i class="fas fa-arrow-right ms-1"></i>
                 </button>
               </div>
-              {% elif actual_session %}
-              <!-- ATTENDANCE NOT YET MARKED - SESSION HAS BEEN STARTED -->
-              <div class="alert alert-warning mb-3">
+              {% else %}
+              <!-- ATTENDANCE SECTION - [LIVE REFRESH ENABLED] -->
+              <div id="attendanceStatusAlert" class="alert alert-warning mb-3" style="display: {% if attendance_saved %}none{% else %}block{% endif %};">
                 <i class="fas fa-exclamation-circle me-2"></i>
-                <strong>⚠️ Attendance Pending</strong><br>
-                <small class="text-muted">
+                <strong id="attendanceAlertTitle">⚠️ Attendance Pending</strong><br>
+                <small id="attendanceAlertText" class="text-muted">
+                  {% if actual_session %}
                   Click the button below to mark attendance for Day {{ current_day }}.
+                  {% else %}
+                  Please start the session first (Step 3) before marking attendance.
+                  {% endif %}
                 </small>
               </div>
 
-              <div class="card border-primary">
+              <!-- SESSION NOT STARTED FALLBACK (Hidden automatically when session starts) -->
+              <div id="sessionNotStartedCard" class="card border-info mb-3" style="display: {% if actual_session or attendance_saved %}none{% else %}block{% endif %};">
+                <div class="card-header bg-info text-white py-3">
+                  <h6 class="mb-0"><i class="fas fa-clock me-2"></i>Waiting for Session Start</h6>
+                </div>
+                <div class="card-body text-center p-4">
+                  <div class="mb-4">
+                    <i class="fas fa-hourglass-start fa-4x text-info mb-3"></i>
+                    <h5>Session Not Started Yet</h5>
+                    <p class="text-muted">Go back to Step 3 and click "Start Session" to begin.</p>
+                  </div>
+                  <div class="text-center mt-3 mb-3">
+                    <button class="btn btn-info btn-lg" onclick="goToStep(3)">
+                      <i class="fas fa-play me-1"></i>Go to Step 3: Start Session
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ATTENDANCE ACTION CARD -->
+              <div id="attendanceActionCard" class="card border-primary" style="display: {% if actual_session and not attendance_saved %}block{% else %}none{% endif %};">
                 <div class="card-header bg-primary text-white py-3">
                   <h6 class="mb-0"><i class="fas fa-users me-2"></i>Mark Attendance for Day {{ current_day }}</h6>
                 </div>
@@ -2091,11 +2185,9 @@
                   </div>
 
                   <div class="text-center mt-3 mb-3">
-
-                    <a href="{% url 'mark_attendance' actual_session.id %}" class="btn btn-primary btn-lg">
+                    <button id="markAttendanceBtn" class="btn btn-primary btn-lg" onclick="openMarkAttendance()">
                       <i class="fas fa-users me-1"></i>Mark Attendance
-                    </a>
-
+                    </button>
                   </div>
 
                   <p class="text-muted small mb-0">
@@ -2105,43 +2197,46 @@
                 </div>
               </div>
 
-              <div class="text-center mt-2 d-flex justify-content-between gap-2">
-                <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
-                  <i class="fas fa-arrow-left me-1"></i>Previous
-                </button>
-                <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()">
-                  Next: Upload <i class="fas fa-arrow-right ms-1"></i>
-                </button>
-              </div>
-
-              {% else %}
-              <!-- SESSION NOT YET STARTED -->
-              <div class="alert alert-info mb-3">
-                <i class="fas fa-info-circle me-2"></i>
-                <strong>ℹ️ Session Not Started</strong><br>
-                <small class="text-muted">
-                  Please start the session first (Step 3) before marking attendance.
-                </small>
-              </div>
-
-              <div class="card border-info">
-                <div class="card-header bg-info text-white py-3">
-                  <h6 class="mb-0"><i class="fas fa-clock me-2"></i>Waiting for Session Start</h6>
-                </div>
-                <div class="card-body text-center p-4">
-                  <div class="mb-4">
-                    <i class="fas fa-hourglass-start fa-4x text-info mb-3"></i>
-                    <h5>Session Not Started Yet</h5>
-                    <p class="text-muted">Go back to Step 3 and click "Start Session" to begin.</p>
-                  </div>
-
-                  <div class="text-center mt-3 mb-3">
-                    <button class="btn btn-info btn-lg" onclick="goToStep(3)">
-                      <i class="fas fa-play me-1"></i>Go to Step 3: Start Session
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <script>
+                function openMarkAttendance() {
+                    let sessionId = null;
+                    const sessionEl = document.querySelector('[data-session-id]');
+                    if (sessionEl) sessionId = sessionEl.getAttribute('data-session-id');
+                    
+                    if (!sessionId || sessionId === 'none' || sessionId === '') {
+                        // Check hidden input as fallback
+                        sessionId = document.querySelector('input[name="actual_session_id"]')?.value;
+                    }
+                    
+                    if (sessionId && sessionId !== 'none') {
+                        window.location.href = `/facilitator/session/${sessionId}/attendance/`;
+                    } else {
+                        alert("Session ID not found. Please ensure Step 3 is completed first.");
+                        goToStep(3);
+                    }
+                }
+                
+                // [LIVE] This function is called by the session start listener
+                function unlockAttendanceUI(sessionId) {
+                    console.log("🔓 [LIVE] Unlocking Attendance UI for session:", sessionId);
+                    
+                    const notStartedCard = document.getElementById('sessionNotStartedCard');
+                    const actionCard = document.getElementById('attendanceActionCard');
+                    const alertTitle = document.getElementById('attendanceAlertTitle');
+                    const alertText = document.getElementById('attendanceAlertText');
+                    
+                    if (notStartedCard) notStartedCard.style.display = 'none';
+                    if (actionCard) actionCard.style.display = 'block';
+                    
+                    if (alertTitle) {
+                        alertTitle.innerHTML = '⚠️ Attendance Pending';
+                        alertTitle.className = 'text-warning';
+                    }
+                    if (alertText) {
+                        alertText.innerHTML = 'The session has started! You can now mark attendance.';
+                    }
+                }
+              </script>
 
               <div class="text-center mt-2 d-flex justify-content-between gap-2">
                 <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
@@ -3355,12 +3450,19 @@
       showMobileNotification(`Switched to ${language === 'hindi' ? 'हिंदी (Hindi)' : 'English'}`);
     }
 
-    // Preparation Checklist
+    // Preparation Checklist - [OPTIMIZED] Debounced saving to prevent request loops
     const checkpointItems = document.querySelectorAll('.checkpoint-item');
+    let prepSaveTimeout = null;
+
     checkpointItems.forEach(item => {
       item.addEventListener('change', function () {
         updatePreparationProgress();
-        saveCheckpointProgress();
+        
+        // Debounce saving: wait 300ms after the last click before sending to server
+        if (prepSaveTimeout) clearTimeout(prepSaveTimeout);
+        prepSaveTimeout = setTimeout(() => {
+            saveCheckpointProgress();
+        }, 300);
       });
     });
 
@@ -3393,16 +3495,20 @@
       }
     }
 
-    // Refresh uploaded files list without page reload
-    function refreshUploadedFilesList() {
+    // [GLOBAL] Refresh uploaded files list without page reload
+    window.refreshUploadedFilesList = function() {
       const sessionId = document.querySelector('input[name="planned_session_id"]')?.value;
       if (!sessionId) return;
 
       // Fetch the latest uploaded files
-      fetch(`/api/lesson-plan-uploads/?planned_session_id=${sessionId}`)
+      const cacheBuster = new Date().getTime();
+      fetch(`/api/get-lesson-plan-uploads/?planned_session_id=${sessionId}&t=${cacheBuster}`)
         .then(r => r.json())
         .then(data => {
+          console.log('📡 [API DATA] Received uploads:', data);
           if (data.success && data.uploads) {
+            localStorage.removeItem(`lesson_plan_${sessionId}`);
+            
             const uploadsList = document.getElementById('uploadedFilesList');
             if (uploadsList) {
               // Clear existing list
@@ -3411,16 +3517,18 @@
               // Add each uploaded file
               data.uploads.forEach(upload => {
                 const item = document.createElement('div');
-                item.className = 'list-group-item';
+                item.className = 'list-group-item px-3 py-3';
                 item.innerHTML = `
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>${upload.filename}</strong>
-                                        <small class="text-muted d-block">Uploaded: ${upload.upload_date}</small>
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <div class="overflow-hidden" style="min-width: 0;">
+                                        <strong class="d-block text-truncate" title="${upload.filename}">${upload.filename}</strong>
+                                        <small class="text-muted">Uploaded: ${upload.upload_date}</small>
                                     </div>
-                                    <a href="${upload.file_url}" class="btn btn-sm btn-outline-primary" target="_blank">
-                                        <i class="fas fa-download"></i> View
-                                    </a>
+                                    <div class="flex-shrink-0">
+                                      <a href="/api/view-lesson-plan/${upload.id}/" class="btn btn-sm btn-primary" target="_blank">
+                                          <i class="fas fa-eye me-1"></i>View
+                                      </a>
+                                    </div>
                                 </div>
                             `;
                 uploadsList.appendChild(item);
@@ -3936,10 +4044,9 @@
         .catch(error => console.error('Error loading grouped session:', error));
     }
 
-    // Initialize Bootstrap modals
-    const cancelModal = document.getElementById('cancelSessionModal');
-    if (cancelModal) {
-      new bootstrap.Modal(cancelModal);
+    // Initialize uploaded files list on page load
+    if (typeof refreshUploadedFilesList === 'function') {
+        refreshUploadedFilesList();
     }
   });
 

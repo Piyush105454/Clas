@@ -102,6 +102,16 @@ class SessionSequenceCalculator:
     Determines the correct "today's session" for any class section
     Implements the core sequence calculation logic
     """
+    # [PER-REQUEST CACHE]
+    # Use threading.local() to ensure the cache is request-specific and thread-safe
+    import threading
+    _local = threading.local()
+
+    @staticmethod
+    def _get_cache():
+        if not hasattr(SessionSequenceCalculator._local, 'cache'):
+            SessionSequenceCalculator._local.cache = {}
+        return SessionSequenceCalculator._local.cache
 
     @staticmethod
     def _get_group_leader(group_members: List[ClassSection]) -> ClassSection:
@@ -110,6 +120,13 @@ class SessionSequenceCalculator:
         (the earliest curriculum gap). This ensures the group stays 
         together and no class misses any curriculum content.
         """
+        # [CACHE] Check if we already calculated the leader for this exact group
+        cache = SessionSequenceCalculator._get_cache()
+        group_key = f"leader:{'-'.join(sorted([str(m.id) for m in group_members]))}"
+        
+        if group_key in cache:
+            return cache[group_key]
+            
         if not group_members:
             return None
         if len(group_members) == 1:
@@ -141,6 +158,7 @@ class SessionSequenceCalculator:
                 if str(cls.id) < str(leader.id):
                     leader = cls
                     
+        SessionSequenceCalculator._get_cache()[group_key] = leader
         return leader
 
     @staticmethod

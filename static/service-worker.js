@@ -9,10 +9,10 @@
 // ✅ PRODUCTION FIX: Increment version number whenever UI changes
 // This forces browsers to download new cache
 const CACHE_NAMES = {
-  static: 'static-v11',
-  pages: 'pages-v11',
-  api: 'api-v11',
-  offline: 'offline-v11'
+  static: 'static-v12',
+  pages: 'pages-v12',
+  api: 'api-v12',
+  offline: 'offline-v12'
 };
 
 // Critical assets to cache on install
