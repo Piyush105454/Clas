@@ -777,8 +777,16 @@ class LessonPlanUpload(models.Model):
     )
     
     lesson_plan_file = models.FileField(
-        upload_to='lesson_plans/%Y/%m/',
-        help_text="Uploaded lesson plan file"
+        upload_to='clas/lessonplan/%Y/%m/',
+        help_text="The actual lesson plan file"
+    )
+    
+    # [NEW] Direct URL for cloud-native access
+    direct_url = models.URLField(
+        max_length=1000,
+        null=True,
+        blank=True,
+        help_text="Permanent full URL to the file"
     )
     
     file_name = models.CharField(

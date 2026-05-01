@@ -146,9 +146,16 @@ def save_step_status(request):
                     )
                 logger.info(f"Step {step_number} synced to {other_planned_sessions.count()} other sessions in group")
         
+        # Find the actual session for this planned session today to return the ID for live UI updates
+        actual_session = ActualSession.objects.filter(
+            planned_session=planned_session,
+            date=timezone.now().date()
+        ).first()
+        
         return JsonResponse({
             'success': True,
             'message': f'Step {step_number} status saved',
+            'actual_session_id': str(actual_session.id) if actual_session else None,
             'step_status': {
                 'id': str(step_status.id),
                 'step_number': step_status.step_number,

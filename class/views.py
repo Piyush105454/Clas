@@ -1265,25 +1265,16 @@ def today_session(request, class_section_id):
             from datetime import timedelta, datetime
             
             today = timezone.localdate()
-        # [ACTIVE GROUPING ONLY]
-        if is_grouped and planned_session.grouped_session_id:
-            # Get uploads for the primary session of the active group for today
-            primary_session = PlannedSession.objects.filter(
-                grouped_session_id=planned_session.grouped_session_id,
-                day_number=planned_session.day_number,
-                class_section__in=grouped_classes
-            ).order_by('id').first()
-            
-            lesson_plan_uploads = LessonPlanUpload.objects.filter(
-                planned_session=primary_session or planned_session,
-                upload_date=today # Only show today's uploads for grouped sessions
-            ).order_by('-upload_date')
-        else:
-            # Single session - get uploads for this session only - PERMANENT (not just today)
-            lesson_plan_uploads = LessonPlanUpload.objects.filter(
-                planned_session=planned_session,
-                facilitator=request.user
-            ).order_by('-upload_date')
+        # [OPTIMIZED] Get uploads for ANY of the grouped classes for this day
+        # This ensures Step 1 stays green even if uploaded via a different class in the group
+        related_planned_sessions = PlannedSession.objects.filter(
+            class_section__in=grouped_classes,
+            day_number=planned_session.day_number
+        )
+        
+        lesson_plan_uploads = LessonPlanUpload.objects.filter(
+            planned_session__in=related_planned_sessions
+        ).order_by('-upload_date')
     except Exception as e:
         logger.error(f"Error getting lesson plan uploads: {e}")
         lesson_plan_uploads = []
@@ -5065,28 +5056,52 @@ def get_lesson_plan_uploads(request):
         ).exists():
             return JsonResponse({"success": False, "error": "Access denied"}, status=403)
         
-        # Get only the latest upload for this session
-        upload = LessonPlanUpload.objects.filter(
-            planned_session=planned_session,
-            facilitator=request.user
-        ).order_by('-upload_date').first()
+        # [DAY-AWARE] Find all related planned sessions for this day
+        from .session_management import get_grouped_classes_for_session
+        from django.utils import timezone
         
-        if upload:
-            return JsonResponse({
-                "success": True,
-                "upload": {
-                    'id': str(upload.id),
-                    'filename': upload.file_name,
-                    'file_size': upload.file_size,
-                    'upload_date': upload.upload_date.strftime('%Y-%m-%d %H:%M:%S') if upload.upload_date else 'N/A',
-                    'file_url': str(upload.lesson_plan_file)
-                }
+        today = timezone.now().date()
+        grouped_classes = get_grouped_classes_for_session(planned_session, today)
+        
+        related_planned_sessions = PlannedSession.objects.filter(
+            class_section__in=grouped_classes,
+            day_number=planned_session.day_number
+        )
+        
+        # Get latest uploads for any of these related sessions
+        uploads = LessonPlanUpload.objects.filter(
+            planned_session__in=related_planned_sessions
+        ).order_by('-upload_date')
+        
+        serialized_uploads = []
+        for upload in uploads:
+            # [DIRECT SOLUTION] Prioritize saved direct_url
+            if upload.direct_url:
+                file_url = upload.direct_url
+            elif upload.lesson_plan_file:
+                file_url = upload.lesson_plan_file.url
+            
+            print(f"📡 [SERVER-API] File: {upload.file_name} | URL: {file_url}")
+            
+            serialized_uploads.append({
+                'id': str(upload.id),
+                'filename': upload.file_name,
+                'file_size': upload.file_size,
+                'upload_date': upload.upload_date.strftime('%Y-%m-%d') if upload.upload_date else 'N/A',
+                'file_url': file_url
             })
-        else:
-            return JsonResponse({
-                "success": True,
-                "upload": None
-            })
+            
+        response = JsonResponse({
+            "success": True,
+            "uploads": serialized_uploads
+        })
+        
+        # Prevent caching of these URLs so S3 links are always fresh
+        response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response["Pragma"] = "no-cache"
+        response["Expires"] = "0"
+        
+        return response
         
     except Exception as e:
         logger.error(f"Error fetching lesson plan upload: {e}")
@@ -5191,6 +5206,15 @@ def upload_lesson_plan(request):
             is_approved=False
         )
         
+        # [DIRECT SOLUTION] Capture the full URL immediately after saving
+        try:
+            full_url = lesson_plan_upload.lesson_plan_file.url
+            lesson_plan_upload.direct_url = full_url
+            lesson_plan_upload.save(update_fields=['direct_url'])
+            print(f"📡 [DIRECT-URL-SAVED] Captured: {full_url}")
+        except Exception as e:
+            logger.warning(f"Failed to capture direct URL: {e}")
+        
         message = "[OK] Lesson plan uploaded successfully"
         if planned_session.grouped_session_id:
             message += " (shared with all grouped classes)"
@@ -5201,7 +5225,8 @@ def upload_lesson_plan(request):
             "upload_id": str(lesson_plan_upload.id),
             "file_name": lesson_plan_upload.file_name,
             "file_size": lesson_plan_upload.file_size,
-            "upload_date": lesson_plan_upload.upload_date.isoformat()
+            "upload_date": lesson_plan_upload.upload_date.isoformat(),
+            "file_url": lesson_plan_upload.direct_url
         })
         
     except Exception as e:
@@ -5301,26 +5326,6 @@ def view_lesson_plan(request, upload_id):
         
         logger.info(f"Attempting to read file: {file_path}")
         
-        try:
-            # Try to read using storage backend
-            with storage.open(file_path, 'rb') as f:
-                file_content = f.read()
-        except Exception as e:
-            logger.error(f"Error reading file from storage: {str(e)}")
-            # Fallback: try to get absolute path and read directly
-            try:
-                abs_path = storage.path(file_path)
-                logger.info(f"Trying absolute path: {abs_path}")
-                if os.path.exists(abs_path):
-                    with open(abs_path, 'rb') as f:
-                        file_content = f.read()
-                else:
-                    logger.error(f"File does not exist at: {abs_path}")
-                    return JsonResponse({"success": False, "error": "File not found on disk"}, status=404)
-            except Exception as e2:
-                logger.error(f"Error reading file: {str(e2)}", exc_info=True)
-                return JsonResponse({"success": False, "error": f"Could not read file"}, status=500)
-        
         # Determine content type
         file_extension = os.path.splitext(lesson_plan.file_name)[1].lower()
         content_type_map = {
@@ -5334,14 +5339,20 @@ def view_lesson_plan(request, upload_id):
             '.doc': 'application/msword',
             '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         }
-        
         content_type = content_type_map.get(file_extension, 'application/octet-stream')
-        
-        # Serve file inline
-        response = HttpResponse(file_content, content_type=content_type)
-        response['Content-Disposition'] = f'inline; filename="{lesson_plan.file_name}"'
-        response['Cache-Control'] = 'public, max-age=3600'
-        return response
+
+        # Serve file using FileResponse (Streaming - Memory Efficient for Production)
+        try:
+            from django.http import FileResponse
+            # Re-open the storage file as a stream
+            f = storage.open(file_path, 'rb')
+            response = FileResponse(f, content_type=content_type)
+            response['Content-Disposition'] = f'inline; filename="{lesson_plan.file_name}"'
+            response['Cache-Control'] = 'public, max-age=3600'
+            return response
+        except Exception as e:
+            logger.error(f"Error creating FileResponse: {str(e)}")
+            return JsonResponse({"success": False, "error": "Could not serve file stream"}, status=500)
     
     except LessonPlanUpload.DoesNotExist:
         return JsonResponse({"success": False, "error": "Lesson plan not found"}, status=404)
@@ -5698,7 +5709,17 @@ def api_mark_conduct_complete(request):
             return JsonResponse({"success": False, "error": "actual_session_id required"}, status=400)
             
         # [FIX] FAIL-SAFE SESSION DETECTION
-        actual_session = ActualSession.objects.filter(id=actual_session_id).first()
+        import uuid
+        actual_session = None
+        
+        # Only try to filter by ID if it looks like a valid UUID
+        if actual_session_id and actual_session_id != 'none':
+            try:
+                # Validate UUID format before querying
+                uuid.UUID(str(actual_session_id))
+                actual_session = ActualSession.objects.filter(id=actual_session_id).first()
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid actual_session_id format received: {actual_session_id}")
         
         if not actual_session:
             # Try to find by planned session and date if ID is invalid
@@ -5737,7 +5758,8 @@ def api_mark_conduct_complete(request):
         return JsonResponse({
             "success": True,
             "message": "Conduct step marked as completed",
-            "is_conduct_completed": True
+            "is_conduct_completed": True,
+            "actual_session_id": str(actual_session.id)
         })
         
     except Exception as e:

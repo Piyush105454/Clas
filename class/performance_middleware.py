@@ -86,20 +86,30 @@ class ResponseCompressionMiddleware(MiddlewareMixin):
     def process_response(self, request, response):
         """Compress response if client supports gzip"""
         
-        # Check if client accepts gzip
-        if 'gzip' not in request.META.get('HTTP_ACCEPT_ENCODING', ''):
-            return response
-        
-        # [STRICT SAFETY] Only compress text-based content
-        content_type = response.get('Content-Type', '').lower()
-        if not any(t in content_type for t in ['text/', 'json', 'javascript', 'xml']):
-            return response
-            
-        # [STRICT SAFETY] Skip streaming responses (FileResponse, etc.)
-        if getattr(response, 'streaming', False):
-            return response
-            
+        # [ULTIMATE SAFETY] If anything goes wrong in the middleware, just return the original response
         try:
+            # Check if client accepts gzip
+            if 'gzip' not in request.META.get('HTTP_ACCEPT_ENCODING', ''):
+                return response
+            
+            # Don't compress if already compressed
+            if response.get('Content-Encoding'):
+                return response
+            
+            # [STRICT SAFETY] Only compress text-based content
+            content_type = response.get('Content-Type', '').lower()
+            if not any(t in content_type for t in ['text/', 'json', 'javascript', 'xml']):
+                return response
+                
+            # [STRICT SAFETY] Skip streaming responses (FileResponse, etc.)
+            if getattr(response, 'streaming', False):
+                return response
+                
+            # [STRICT SAFETY] Skip common non-compressable or critical system paths
+            if request.path.endswith(('.js', '.css', '.map', '.json', '.ico', '.png', '.jpg', '.jpeg')):
+                # These are either already handled, or binary, or critical system files (like service-worker.js)
+                return response
+                
             # Don't compress small responses
             if len(response.content) < 1024:
                 return response
@@ -109,11 +119,18 @@ class ResponseCompressionMiddleware(MiddlewareMixin):
             gzip_file.write(response.content)
             gzip_file.close()
             
-            response.content = gzip_buffer.getvalue()
-            response['Content-Encoding'] = 'gzip'
-            response['Content-Length'] = len(response.content)
-        except (AttributeError, Exception):
-            # Fallback for any unexpected response types
+            compressed_content = gzip_buffer.getvalue()
+            
+            # Only use compressed version if it's actually smaller
+            if len(compressed_content) < len(response.content):
+                response.content = compressed_content
+                response['Content-Encoding'] = 'gzip'
+                response['Content-Length'] = len(response.content)
+                
+        except Exception as e:
+            # Silently fail and return original response to avoid 500/502 errors
+            import logging
+            logging.getLogger(__name__).warning(f"Middleware compression skipped: {e}")
             pass
         
         return response

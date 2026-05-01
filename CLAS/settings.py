@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'class',
     'widget_tweaks',
     'django.contrib.humanize',  # For better number formatting
+    'storages',                 # Required for AWS S3 storage
 ]
 
 # Static files optimization
@@ -76,20 +77,11 @@ STATICFILES_FINDERS = [
 ]
 
 # Enable static file compression in production
-if not DEBUG:
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-    
-    # Additional compression settings
-    WHITENOISE_USE_FINDERS = True
-    WHITENOISE_AUTOREFRESH = False
-    WHITENOISE_SKIP_COMPRESS_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'tgz', 'bz2', 'tbz', 'xz', 'br']
-    
-    # ✅ CACHE CONTROL FOR STATIC FILES
-    # Don't cache HTML files, but cache other assets for 1 year
-    WHITENOISE_MAX_AGE = 31536000  # 1 year for versioned assets
-else:
-    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
-    WHITENOISE_MAX_AGE = 0  # No caching in development
+# Static files optimization - Handled by STORAGES dictionary below
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = False
+WHITENOISE_SKIP_COMPRESS_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'tgz', 'bz2', 'tbz', 'xz', 'br']
+WHITENOISE_MAX_AGE = 31536000 if not DEBUG else 0
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -324,18 +316,60 @@ if os.path.exists(MEDIA_ROOT):
     except Exception as e:
         logger.warning(f"Could not set media directory permissions: {e}")
 
-# AWS S3 Configuration for Static Files (Optional - uncomment to use S3)
-# Uncomment these lines if you want to use AWS S3 for static files
-# import boto3
-# AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-# AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-# AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'your-bucket-name')
-# AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
-# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-# AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-# AWS_LOCATION = 'static'
-# STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/'
-# STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# AWS S3 Configuration for Media Files (User Uploads)
+# Note: We use WhiteNoise for Static files (CSS/JS) and S3 only for Media (Uploads)
+AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default='').strip()
+AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default='').strip()
+AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='').strip()
+AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='ap-south-1').strip()
+AWS_S3_FILE_OVERWRITE = False
+AWS_DEFAULT_ACL = None
+AWS_S3_VERIFY = True
+AWS_QUERYSTRING_AUTH = True  # Generate secure expiring links
+
+# When AWS keys are present, use S3 for media storage
+# [DIAGNOSTIC] Check if keys are valid (not placeholders)
+is_s3_ready = (
+    AWS_ACCESS_KEY_ID and 
+    AWS_SECRET_ACCESS_KEY and 
+    "your_access_key" not in AWS_ACCESS_KEY_ID and
+    "your_secret_key" not in AWS_SECRET_ACCESS_KEY
+)
+
+if is_s3_ready:
+    print("SUCCESS: S3 STORAGE ACTIVE: Using Amazon S3 for media files.")
+    
+    # Explicitly set these for django-storages compatibility
+    AWS_S3_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
+    AWS_S3_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
+    
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+    print(f"LINK: MEDIA URL set to: {MEDIA_URL}")
+    
+    # [FINAL] Combined modern and legacy settings for absolute certainty
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+else:
+    print("WARNING: S3 STORAGE INACTIVE: Using local filesystem (Missing or invalid keys in .env).")
+    MEDIA_URL = '/media/'
+    print(f"LINK: MEDIA URL set to: {MEDIA_URL}")
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 
 
