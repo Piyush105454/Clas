@@ -1129,8 +1129,39 @@
 
               // Optional: Redirect or show completion screen
               setTimeout(() => {
-                alert('✅ All steps completed! Your session workflow is now complete.');
+                const completionDiv = document.getElementById('completionMessage');
+                if (completionDiv) {
+                  completionDiv.style.display = 'block';
+                  completionDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
               }, 500);
+            }
+
+            function finishWorkflow() {
+              console.log('🏁 Finishing workflow...');
+              // Mark step 7 as completed
+              markStepCompleted(7);
+              
+              // Hide the workflow content area
+              const workflowTabs = document.getElementById('workflowTabContent');
+              if (workflowTabs) {
+                  workflowTabs.style.display = 'none';
+              }
+              
+              // Hide the step bar
+              const stepBar = document.querySelector('.step-bar');
+              if (stepBar) {
+                  stepBar.style.display = 'none';
+              }
+
+              // Show completion message
+              const completionDiv = document.getElementById('completionMessage');
+              if (completionDiv) {
+                completionDiv.style.display = 'block';
+                completionDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              
+              showMobileNotification('🎉 Session workflow complete!', 'success');
             }
 
             // ============================================
@@ -2619,13 +2650,11 @@
                 <button class="btn btn-primary btn-lg flex-grow-1" onclick="nextStep()">
                   Next: Feedback <i class="fas fa-arrow-right ms-1"></i>
                 </button>
+                <button class="btn btn-outline-secondary btn-lg" onclick="nextStep()">
+                  Skip <i class="fas fa-forward ms-1"></i>
+                </button>
               </div>
-              </button>
-              <button class="btn btn-outline-secondary btn-lg ms-2" onclick="nextStep()">
-                Skip <i class="fas fa-forward ms-1"></i>
-              </button>
             </div>
-          </div>
 
           <!-- FEEDBACK TAB - FIXED VERSION -->
           <div class="tab-pane fade" id="feedback" role="tabpanel" aria-labelledby="feedback-tab">
@@ -2845,7 +2874,9 @@
               <button class="btn btn-outline-secondary btn-lg" onclick="previousStep()">
                 <i class="fas fa-arrow-left me-1"></i>Previous
               </button>
-             
+              <button class="btn btn-success btn-lg flex-grow-1" onclick="finishWorkflow()">
+                <i class="fas fa-check-double me-1"></i>Finish Session
+              </button>
             </div>
 
           </div>
