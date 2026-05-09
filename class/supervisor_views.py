@@ -442,30 +442,21 @@ def supervisor_classes_list(request):
 # =====================================================
 def _reports_dashboard_logic(request, base_template='supervisor/shared/base.html'):
     """Core logic for reports and analytics dashboard (undecorated)"""
-    """Reports and analytics dashboard"""
     
-    from django.db.models import Count, Q
+    # Get all schools for filter dropdown - optimized query
+    schools = School.objects.filter(status=1).only('id', 'name').order_by('name')
     
-    # Use aggregation for all statistics
-    stats = User.objects.aggregate(
-        total_users=Count('id')
-    )
-    
-    total_schools = School.objects.count()
-    total_classes = ClassSection.objects.count()
-    
-    # Batch query: Get user breakdown by role
-    user_by_role = User.objects.values('role__name').annotate(count=Count('id'))
-    
-    # Batch query: Get schools by status
-    schools_by_status = School.objects.values('status').annotate(count=Count('id'))
+    # Calculate summary statistics with optimized queries
+    summary = {
+        'total_students': Enrollment.objects.filter(is_active=True).values('student').distinct().count(),
+        'total_facilitators': User.objects.filter(role__name__iexact='FACILITATOR').count(),
+        'total_sessions': ActualSession.objects.filter(status=SessionStatus.CONDUCTED).count(),
+        'attendance_rate': 85.0  # Default or placeholder as in admin view
+    }
     
     context = {
-        'total_users': stats['total_users'],
-        'total_schools': total_schools,
-        'total_classes': total_classes,
-        'user_by_role': user_by_role,
-        'schools_by_status': schools_by_status,
+        'schools': schools,
+        'summary': summary,
         'base_template': base_template,
     }
     

@@ -40,10 +40,10 @@ def reports_dashboard(request):
     """
     from django.core.cache import cache
     
-    if request.user.role.name.upper() != "ADMIN":
+    if request.user.role.name.upper() not in ["ADMIN", "SUPERVISOR"]:
         messages.error(request, "Permission denied.")
         from django.shortcuts import redirect
-        return redirect("admin_dashboard")  # Redirect to admin dashboard instead
+        return redirect("no_permission")
     
     # Check cache with user-specific key
     cache_key = f"reports_dashboard_{request.user.id}"
@@ -81,7 +81,7 @@ def reports_dashboard(request):
 @login_required
 def get_classes_for_school(request, school_id):
     """AJAX endpoint to get classes for one or more schools"""
-    if request.user.role.name.upper() != "ADMIN":
+    if request.user.role.name.upper() not in ["ADMIN", "SUPERVISOR"]:
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     try:
@@ -115,7 +115,7 @@ def get_classes_for_school(request, school_id):
 @login_required
 def get_report_data(request, report_type):
     """AJAX endpoint to get report data based on filters"""
-    if request.user.role.name.upper() != "ADMIN":
+    if request.user.role.name.upper() not in ["ADMIN", "SUPERVISOR"]:
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     if request.method != 'POST':
@@ -606,7 +606,7 @@ def get_feedback_report_data(filters, date_filter, offset=0, limit=20):
 @login_required
 def download_pdf_report(request, report_type):
     """Generate and download PDF report"""
-    if request.user.role.name.upper() != "ADMIN":
+    if request.user.role.name.upper() not in ["ADMIN", "SUPERVISOR"]:
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     if request.method != 'POST':
@@ -726,7 +726,7 @@ def download_pdf_report(request, report_type):
 @login_required
 def download_excel_report(request, report_type):
     """Generate and download Excel report"""
-    if request.user.role.name.upper() != "ADMIN":
+    if request.user.role.name.upper() not in ["ADMIN", "SUPERVISOR"]:
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     if request.method != 'POST':
@@ -871,7 +871,7 @@ def calculate_overall_attendance_rate():
 @login_required
 def download_all_excel_report(request):
     """Generate and download a combined Excel report with all tabs as worksheets"""
-    if request.user.role.name.upper() != "ADMIN":
+    if request.user.role.name.upper() not in ["ADMIN", "SUPERVISOR"]:
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     if request.method != 'POST':
