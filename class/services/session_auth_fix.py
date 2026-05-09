@@ -101,7 +101,7 @@ class URLAccessControlMiddleware(MiddlewareMixin):
     # Admin can access both /admin/ and /supervisor/ (shared views) and all /api/ endpoints
     ROLE_URLS = {
         'Admin': ['/admin/', '/supervisor/', '/api/'],
-        'Supervisor': ['/supervisor/', '/api/'],
+        'Supervisor': ['/supervisor/', '/admin/reports/', '/api/'],
         'Facilitator': ['/facilitator/', '/api/'],
     }
     
