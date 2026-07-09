@@ -272,7 +272,7 @@
             <!-- Save Button -->
             <div class="d-flex justify-content-between align-items-center">
               <div>
-                <a href="{% if session.planned_session.day_number >= 998 %}{% url 'facilitator_attendance' %}{% else %}{% url 'facilitator_class_today_session' session.planned_session.class_section.id %}{% endif %}" class="btn btn-outline-secondary">
+                <a href="{% if session.planned_session.day_number >= 998 %}{% url 'facilitator_attendance' %}{% else %}{% url 'facilitator_class_today_session' session.class_section.id %}{% endif %}" class="btn btn-outline-secondary">
                   <i class="fas fa-arrow-left me-1"></i>Back to Session
                 </a>
               </div>

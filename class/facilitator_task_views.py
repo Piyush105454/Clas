@@ -24,7 +24,7 @@ def facilitator_task_step(request, actual_session_id):
     actual_session = get_object_or_404(ActualSession, id=actual_session_id)
     
     # Verify facilitator access
-    if actual_session.planned_session.class_section.school.facilitators.filter(
+    if actual_session.class_section.school.facilitators.filter(
         facilitator=request.user,
         is_active=True
     ).count() == 0:
@@ -284,4 +284,4 @@ def facilitator_task_complete(request, actual_session_id):
     # Session status remains PENDING - it will be marked CONDUCTED when feedback is saved
     messages.success(request, "Facilitator task completed. Continue to feedback step.")
     # Redirect to feedback step instead of marking attendance
-    return redirect('facilitator_class_today_session', class_section_id=actual_session.planned_session.class_section.id)
+    return redirect('facilitator_class_today_session', class_section_id=actual_session.class_section.id)

@@ -105,7 +105,7 @@
                                             <div class="ms-2 me-auto">
                                                 <div class="fw-bold">{{ session.planned_session.title }}</div>
                                                 <small class="text-muted">
-                                                    {{ session.planned_session.class_section }} - {{ session.facilitator.full_name }}
+                                                    {{ session.class_section }} - {{ session.facilitator.full_name }}
                                                 </small>
                                             </div>
                                             <span class="badge bg-{{ session.status == 'conducted' and 'success' or session.status == 'cancelled' and 'danger' or 'warning' }} rounded-pill">

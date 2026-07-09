@@ -35,7 +35,7 @@ class Command(BaseCommand):
                 # 4. PERFORM CHRONO-SHIFTING (Gap Normalization)
                 # This ensures that if a class has 3 physical records, they are ALWAYS Days 1, 2, and 3.
                 history = list(ActualSession.objects.filter(
-                    planned_session__class_section=class_section,
+                    class_section=class_section,
                     planned_session__day_number__lte=150,
                     status__in=[SessionStatus.CONDUCTED, SessionStatus.CANCELLED]
                 ).order_by('date', 'created_at'))
@@ -45,7 +45,7 @@ class Command(BaseCommand):
                     target_day = j + 1
                     if session.planned_session.day_number != target_day:
                         try:
-                            correct_ps = PlannedSession.objects.get(class_section=class_section, day_number=target_day)
+                            correct_ps = PlannedSession.objects.get(day_number=target_day)
                             session.planned_session = correct_ps
                             session.save(update_fields=['planned_session'])
                             shift_count += 1

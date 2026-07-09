@@ -51,7 +51,7 @@ class ProgressMetrics:
 
 
 
-def get_grouped_classes_for_session(planned_session: PlannedSession, target_date: Optional[date] = None) -> List[ClassSection]:
+def get_grouped_classes_for_session(class_section_or_planned, target_date: Optional[date] = None) -> List[ClassSection]:
     """
     Helper function to get all classes in a grouped session
     Consolidates logic for checking both grouped_session_id and CalendarDate
@@ -62,38 +62,33 @@ def get_grouped_classes_for_session(planned_session: PlannedSession, target_date
     if target_date is None:
         target_date = timezone.localdate()
     
+    from .models import ClassSection, ActualSession
+    
+    if isinstance(class_section_or_planned, ClassSection):
+        class_section = class_section_or_planned
+    elif isinstance(class_section_or_planned, ActualSession):
+        class_section = class_section_or_planned.class_section
+    else:
+        class_section = getattr(class_section_or_planned, 'class_section', None)
+        
+    if not class_section:
+        return []
+        
     grouped_classes = []
     
-    # Priority 1: Check CalendarDate for specific date grouping
+    # Check CalendarDate for specific date grouping
     calendar_entry = CalendarDate.objects.filter(
         date=target_date,
-        class_sections=planned_session.class_section,
+        class_sections=class_section,
         date_type=DateType.SESSION
     ).prefetch_related('class_sections').first()
     
     if calendar_entry and calendar_entry.class_sections.count() > 1:
         grouped_classes = list(calendar_entry.class_sections.all())
         return grouped_classes
-
-    # Priority 2: Persistent Groups (REMOVED)
-    # To maintain the "Daily Clean Start" rule, we no longer automatically group 
-    # based on permanent ID here. This ensures that if the dashboard shows 
-    # 4A and 5A as single cards, the session page also treats them as single.
-    # Grouping only happens if Priority 1 (Manual Today Grouping) is found.
-    # -------------------------------------------------------------------------
-    # if planned_session.grouped_session_id:
-    #     today = timezone.localtime(timezone.now()).date()
-    #     if target_date == today:
-    #         grouped_sessions = PlannedSession.objects.filter(
-    #             grouped_session_id=planned_session.grouped_session_id,
-    #             day_number=planned_session.day_number
-    #         ).select_related('class_section')
-    #         
-    #         grouped_classes = [gs.class_section for gs in grouped_sessions]
-    #         return grouped_classes
             
     # Default: Single class
-    grouped_classes = [planned_session.class_section]
+    grouped_classes = [class_section]
     return grouped_classes
 
 
@@ -140,7 +135,7 @@ class SessionSequenceCalculator:
             # Get all curriculum days (1-150) that have been successfully CONDUCTED
             # We exclude CANCELLED sessions so they can be re-tried in a group
             completed_days = set(ActualSession.objects.filter(
-                planned_session__class_section=cls,
+                class_section=cls,
                 status=SessionStatus.CONDUCTED
             ).values_list('planned_session__day_number', flat=True))
             
@@ -164,8 +159,8 @@ class SessionSequenceCalculator:
     @staticmethod
     def get_next_pending_session(class_section: ClassSection, facilitator: User = None, calendar_entry: Any = None) -> Optional[PlannedSession]:
         """
-        Returns the next session that needs to be conducted.
-        ENHANCED: Respects manual grouping for TODAY vs permanent grouping.
+        Returns the next PlannedSession (global master) that needs to be conducted for a given class.
+        Uses ActualSession.class_section to determine progress per class.
         """
         from django.utils import timezone
         from .services.facilitator_session_continuation import FacilitatorSessionContinuation
@@ -182,7 +177,6 @@ class SessionSequenceCalculator:
                     return continuation
             
             # Step 2: Detect Grouping for TODAY
-            # Priority: Manual Grouping from CalendarDate
             lookup_class = class_section
             group_members = [class_section]
             
@@ -192,7 +186,6 @@ class SessionSequenceCalculator:
                     if class_section in current_group:
                         group_members = current_group
             else:
-                # Fallback: Check for manual group for today in the DB
                 from .models import CalendarDate
                 todays_entry = CalendarDate.objects.filter(
                     date=today
@@ -207,84 +200,54 @@ class SessionSequenceCalculator:
                         group_members = list(todays_entry.class_sections.all())
             
             if len(group_members) > 1:
-                # We are grouped TODAY. Use the class with MINIMUM progress as leader (no gap miss).
                 lookup_class = SessionSequenceCalculator._get_group_leader(group_members)
-                logger.info(f"Grouped progress for today: Using leader {lookup_class.display_name} (minimum progress sync) for {class_section.display_name}")
+                logger.info(f"Grouped: Using leader {lookup_class.display_name} for {class_section.display_name}")
             else:
-                # We are NOT grouped today. Use individual class progress history.
-                # Note: We purposely ignore permanent GroupedSession records here to allow 
-                # classes to diverge if they aren't taught together today.
-                logger.info(f"Individual progress for today: Using individual history for {class_section.display_name}")
+                logger.info(f"Individual: Using {class_section.display_name}")
             
-            # Step 2: ENSURE TODAY'S SESSION IS VALID
-            # Check if there is an ActualSession for TODAY
+            # Step 3: Check if there's already an ActualSession for today
             todays_actual_session = ActualSession.objects.filter(
-                planned_session__class_section=lookup_class,
-                date=today
+                class_section=lookup_class,
+                date=today,
+                planned_session__day_number__lt=900
             ).select_related('planned_session').order_by('planned_session__day_number').first()
             
-            # [HEARTBEAT] GAP-AWARE SEQUENCING
-            # We no longer look at the MAX Day Number. Instead, we find the FIRST MISSING Day.
-            # 1. Get all curriculum days (1-150) that have been successfully CONDUCTED
-            # We exclude CANCELLED to ensure they can be re-tried until CONDUCTED.
+            # Count conducted curriculum sessions (gap-aware)
             completed_days = set(ActualSession.objects.filter(
-                planned_session__class_section=lookup_class,
+                class_section=lookup_class,
                 planned_session__day_number__lte=150,
                 status=SessionStatus.CONDUCTED
             ).exclude(date=today).values_list('planned_session__day_number', flat=True))
             
-            # [SIMPLE LOGIC] 
-            # Total conducted sessions (curriculum) + 1 = Next Day.
-            # This is "Easy Logic": 2 conducted -> Suggest Day 3.
             standard_conducted_count = ActualSession.objects.filter(
-                planned_session__class_section=lookup_class,
+                class_section=lookup_class,
                 status=SessionStatus.CONDUCTED,
                 planned_session__day_number__lte=150
             ).values('planned_session__day_number').distinct().count()
             
             target_day = standard_conducted_count + 1
             highest_completed_day = max(list(completed_days) + [0])
-            logger.info(f"Gap-Aware Sync: {lookup_class.display_name} has highest {highest_completed_day}. Suggesting first gap: Day {target_day}")
+            logger.info(f"Gap-Aware: {lookup_class.display_name} highest={highest_completed_day}, target=Day {target_day}")
             
             if todays_actual_session:
-                # [FIX] CURRICULUM-FIRST: Ignore "Magic" days (997, 998, 999) on the main dashboard 
-                # unless they are explicitly standard curriculum. This ensures that if 6 are done, 
-                # Day 7 is shown even if Office Work was accidentally tagged.
                 current_day_num = todays_actual_session.planned_session.day_number
-                
                 if current_day_num < 900:
-                    # If today's session is CONDUCTED or CANCELLED, we must return it
                     if todays_actual_session.status in [SessionStatus.CONDUCTED, SessionStatus.CANCELLED]:
                         return todays_actual_session.planned_session
-                    
-                    # [STRICT GAP PROTECTION]
-                    # If today's session is PENDING but it doesn't match our first gap (target_day),
-                    # we must DELETE this incorrect record to allow the correct day to start.
                     if current_day_num != target_day:
-                        logger.warning(f"CRITICAL: Today's session (Day {current_day_num}) does not match first gap (Day {target_day}) for {lookup_class}. Attempting to DELETING jumped record to restore sequence.")
+                        logger.warning(f"CRITICAL: Today session Day {current_day_num} != gap Day {target_day} for {lookup_class}. Deleting.")
                         try:
-                            # Use transaction.atomic to ensure we don't leave half-deleted states 
-                            # and catch specific DB errors if related tables are missing
                             with transaction.atomic():
                                 todays_actual_session.delete()
-                                # After deletion, null out local var so we proceed to Step 3
                                 todays_actual_session = None
                         except Exception as delete_error:
-                            logger.error(f"Failed to delete jumped record (possible missing DB table): {delete_error}")
-                            # If we can't delete it, we MUST return it anyway or move to a fallback 
-                            # to prevent a total UI crash. Better to show 'incorrect' session than no session.
+                            logger.error(f"Failed to delete jumped record: {delete_error}")
                             return todays_actual_session.planned_session
                     else:
-                        # Today's session is valid and pending, return it
                         return todays_actual_session.planned_session
                 else:
-                    # It's a magic day (997-999). We ignore it to let the curriculum day (target_day) 
-                    # take precedence on this page.
-                    logger.info(f"Ignoring existing today session for Magic Day {current_day_num} to prioritize curriculum.")
+                    logger.info(f"Ignoring existing today session for Magic Day {current_day_num}.")
                     todays_actual_session = None
-            
-            # Step 3: USE ACTUAL SESSION HISTORY + PROGRESS TRACKER as source of truth
-            # target_day from Gap-Aware Sync is our foundation.
             
             # Step 4: Reconcile with PROGRESS TRACKER
             latest_progress = ClassSessionProgress.objects.filter(
@@ -293,86 +256,55 @@ class SessionSequenceCalculator:
             
             if latest_progress:
                 progress_day = latest_progress.day_number
-                
-                # [GAP SYNC] 
-                # If progress tracker is out of sync with our first available gap,
-                # we force the tracker to the gap to ensure UI consistency.
                 if progress_day != target_day:
-                    logger.warning(f"Gap Sync for {lookup_class}: Tracker says Day {progress_day} but physical gap is Day {target_day}. Correcting.")
-                    # Self-heal the progress tracker
+                    logger.warning(f"Gap Sync for {lookup_class}: Tracker Day {progress_day} != gap Day {target_day}. Correcting.")
                     latest_progress.day_number = target_day
                     latest_progress.save(update_fields=['day_number'])
-                    
-                    # [CRITICAL] Invalidate progress cache so the UI updates Day badge immediately
                     SessionStatusManager._invalidate_progress_cache(lookup_class)
-                    logger.info(f"Self-healed progress tracker and invalidated cache for {lookup_class}")
-                
-            logger.info(f"Final Target Calculation: Suggesting Day {target_day} for {lookup_class}")
-
-            # Safety check: range 1-150
-            if target_day > 150:
-                 # Only stop if ALL 150 are done
-                 if highest_completed_day >= 150:
-                    return None
-                 target_day = 150
             
+            logger.info(f"Final target: Day {target_day} for {lookup_class}")
+
+            # Safety bounds
+            if target_day > 150:
+                if highest_completed_day >= 150:
+                    return None
+                target_day = 150
             if target_day < 1:
                 target_day = 1
 
-            # Find the target planned session
+            # Fetch from GLOBAL master planned session table (no class_section filter)
             next_session = PlannedSession.objects.filter(
-                class_section=lookup_class,
                 day_number__gte=target_day,
+                day_number__lte=150,
                 is_active=True
             ).order_by('day_number').first()
 
-            # [AUTO-REPAIR] If we found a session but it's AFTER the target day,
-            # or we found NOTHING but history says we aren't done, it's a curriculum gap.
-            if (next_session and next_session.day_number > target_day) or (not next_session and highest_completed_day < 149):
-                logger.warning(f"Curriculum gap detected for {lookup_class}: Expected Day {target_day}. Triggering aggressive repair.")
-                SessionBulkManager.repair_sequence_gaps(lookup_class) # Fill the holes in 1-150
-                # Re-fetch after repair
-                next_session = PlannedSession.objects.filter(
-                    class_section=lookup_class,
-                    day_number__gte=target_day,
-                    is_active=True
-                ).order_by('day_number').first()
-                logger.info(f"Curriculum repaired for {lookup_class}. New session identified: {next_session}")
-            
-            # If no session found, check if we have any sessions at all
             if not next_session:
-                # [FIX] For grouped classes, we must check sessions for lookup_class
-                total_sessions = PlannedSession.objects.filter(
-                    class_section=lookup_class,
-                    is_active=True
-                ).count()
-                
-                if total_sessions == 0:
-                    logger.warning(f"No planned sessions found for {lookup_class}")
-                    return None
-                
-                # Check if all sessions are truly conducted
+                # Check if all sessions are truly completed
                 completed_count = ActualSession.objects.filter(
-                    planned_session__class_section=lookup_class,
-                    status=SessionStatus.CONDUCTED
-                ).count()
+                    class_section=lookup_class,
+                    status=SessionStatus.CONDUCTED,
+                    planned_session__day_number__lte=150
+                ).values('planned_session__day_number').distinct().count()
                 
-                if completed_count >= total_sessions:
-                    logger.info(f"All sessions completed for {lookup_class}")
+                if completed_count >= 150:
+                    logger.info(f"All 150 sessions completed for {lookup_class}")
                     return None
                 
-                # There might be sessions without actual sessions, get the first one
+                # Fall back to first available global planned session
                 next_session = PlannedSession.objects.filter(
-                    class_section=lookup_class,
-                    is_active=True
+                    is_active=True,
+                    day_number__lte=150
                 ).order_by('day_number').first()
             
             logger.info(f"Next pending session for {class_section}: Day {next_session.day_number if next_session else 'None'}")
             return next_session
             
         except Exception as e:
-            logger.error(f"Error getting next pending session for {class_section}: {e}")
+            import traceback
+            logger.error(f"Error getting next pending session for {class_section}: {e}\n{traceback.format_exc()}")
             return None
+
     
     @staticmethod
     def validate_sequence_integrity(class_section: ClassSection) -> ValidationResult:
@@ -615,7 +547,7 @@ class SessionSequenceCalculator:
         try:
             # Get all actual sessions with their planned sessions
             actual_sessions = ActualSession.objects.filter(
-                planned_session__class_section=class_section
+                class_section=class_section
             ).select_related('planned_session', 'facilitator').order_by('-date')[:limit]
             
             history = []
@@ -670,17 +602,15 @@ class SessionStatusManager:
                 actual_session.save()
 
                 # 2. Handle Grouped Sessions (Sync status across the group)
-                # CRITICAL: Only sync if they share a valid, non-None grouped_session_id
                 planned_session = actual_session.planned_session
                 today = actual_session.date
-                group_members = get_grouped_classes_for_session(planned_session, today)
+                group_members = get_grouped_classes_for_session(actual_session, today)
                 
-                if len(group_members) > 1 and planned_session.grouped_session_id:
+                if len(group_members) > 1:
                     other_actuals = ActualSession.objects.filter(
                         date=today,
-                        planned_session__grouped_session_id=planned_session.grouped_session_id,
-                        planned_session__day_number=planned_session.day_number,
-                        planned_session__class_section__in=group_members
+                        class_section__in=group_members,
+                        planned_session__day_number=planned_session.day_number
                     ).exclude(id=actual_session.id)
                     
                     updated_count = other_actuals.update(
@@ -708,7 +638,7 @@ class SessionStatusManager:
             raise ValidationError(f"Failed to complete session: {str(e)}")
 
     @staticmethod
-    def conduct_session(planned_session: PlannedSession, facilitator: User, 
+    def conduct_session(planned_session: PlannedSession, class_section: ClassSection, facilitator: User, 
                        remarks: str = "", duration_minutes: Optional[int] = None) -> ActualSession:
         """
         Starts session and creates it with PENDING status.
@@ -719,6 +649,7 @@ class SessionStatusManager:
                 # Create or update actual session with PENDING status
                 actual_session, created = ActualSession.objects.get_or_create(
                     planned_session=planned_session,
+                    class_section=class_section,
                     date=timezone.localdate(),
                     defaults={
                         'facilitator': facilitator,
@@ -745,7 +676,7 @@ class SessionStatusManager:
                 
                 # [GROUP-AWARE] Identify all classes in the group
                 today = timezone.localdate()
-                group_members = get_grouped_classes_for_session(planned_session, today)
+                group_members = get_grouped_classes_for_session(class_section, today)
                 
                 # Update ClassSessionProgress for ALL classes in the group
                 for cls in group_members:
@@ -756,7 +687,6 @@ class SessionStatusManager:
                             'day_number': planned_session.day_number,
                             'status': 'pending',
                             'is_grouped': len(group_members) > 1,
-                            'grouped_session_id': planned_session.grouped_session_id
                         }
                     )
                     
@@ -768,7 +698,7 @@ class SessionStatusManager:
                     # Invalidate progress cache for each member
                     SessionStatusManager._invalidate_progress_cache(cls)
                 
-                logger.info(f"Session started (PENDING): {planned_session} by {facilitator} (Group size: {len(group_members)})")
+                logger.info(f"Session started (PENDING): {planned_session} for {class_section} by {facilitator} (Group size: {len(group_members)})")
                 return actual_session
                 
         except Exception as e:
@@ -776,7 +706,7 @@ class SessionStatusManager:
             raise ValidationError(f"Failed to start session: {str(e)}")
     
     @staticmethod
-    def mark_holiday(planned_session: PlannedSession, facilitator: User, 
+    def mark_holiday(planned_session: PlannedSession, class_section: ClassSection, facilitator: User, 
                     reason: str = "") -> ActualSession:
         """
         Marks session as holiday while preserving for future conduct
@@ -785,6 +715,7 @@ class SessionStatusManager:
             with transaction.atomic():
                 actual_session, created = ActualSession.objects.get_or_create(
                     planned_session=planned_session,
+                    class_section=class_section,
                     date=timezone.localdate(),
                     defaults={
                         'facilitator': facilitator,
@@ -808,7 +739,7 @@ class SessionStatusManager:
                 
                 # [GROUP-AWARE] Identify all classes in the group
                 today = timezone.localdate()
-                group_members = get_grouped_classes_for_session(planned_session, today)
+                group_members = get_grouped_classes_for_session(class_section, today)
                 
                 # UPDATE PROGRESS TRACKER: Holiday does NOT move to next day for ANY member
                 for cls in group_members:
@@ -820,7 +751,7 @@ class SessionStatusManager:
                     # Invalidate progress cache
                     SessionStatusManager._invalidate_progress_cache(cls)
                 
-                logger.info(f"Session marked as holiday: {planned_session} by {facilitator} (Group size: {len(group_members)})")
+                logger.info(f"Session marked as holiday: {planned_session} for {class_section} by {facilitator} (Group size: {len(group_members)})")
                 return actual_session
                 
         except Exception as e:
@@ -828,7 +759,7 @@ class SessionStatusManager:
             raise ValidationError(f"Failed to mark session as holiday: {str(e)}")
     
     @staticmethod
-    def cancel_session(planned_session: PlannedSession, facilitator: User, 
+    def cancel_session(planned_session: PlannedSession, class_section: ClassSection, facilitator: User, 
                       cancellation_reason: str, remarks: str = "") -> ActualSession:
         """
         Permanently cancels session and moves to next day
@@ -842,6 +773,7 @@ class SessionStatusManager:
             with transaction.atomic():
                 actual_session, created = ActualSession.objects.get_or_create(
                     planned_session=planned_session,
+                    class_section=class_section,
                     date=timezone.localdate(),
                     defaults={
                         'facilitator': facilitator,
@@ -871,7 +803,7 @@ class SessionStatusManager:
                 
                 # [GROUP-AWARE] Identify all classes in the group
                 today = timezone.localdate()
-                group_members = get_grouped_classes_for_session(planned_session, today)
+                group_members = get_grouped_classes_for_session(class_section, today)
                 
                 # UPDATE PROGRESS TRACKER: Cancellation also moves to next day for ALL members
                 for cls in group_members:
@@ -883,7 +815,7 @@ class SessionStatusManager:
                     # Invalidate progress cache
                     SessionStatusManager._invalidate_progress_cache(cls)
                 
-                logger.info(f"Session cancelled: {planned_session} by {facilitator} (Group size: {len(group_members)}), reason: {cancellation_reason}")
+                logger.info(f"Session cancelled: {planned_session} for {class_section} by {facilitator} (Group size: {len(group_members)}), reason: {cancellation_reason}")
                 return actual_session
                 
         except Exception as e:

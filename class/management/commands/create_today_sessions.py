@@ -44,7 +44,7 @@ class Command(BaseCommand):
         for cls in classes:
             # Check if session already exists for today
             existing = ActualSession.objects.filter(
-                planned_session__class_section=cls,
+                class_section=cls,
                 date=today
             ).first()
 
@@ -52,9 +52,8 @@ class Command(BaseCommand):
                 skipped_count += 1
                 continue
 
-            # Get PlannedSession for this class at the current day_number
+            # Get PlannedSession for the current day_number (global template)
             planned_session = PlannedSession.objects.filter(
-                class_section=cls,
                 day_number=day_number,
                 is_active=True
             ).first()
@@ -68,15 +67,15 @@ class Command(BaseCommand):
             # Create ActualSession
             session = ActualSession.objects.create(
                 planned_session=planned_session,
+                class_section=cls,
                 date=today,
                 status=0,  # PENDING
                 facilitator=None
             )
 
             created_count += 1
-            grouping_status = 'Grouped' if planned_session.grouped_session_id else 'Single'
             self.stdout.write(
-                self.style.SUCCESS(f'  ✓ {cls.display_name}: Created (Day {day_number}, {grouping_status})')
+                self.style.SUCCESS(f'  ✓ {cls.display_name}: Created (Day {day_number})')
             )
 
         self.stdout.write(f'\n' + '='*70)

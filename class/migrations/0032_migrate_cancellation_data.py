@@ -28,7 +28,7 @@ def migrate_cancellation_data(apps, schema_editor):
         )
         count += 1
     
-    print(f"✅ Migrated {count} cancellation records")
+    print(f"SUCCESS: Migrated {count} cancellation records")
 
 
 def reverse_migration(apps, schema_editor):
@@ -39,7 +39,7 @@ def reverse_migration(apps, schema_editor):
     SessionCancellation = apps.get_model('class', 'SessionCancellation')
     count = SessionCancellation.objects.count()
     SessionCancellation.objects.all().delete()
-    print(f"✅ Deleted {count} cancellation records (rollback)")
+    print(f"SUCCESS: Deleted {count} cancellation records (rollback)")
 
 
 class Migration(migrations.Migration):

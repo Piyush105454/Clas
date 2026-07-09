@@ -70,6 +70,7 @@ class DailyProfileService:
         # Fast subqueries using Exists
         has_attendance = Attendance.objects.filter(actual_session_id=OuterRef('id'))
         has_steps = SessionStepStatus.objects.filter(
+            class_section_id=OuterRef('class_section_id'),
             planned_session_id=OuterRef('planned_session_id'),
             session_date=OuterRef('date')
         )
@@ -77,15 +78,15 @@ class DailyProfileService:
         sessions = ActualSession.objects.filter(
             facilitator=self.facilitator,
             date=self.selected_date,
-            planned_session__class_section__school_id__in=assigned_school_ids
+            class_section__school_id__in=assigned_school_ids
         ).filter(
             Q(status__in=[SessionStatus.CONDUCTED, SessionStatus.CANCELLED, SessionStatus.HOLIDAY]) |
             Exists(has_attendance) |
             Exists(has_steps)
         ).select_related(
             'planned_session',
-            'planned_session__class_section',
-            'planned_session__class_section__school'
+            'class_section',
+            'class_section__school'
         ).distinct()
         
         processed_session_ids = set()
@@ -110,10 +111,10 @@ class DailyProfileService:
                 # Group sessions by active members (ignore historical grouped_session_id)
                 # We find all sessions today that belong to the active group members
                 group_sessions = [s for s in sorted_sessions if 
-                                 s.planned_session.class_section in group_members]
+                                 s.class_section in group_members]
                 
                 # Combine classes for display
-                classes = [f"{s.planned_session.class_section.class_level} - {s.planned_session.class_section.section}" for s in group_sessions]
+                classes = [f"{s.class_section.class_level} - {s.class_section.section}" for s in group_sessions]
                 class_section_str = ", ".join(sorted(set(classes)))
                 
                 # Use the session with the highest day_number or specific title for the group name
@@ -142,12 +143,12 @@ class DailyProfileService:
                 # Individual class breakdown
                 class_breakdown = []
                 for s in group_sessions:
-                    s_class_name = f"{s.planned_session.class_section.class_level} - {s.planned_session.class_section.section}"
+                    s_class_name = f"{s.class_section.class_level} - {s.class_section.section}"
                     s_present = s.attendances.filter(status=1).values('student_id').distinct().count()
                     if s_present == 0:
                         s_present = s.attendances.filter(status=1).values('enrollment__student_id').distinct().count()
                     
-                    s_enrolled = Enrollment.objects.filter(class_section=s.planned_session.class_section, is_active=True).count()
+                    s_enrolled = Enrollment.objects.filter(class_section=s.class_section, is_active=True).count()
                     class_breakdown.append({
                         'class_name': s_class_name,
                         'present': s_present,
@@ -162,7 +163,7 @@ class DailyProfileService:
                     'students_present': attendance_count,
                     'students_enrolled': max(attendance_count, enrolled_count),
                     'attendance_rate': round((attendance_count / max(1, enrolled_count)) * 100) if enrolled_count > 0 else 0,
-                    'school': pinned_planned.class_section.school.name,
+                    'school': session.class_section.school.name,
                     'class_breakdown': class_breakdown,
                 })
                 
@@ -176,19 +177,19 @@ class DailyProfileService:
                      attendance_count = session.attendances.filter(status=1).values('enrollment__student_id').distinct().count()
                 
                 enrolled_count = Enrollment.objects.filter(
-                    class_section=pinned_planned.class_section,
+                    class_section=session.class_section,
                     is_active=True
                 ).count()
                 
                 session_list.append({
                     'id': str(session.id),
                     'name': pinned_planned.title or f"Day {pinned_planned.day_number}",
-                    'class_section': f"{pinned_planned.class_section.class_level} - {pinned_planned.class_section.section}",
+                    'class_section': f"{session.class_section.class_level} - {session.class_section.section}",
                     'status': session.status or 'completed',
                     'students_present': attendance_count,
                     'students_enrolled': max(attendance_count, enrolled_count),
                     'attendance_rate': round((attendance_count / max(1, enrolled_count)) * 100) if enrolled_count > 0 else 0,
-                    'school': pinned_planned.class_section.school.name,
+                    'school': session.class_section.school.name,
                 })
                 processed_session_ids.add(session.id)
             
@@ -204,8 +205,8 @@ class DailyProfileService:
             upload_date=self.selected_date
         ).select_related(
             'planned_session',
-            'planned_session__class_section',
-            'planned_session__class_section__school'
+            'class_section',
+            'class_section__school'
         ).order_by('-upload_date')
         
         lesson_plan_list = []
@@ -218,8 +219,8 @@ class DailyProfileService:
                 'session_id': str(lesson.planned_session.id) if lesson.planned_session else None,
                 'file_name': lesson.file_name,
                 'upload_date': lesson.upload_date.isoformat(),
-                'class_section': f"{lesson.planned_session.class_section.class_level} - {lesson.planned_session.class_section.section}",
-                'school': lesson.planned_session.class_section.school.name,
+                'class_section': f"{lesson.class_section.class_level} - {lesson.class_section.section}",
+                'school': lesson.class_section.school.name,
             })
         
         return lesson_plan_list
@@ -232,8 +233,8 @@ class DailyProfileService:
         ).select_related(
             'actual_session',
             'actual_session__planned_session',
-            'actual_session__planned_session__class_section',
-            'actual_session__planned_session__class_section__school'
+            'actual_session__class_section',
+            'actual_session__class_section__school'
         ).order_by('-created_at')
         
         # Get facilitator's assigned schools for fallback
@@ -248,7 +249,7 @@ class DailyProfileService:
             date=self.selected_date
         ).select_related(
             'planned_session',
-            'planned_session__class_section'
+            'class_section'
         ).order_by('-date').first()
         
         task_list = []
@@ -257,14 +258,14 @@ class DailyProfileService:
             class_section = 'General Task'
             school = 'No Session'
             
-            if task.actual_session and task.actual_session.planned_session:
+            if task.actual_session:
                 # Task has a session - use it
-                class_section = f"{task.actual_session.planned_session.class_section.class_level} - {task.actual_session.planned_session.class_section.section}"
-                school = task.actual_session.planned_session.class_section.school.name
-            elif recent_session and recent_session.planned_session:
+                class_section = f"{task.actual_session.class_section.class_level} - {task.actual_session.class_section.section}"
+                school = task.actual_session.class_section.school.name
+            elif recent_session:
                 # No session on task, but facilitator has sessions today - use most recent
-                class_section = f"{recent_session.planned_session.class_section.class_level} - {recent_session.planned_session.class_section.section}"
-                school = recent_session.planned_session.class_section.school.name
+                class_section = f"{recent_session.class_section.class_level} - {recent_session.class_section.section}"
+                school = recent_session.class_section.school.name
             elif facilitator_schools.exists():
                 # No sessions today, use assigned school
                 school = facilitator_schools.first().school.name
@@ -306,15 +307,15 @@ class DailyProfileService:
         ).select_related(
             'actual_session',
             'actual_session__planned_session',
-            'actual_session__planned_session__class_section'
+            'actual_session__class_section'
         ).order_by('-feedback_date')
         
         for feedback in facilitator_feedback:
             class_section = 'No Session'
             school = 'No Session'
-            if feedback.actual_session and feedback.actual_session.planned_session:
-                class_section = f"{feedback.actual_session.planned_session.class_section.class_level} - {feedback.actual_session.planned_session.class_section.section}"
-                school = feedback.actual_session.planned_session.class_section.school.name
+            if feedback.actual_session:
+                class_section = f"{feedback.actual_session.class_section.class_level} - {feedback.actual_session.class_section.section}"
+                school = feedback.actual_session.class_section.school.name
             
             all_feedback.append({
                 'id': str(feedback.id),
@@ -335,15 +336,15 @@ class DailyProfileService:
         ).select_related(
             'actual_session',
             'actual_session__planned_session',
-            'actual_session__planned_session__class_section'
+            'actual_session__class_section'
         ).order_by('-submitted_at')
         
         for feedback in student_feedback:
             class_section = 'No Session'
             school = 'No Session'
-            if feedback.actual_session and feedback.actual_session.planned_session:
-                class_section = f"{feedback.actual_session.planned_session.class_section.class_level} - {feedback.actual_session.planned_session.class_section.section}"
-                school = feedback.actual_session.planned_session.class_section.school.name
+            if feedback.actual_session:
+                class_section = f"{feedback.actual_session.class_section.class_level} - {feedback.actual_session.class_section.section}"
+                school = feedback.actual_session.class_section.school.name
             
             all_feedback.append({
                 'id': str(feedback.id),

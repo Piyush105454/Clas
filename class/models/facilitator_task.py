@@ -1,6 +1,14 @@
 import uuid
+import datetime
 from django.db import models
 from django.conf import settings
+
+def facilitator_task_upload_path(instance, filename):
+    now = datetime.datetime.now()
+    user = 'unknown_user'
+    if instance.facilitator and instance.facilitator.email:
+        user = instance.facilitator.email.split('@')[0]
+    return f"CLAS/{now.strftime('%Y')}/{now.strftime('%m')}/facilitator_tasks/{user}/{filename}"
 
 
 class FacilitatorTask(models.Model):
@@ -39,7 +47,7 @@ class FacilitatorTask(models.Model):
     
     # For photo/video uploads
     media_file = models.FileField(
-        upload_to='facilitator_tasks/%Y/%m/%d/',
+        upload_to=facilitator_task_upload_path,
         null=True,
         blank=True,
         help_text="Photo or video file"

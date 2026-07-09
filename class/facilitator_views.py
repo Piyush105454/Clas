@@ -228,38 +228,19 @@ class FacilitatorStudentListView(FacilitatorAccessMixin, ListView):
         class_ids = [c.id for c in context['classes']]
         
         # Single query for all class session counts
-        # ✅ Group Mapping (For Single Set of 150 Architecture)
-        # Map each class to its primary class if it's part of a group
-        from .models import GroupedSession, PlannedSession
-        class_to_primary = {c_id: c_id for c_id in class_ids}
-        group_infos = GroupedSession.objects.filter(class_sections__id__in=class_ids).prefetch_related('class_sections')
-        
-        all_relevant_class_ids = set(class_ids)
-        for g in group_infos:
-            # Find the primary class for this group (the one with PlannedSessions)
-            primary_ps = PlannedSession.objects.filter(grouped_session_id=g.grouped_session_id).first()
-            if primary_ps:
-                primary_id = primary_ps.class_section_id
-                all_relevant_class_ids.add(primary_id)
-                for c in g.class_sections.all():
-                    if c.id in class_ids:
-                        class_to_primary[c.id] = primary_id
-
         class_session_counts = ActualSession.objects.filter(
-            planned_session__class_section_id__in=list(all_relevant_class_ids),
+            class_section_id__in=class_ids,
             status=SessionStatus.CONDUCTED
-        ).values('planned_session__class_section_id').annotate(count=Count('id'))
-        
-        # Build the final dict, mapping secondary classes to primary counts
-        primary_session_dict = {
-            item['planned_session__class_section_id']: item['count'] 
+        ).values('class_section_id').annotate(count=Count('id'))
+
+        class_session_dict = {
+            item['class_section_id']: item['count']
             for item in class_session_counts
         }
-        
-        class_session_dict = {
-            c_id: primary_session_dict.get(class_to_primary[c_id], 0)
-            for c_id in class_ids
-        }
+        # Ensure classes with 0 sessions are defaulted to 0
+        for c_id in class_ids:
+            if c_id not in class_session_dict:
+                class_session_dict[c_id] = 0
         
         # Single query for all attendance stats
         attendance_stats_raw = Attendance.objects.filter(
@@ -826,15 +807,12 @@ def facilitator_dashboard(request):
     ).select_related('student', 'class_section').order_by('-student__created_at')[:5]
     
     recent_sessions = ActualSession.objects.filter(
-        planned_session__class_section__in=facilitator_classes,
+        class_section__in=facilitator_classes,
         date__gte=last_week
     ).count()
     
     upcoming_sessions = PlannedSession.objects.filter(
-        class_section__in=facilitator_classes,
         is_active=True
-    ).exclude(
-        actual_sessions__status=SessionStatus.CONDUCTED
     ).order_by('day_number')[:5]
     
     context = {
@@ -965,15 +943,14 @@ def facilitator_today_session_calendar(request):
             'first_class': first_class
         }
 
-    # OPTIMIZATION: Bulk query all actual sessions for today
     actual_sessions_today = ActualSession.objects.filter(
-        planned_session__class_section_id__in=class_to_calendar_map.keys(),
+        class_section_id__in=class_to_calendar_map.keys(),
         date=today
-    ).select_related('planned_session', 'planned_session__class_section')
+    ).select_related('planned_session', 'class_section')
     
     actual_session_ids = []
     for actual_session in actual_sessions_today:
-        class_id = actual_session.planned_session.class_section.id
+        class_id = actual_session.class_section.id
         if class_id in class_to_calendar_map:
             map_data = class_to_calendar_map[class_id]
             actual_session_ids.append(actual_session.id)
@@ -1340,23 +1317,35 @@ def facilitator_my_attendance(request):
         
         # 1. ENSURE SESSIONS EXIST FOR TODAY (Skip on Sundays as per user request)
         if today.weekday() != 6: # 6 is Sunday
-            for cls in class_sections:
-                # Check if there's already an ActualSession for today
-                has_today_session = ActualSession.objects.filter(
-                    planned_session__class_section=cls,
+            # Batch query existing actual sessions today for all facilitator classes
+            classes_with_actual_session = set(
+                ActualSession.objects.filter(
+                    class_section__in=class_sections,
                     date=today
-                ).exists()
-                
-                # Also check if today is a holiday/office work for this school/class
-                is_off_day = CalendarDate.objects.filter(
-                    date=today,
-                    date_type__in=[DateType.HOLIDAY, DateType.OFFICE_WORK]
-                ).filter(
-                    Q(school=cls.school, class_section__isnull=True) |
-                    Q(school__isnull=True) |
-                    Q(class_section=cls) |
-                    Q(class_sections=cls)
-                ).exists()
+                ).values_list('class_section_id', flat=True)
+            )
+
+            # Batch query calendar off-days for today
+            calendar_off_days = CalendarDate.objects.filter(
+                date=today,
+                date_type__in=[DateType.HOLIDAY, DateType.OFFICE_WORK]
+            ).prefetch_related('class_sections')
+
+            off_day_class_ids = set()
+            for cd in calendar_off_days:
+                if cd.class_section_id:
+                    off_day_class_ids.add(cd.class_section_id)
+                elif cd.class_sections.exists():
+                    off_day_class_ids.update(cd.class_sections.values_list('id', flat=True))
+                elif cd.school_id:
+                    off_day_class_ids.update(class_sections.filter(school_id=cd.school_id).values_list('id', flat=True))
+                else:
+                    # Global off-day
+                    off_day_class_ids.update(class_sections.values_list('id', flat=True))
+
+            for cls in class_sections:
+                has_today_session = cls.id in classes_with_actual_session
+                is_off_day = cls.id in off_day_class_ids
                 
                 if not has_today_session and not is_off_day:
                     next_planned = SessionSequenceCalculator.get_next_pending_session(cls)
@@ -1364,8 +1353,9 @@ def facilitator_my_attendance(request):
                         try:
                             # This creates an ActualSession (PENDING) and updates progress
                             SessionStatusManager.conduct_session(
-                                next_planned, 
-                                request.user, 
+                                planned_session=next_planned,
+                                class_section=cls,
+                                facilitator=request.user,
                                 remarks="Auto-started via My Attendance"
                             )
                         except Exception as ex:
@@ -1373,12 +1363,12 @@ def facilitator_my_attendance(request):
 
         # 2. FETCH TODAY'S SESSIONS (Including the ones we just created)
         actual_sessions_today = ActualSession.objects.filter(
-            planned_session__class_section__in=class_sections,
+            class_section__in=class_sections,
             date=today
         ).select_related(
             'planned_session', 
-            'planned_session__class_section', 
-            'planned_session__class_section__school'
+            'class_section', 
+            'class_section__school'
         ).order_by('date')
         
         # 3. IDENTIFY CALENDAR EVENTS (Holidays, Office Work, and Today's Groups)
@@ -1449,7 +1439,7 @@ def facilitator_my_attendance(request):
             ui_processed_classes.add(cls.id)
 
         for session in actual_sessions_today:
-            cls_id = session.planned_session.class_section.id
+            cls_id = session.class_section.id
             if cls_id in ui_processed_classes:
                 continue
                 
@@ -1580,7 +1570,7 @@ def update_session_status(request):
                 
                 # Delete existing ActualSession for today
                 ActualSession.objects.filter(
-                    planned_session__class_section=cls,
+                    class_section=cls,
                     date=today
                 ).delete()
                 
@@ -1610,27 +1600,22 @@ def update_session_status(request):
                 
                 # Get today's session to get day_number
                 today_session = ActualSession.objects.filter(
-                    planned_session__class_section=cls,
+                    class_section=cls,
                     date=today
                 ).first()
                 
                 if today_session:
                     day_number = today_session.planned_session.day_number
-                    grouped_id = today_session.planned_session.grouped_session_id
                     
                     # Delete today's session
                     today_session.delete()
                     
-                    # Create new session for tomorrow with SAME day_number and group ID
-                    planned = PlannedSession.objects.create(
-                        class_section=cls,
-                        day_number=day_number,
-                        grouped_session_id=grouped_id,
-                        is_active=True
-                    )
+                    # Look up the master planned session for this day number
+                    planned = PlannedSession.objects.get(day_number=day_number)
                     
                     ActualSession.objects.create(
                         planned_session=planned,
+                        class_section=cls,
                         date=tomorrow,
                         status=0,  # PENDING
                         facilitator=request.user
@@ -1757,12 +1742,13 @@ def apply_grouping(request):
         # 1. Generate the shared Grouped Session UUID
         import uuid
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
         group_uuid = uuid.uuid4()
         
         # 2. Get the target primary day number
+        # 2. Get the target primary day number
         primary_session_query = ActualSession.objects.filter(
-            planned_session__class_section=primary_class,
+            class_section=primary_class,
             date=today
         ).select_related('planned_session').first()
         
@@ -1773,17 +1759,6 @@ def apply_grouping(request):
             from .session_management import SessionSequenceCalculator
             pending = SessionSequenceCalculator.get_next_pending_session(primary_class)
             target_day = pending.day_number if pending else 1
-            
-            # Fetch the planned session itself to update
-            primary_planned = PlannedSession.objects.filter(
-                class_section=primary_class,
-                day_number=target_day,
-                is_active=True
-            ).first()
-            
-            if primary_planned:
-                primary_planned.grouped_session_id = group_uuid
-                primary_planned.save(update_fields=['grouped_session_id'])
 
         # 3. Create the GroupedSession master record
         grouped_session = GroupedSession.objects.create(
@@ -1820,66 +1795,28 @@ def apply_grouping(request):
         cal_date.class_sections.add(primary_class)
         cal_date.class_sections.add(*secondary_classes)
         
-        # 5. Synchronize secondary classes to match day number and UUID
-        for sec_cls in secondary_classes:
-            # Check if there's an existing PlannedSession for this class on the target day
-            sec_planned = PlannedSession.objects.filter(
-                class_section=sec_cls,
-                day_number=target_day
-            ).first()
+        # Get the master planned session for this day_number
+        master_planned = PlannedSession.objects.get(day_number=target_day)
 
-            if not sec_planned:
-                # If no planned session exists for the target day, try to find the one they were supposed to do today
-                # and move it, OR create a new one.
-                sec_actual_today = ActualSession.objects.filter(
-                    planned_session__class_section=sec_cls,
-                    date=today
-                ).select_related('planned_session').first()
-
-                if sec_actual_today:
-                    sec_planned = sec_actual_today.planned_session
-                    sec_planned.day_number = target_day
-                    sec_planned.grouped_session_id = group_uuid
-                    sec_planned.save(update_fields=['day_number', 'grouped_session_id'])
-                else:
-                    # Create new planned session if none exists at all for this day
-                    sec_planned = PlannedSession.objects.create(
-                        class_section=sec_cls,
-                        day_number=target_day,
-                        grouped_session_id=group_uuid,
-                        is_active=True,
-                        title=f"Day {target_day}",
-                        sequence_position=target_day
-                    )
-            else:
-                # If it already exists, just update its grouped_session_id
-                sec_planned.grouped_session_id = group_uuid
-                sec_planned.save(update_fields=['grouped_session_id'])
-
-            # Assign/Update ActualSession for today for this class
-            sec_actual = ActualSession.objects.filter(
-                planned_session__class_section=sec_cls,
-                date=today
-            ).first()
-            if sec_actual:
-                sec_actual.planned_session = sec_planned
-                sec_actual.status = 0
-                sec_actual.facilitator = request.user
-                sec_actual.save(update_fields=['planned_session', 'status', 'facilitator'])
-            else:
-                ActualSession.objects.create(
-                    planned_session=sec_planned,
-                    date=today,
-                    status=0,
-                    facilitator=request.user
-                )
-                
+        # 5. Synchronize all classes (primary and secondary) to use this master planned session today
+        all_classes = [primary_class] + list(secondary_classes)
+        for cls in all_classes:
+            ActualSession.objects.update_or_create(
+                class_section=cls,
+                date=today,
+                defaults={
+                    'planned_session': master_planned,
+                    'status': 0, # PENDING
+                    'facilitator': request.user
+                }
+            )
+                 
         # Clear facilitator cache
         from django.core.cache import cache
         cache.delete(f'facilitator_{request.user.id}_attendance')
         
         # Clear specific caches for involved classes
-        for cls in [primary_class] + list(secondary_classes):
+        for cls in all_classes:
             # Clear today_session grouping cache
             cache.delete(f"grouped_session_status_{cls.id}_{today}")
             # Clear dashboard/attendance status caches that might be affected
@@ -1914,63 +1851,52 @@ def clear_grouping(request):
         from .models import PlannedSession, ActualSession, GroupedSession, CalendarDate, DateType
         from django.utils import timezone
         from django.core.cache import cache
-        today = timezone.now().date()
+        today = timezone.localdate()
         
-        # 1. Find all planned sessions for this facilitator for today that are grouped
+        # 1. Get facilitator's assigned classes
         facilitator_classes = ClassSection.objects.filter(
             school__facilitators__facilitator=request.user
         )
         
-        # Get sessions that have a grouped_session_id
-        grouped_planned_sessions_for_facilitator = PlannedSession.objects.filter(
-            class_section__in=facilitator_classes,
-            grouped_session_id__isnull=False,
-            is_active=True
-        )
+        # Find any GroupedSession containing these classes
+        groups = GroupedSession.objects.filter(class_sections__in=facilitator_classes).distinct()
+        for g in groups:
+            # Delete GroupedSession master records
+            g.delete()
         
-        # Collect class IDs and group UUIDs before clearing
-        class_ids_to_clear_cache = set()
-        group_uuids_to_clear = set()
-        for ps in grouped_planned_sessions_for_facilitator:
-            class_ids_to_clear_cache.add(ps.class_section_id)
-            if ps.grouped_session_id:
-                group_uuids_to_clear.add(ps.grouped_session_id)
-
-        # 2. Fast clear ALL grouped_session_id from PlannedSessions
-        PlannedSession.objects.filter(
-            class_section__in=facilitator_classes, 
-            grouped_session_id__isnull=False
-        ).update(grouped_session_id=None)
-        
-        if group_uuids_to_clear:
-            # Also clear any stray sessions tied to these groups
-            PlannedSession.objects.filter(grouped_session_id__in=group_uuids_to_clear).update(grouped_session_id=None)
-            
-            # 3. Delete the GroupedSession master records
-            GroupedSession.objects.filter(grouped_session_id__in=group_uuids_to_clear).delete()
-        
-        # 4. Delete ALL CalendarDate records for these classes that represent groupings
-        # We clear ALL past and future daily groupings for these classes to ensure a totally clean start
+        # 2. Delete ALL CalendarDate records for today representing groupings for these classes
         CalendarDate.objects.filter(
+            date=today,
             date_type=DateType.SESSION,
             class_sections__in=facilitator_classes
         ).distinct().delete()
         
-        # 5. Clear ALL relevant caches
-        for ps in PlannedSession.objects.filter(class_section__in=facilitator_classes, is_active=True):
-            cache.delete(f"grouped_classes:{ps.id}:{today}")
+        # 3. For each class, reset today's session to its own next pending session
+        from .session_management import SessionSequenceCalculator
+        for cls in facilitator_classes:
+            # Delete today's actual session
+            ActualSession.objects.filter(class_section=cls, date=today).delete()
             
+            # Find next pending session for this class and create actual session for today
+            next_planned = SessionSequenceCalculator.get_next_pending_session(cls)
+            if next_planned:
+                ActualSession.objects.create(
+                    planned_session=next_planned,
+                    class_section=cls,
+                    date=today,
+                    status=0,  # PENDING
+                    facilitator=request.user
+                )
+
+        # 4. Clear all relevant caches
         for cls_id in facilitator_classes.values_list('id', flat=True):
-            # Clear today grouping status
             cache.delete(f"grouped_session_status_{cls_id}_{today}")
-            # Clear general grouped classes cache
-            # Since we don't know all dates, we clear a few primary ones or trust time-to-live
             cache.delete(f"facilitator_attendance_{request.user.id}_{cls_id}_{today}")
             
         cache.delete(f"facilitator_{request.user.id}_attendance")
         cache.delete(f"facilitator_dashboard_{request.user.id}")
 
-        return JsonResponse({'success': True, 'message': 'All past and present grouping links cleared successfully.'})
+        return JsonResponse({'success': True, 'message': 'All grouping links cleared successfully.'})
         
     except Exception as e:
         logger.error(f"Error in clear_grouping: {e}", exc_info=True)
@@ -2110,9 +2036,6 @@ def facilitator_class_office_work(request, class_section_id):
     from .session_management import SessionSequenceCalculator, get_grouped_classes_for_session
     next_planned = SessionSequenceCalculator.get_next_pending_session(class_section)
     classes_to_process = get_grouped_classes_for_session(next_planned, today) if next_planned else [class_section]
-    
-    # Get persistent grouped_session_id if any (for PlannedSession creation)
-    grouped_session_id = next_planned.grouped_session_id if next_planned else None
         
     if request.method == 'POST':
         office_work_category = request.POST.get('office_work_category', '')
@@ -2127,34 +2050,27 @@ def facilitator_class_office_work(request, class_section_id):
         if office_work_description:
             remarks_content += f"\nDescription: {office_work_description}"
             
-        # 1. Get or Create static PlannedSession for all classes in group
-        existing_day_classes = set(PlannedSession.objects.filter(
-            class_section__in=classes_to_process,
-            day_number=day_number
-        ).values_list('class_section_id', flat=True))
-        
-        for cls in classes_to_process:
-            if cls.id not in existing_day_classes:
-                PlannedSession.objects.create(
-                    class_section=cls,
-                    day_number=day_number,
-                    title="Office Work",
-                    is_active=False, # Hide from normal sequences
-                    grouped_session_id=grouped_session_id
-                )
+        # Get the global master PlannedSession for Office Work (day_number 997)
+        office_planned = PlannedSession.objects.filter(day_number=day_number).first()
+        if not office_planned:
+            office_planned = PlannedSession.objects.create(
+                day_number=day_number,
+                title="Office Work",
+                is_active=False
+            )
                 
         # Ensure strictly PENDING (auto-grouped) sessions are cleared, without deleting actual conducted sessions
         ActualSession.objects.filter(
-            planned_session__class_section__in=classes_to_process,
+            class_section__in=classes_to_process,
             date=today,
             status=SessionStatus.PENDING
         ).delete()
         
         # 2. Get or Create ActualSession for TODAY
         for cls in classes_to_process:
-            cls_planned = PlannedSession.objects.get(class_section=cls, day_number=day_number)
             actual_session, created = ActualSession.objects.get_or_create(
-                planned_session=cls_planned,
+                planned_session=office_planned,
+                class_section=cls,
                 date=today,
                 defaults={
                     'facilitator': request.user,

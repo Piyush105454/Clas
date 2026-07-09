@@ -261,15 +261,15 @@
             {% for session in date_group.list %}
             <div class="col">
                 <div class="session-item h-100 {% if session.facilitator_attendance %}{{ session.facilitator_attendance }}{% endif %}"
-                    data-class-id="{{ session.planned_session.class_section.id }}">
+                    data-class-id="{{ session.class_section.id }}">
                     
                     <!-- SESSION HEADER -->
                     <div class="session-header">
                         <div class="session-info">
-                            <h5>{{ session.planned_session.class_section.display_name }}</h5>
+                            <h5>{{ session.class_section.display_name }}</h5>
                             <small class="text-muted">
                                 <i class="bi bi-building me-1"></i>
-                                {{ session.planned_session.class_section.school.name }}
+                                {{ session.class_section.school.name }}
                             </small>
                             
                             <!-- GROUPING STATUS BADGE -->

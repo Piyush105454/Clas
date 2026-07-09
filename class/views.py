@@ -391,16 +391,16 @@ def school_detail(request, school_id):
     
     # Calculate sessions count
     total_sessions = ActualSession.objects.filter(
-        planned_session__class_section__school=school
+        class_section__school=school
     ).count()
     
     # Calculate attendance percentage
     total_attendance_records = Attendance.objects.filter(
-        actual_session__planned_session__class_section__school=school
+        actual_session__class_section__school=school
     ).count()
     
     present_count = Attendance.objects.filter(
-        actual_session__planned_session__class_section__school=school,
+        actual_session__class_section__school=school,
         status=AttendanceStatus.PRESENT
     ).count()
     
@@ -843,9 +843,9 @@ def sessions_view(request, class_section_id):
     cached_data = cache.get(cache_key)
     
     # FIX: Count unique day_numbers, not raw rows (prevents 300-sessions bug)
-    unique_days = PlannedSession.objects.filter(class_section=class_section).values('day_number').distinct().count()
-    conducted_count = ActualSession.objects.filter(planned_session__class_section=class_section, status=SessionStatus.CONDUCTED).values('planned_session__day_number').distinct().count()
-    cancelled_count = ActualSession.objects.filter(planned_session__class_section=class_section, status=SessionStatus.CANCELLED).values('planned_session__day_number').distinct().count()
+    unique_days = 150  # Global master curriculum has exactly 150 days
+    conducted_count = ActualSession.objects.filter(class_section=class_section, status=SessionStatus.CONDUCTED).values('planned_session__day_number').distinct().count()
+    cancelled_count = ActualSession.objects.filter(class_section=class_section, status=SessionStatus.CANCELLED).values('planned_session__day_number').distinct().count()
     stats = {
         'total_sessions': unique_days,
         'conducted_count': conducted_count,
@@ -1076,33 +1076,11 @@ def today_session(request, class_section_id):
     # 2. GET NEXT PENDING SESSION (Sequence logic)
     planned_session = SessionSequenceCalculator.get_next_pending_session(class_section, calendar_entry=calendar_entry)
     
-    # Auto-generate if missing (Only if NOT part of a group, or group is broken)
-    if not planned_session:
-        # Check if we need to generate or repair
-        is_part_of_group = GroupedSession.objects.filter(class_sections=class_section).exists()
-        
-        if not is_part_of_group:
-            if not PlannedSession.objects.filter(class_section=class_section, is_active=True).exists():
-                SessionBulkManager.generate_sessions_for_class(class_section, created_by=request.user)
-                planned_session = SessionSequenceCalculator.get_next_pending_session(class_section)
-            else:
-                repair_result = SessionBulkManager.repair_sequence_gaps(class_section, request.user)
-                if repair_result['success']:
-                    planned_session = SessionSequenceCalculator.get_next_pending_session(class_section)
-        else:
-            # For grouped classes, if the current class has no local sessions, 
-            # SessionSequenceCalculator should have grabbed the primary class's session.
-            # If it's still None, it means the whole group is missing sessions.
-            # We'll allow repair but be cautious about bulk generation.
-            repair_result = SessionBulkManager.repair_sequence_gaps(class_section, request.user)
-            if repair_result['success']:
-                planned_session = SessionSequenceCalculator.get_next_pending_session(class_section)
-
     if not planned_session:
         # Check completion
-        total = PlannedSession.objects.filter(class_section=class_section, is_active=True).count()
+        total = 150
         completed = ActualSession.objects.filter(
-            planned_session__class_section=class_section,
+            class_section=class_section,
             status__in=[SessionStatus.CONDUCTED, SessionStatus.CANCELLED]
         ).count()
         
@@ -1110,17 +1088,19 @@ def today_session(request, class_section_id):
             return render(request, "facilitator/Today_session.html", {
                 "class_section": class_section,
                 "completed": True,
-                "completion_message": "[SUCCESS] All 150 sessions completed for this class!"
+                "completion_message": "[SUCCESS] All 150 sessions completed for this class!",
+                "today_date": today,
             })
         
         return render(request, "facilitator/Today_session.html", {
             "class_section": class_section,
             "error": True,
-            "error_message": "No sessions available. Please contact admin."
+            "error_message": "No sessions available. Please contact admin.",
+            "today_date": today,
         })
 
     # Step 3: Determine if we are grouped TODAY (Active grouping only)
-    grouped_classes = get_grouped_classes_for_session(planned_session, today)
+    grouped_classes = get_grouped_classes_for_session(class_section, today)
     is_grouped = len(grouped_classes) > 1
 
     # Redirect to primary ONLY if grouped TODAY via active calendar/grouping
@@ -1141,7 +1121,11 @@ def today_session(request, class_section_id):
             return redirect(url)
 
     # 3. LOG PROGRESS
-    grouped_session_id = planned_session.grouped_session_id
+    grouped_session_id = None
+    if is_grouped:
+        group = GroupedSession.objects.filter(class_sections=class_section).first()
+        if group:
+            grouped_session_id = group.grouped_session_id
 
     progress, created = ClassSessionProgress.objects.get_or_create(
         date=today,
@@ -1174,7 +1158,10 @@ def today_session(request, class_section_id):
         'steps', 'actual_sessions'
     ).first()
     
-    actual_session = planned_session.actual_sessions.order_by("-date").first()
+    actual_session = ActualSession.objects.filter(
+        planned_session=planned_session,
+        class_section=class_section
+    ).order_by("-date").first()
     
     if len(grouped_classes) > 1:
         session_type = "grouped"
@@ -1193,8 +1180,8 @@ def today_session(request, class_section_id):
     if not actual_session or actual_session.date != today:
         actual_session = ActualSession.objects.filter(
             planned_session=planned_session,
-            date=today,
-            facilitator=request.user
+            class_section=class_section,
+            date=today
         ).first()
 
     if request.GET.get('mode') == 'attendance' and actual_session:
@@ -1252,27 +1239,21 @@ def today_session(request, class_section_id):
     # Get workflow-related data
     
     # Get lesson plan uploads for this session
-    # For grouped sessions, get uploads from ANY grouped session (they all share the same lesson plan)
+    # For grouped sessions, get uploads from ANY grouped session class
     try:
-        if is_grouped:
-            # Get uploads from any session in the active group
-            grouped_session_ids = [ps.id for ps in PlannedSession.objects.filter(
-                class_section__in=grouped_classes,
-                day_number=planned_session.day_number
-            )]
-            
-            # Get all uploads from TODAY ONLY and deduplicate by file name
-            from datetime import timedelta, datetime
-            
-            today = timezone.localdate()
-        # [OPTIMIZED] Get uploads for ANY of the grouped classes for this day
-        # This ensures Step 1 stays green even if uploaded via a different class in the group
-        # [SYNC FIX] Only fetch uploads from TODAY to ensure a fresh start each day
         today = timezone.localdate()
-        lesson_plan_uploads = LessonPlanUpload.objects.filter(
-            planned_session__in=related_planned_sessions,
-            upload_date=today
-        ).order_by('-upload_date')
+        if is_grouped:
+            lesson_plan_uploads = LessonPlanUpload.objects.filter(
+                planned_session=planned_session,
+                class_section__in=grouped_classes,
+                upload_date=today
+            ).order_by('-upload_date')
+        else:
+            lesson_plan_uploads = LessonPlanUpload.objects.filter(
+                planned_session=planned_session,
+                class_section=class_section,
+                upload_date=today
+            ).order_by('-upload_date')
     except Exception as e:
         logger.error(f"Error getting lesson plan uploads: {e}")
         lesson_plan_uploads = []
@@ -1291,21 +1272,17 @@ def today_session(request, class_section_id):
     # Get preparation checklist for this session (TODAY ONLY)
     try:
         if is_grouped:
-            # Get from any session in the active group
-            grouped_session_ids = [ps.id for ps in PlannedSession.objects.filter(
-                class_section__in=grouped_classes,
-                day_number=planned_session.day_number
-            )]
             preparation_checklist = SessionPreparationChecklist.objects.filter(
-                planned_session_id__in=grouped_session_ids,
+                planned_session=planned_session,
+                class_section__in=grouped_classes,
                 preparation_complete_time__date=today
             ).first()
         else:
             preparation_checklist = SessionPreparationChecklist.objects.filter(
                 planned_session=planned_session,
-                facilitator=request.user,
+                class_section=class_section,
                 preparation_complete_time__date=today
-            ).order_by('-preparation_start_time').first()
+            ).first()
     except Exception as e:
         logger.error(f"Error getting preparation checklist: {e}")
         preparation_checklist = None
@@ -1352,20 +1329,14 @@ def today_session(request, class_section_id):
             attendance_saved = actual_session.attendance_marked
             
             # If actively grouped TODAY, check if ANY session in the group has attendance marked
-            if is_grouped:
-                grouped_session_ids = [ps.id for ps in PlannedSession.objects.filter(
+            if is_grouped and not attendance_saved:
+                # Check if ANY session in the active group for TODAY has attendance marked
+                attendance_saved = ActualSession.objects.filter(
                     class_section__in=grouped_classes,
-                    day_number=planned_session.day_number
-                )]
-                
-                if not attendance_saved:
-                    # STRICT: Only check attendance for other classes in the ACTIVE group for the SAME DAY
-                    attendance_saved = ActualSession.objects.filter(
-                        planned_session_id__in=grouped_session_ids,
-                        planned_session__day_number=planned_session.day_number, # Added strict day check
-                        date=today,
-                        attendance_marked=True
-                    ).exists()
+                    planned_session__day_number=planned_session.day_number,
+                    date=today,
+                    attendance_marked=True
+                ).exists()
             
             # Fetch stats for display
             stats = Attendance.objects.filter(actual_session=actual_session).aggregate(
@@ -1421,7 +1392,11 @@ def today_session(request, class_section_id):
             attendance_records = []
 
     # Grouped session data for template
-    grouped_session_id = planned_session.grouped_session_id
+    grouped_session_id = None
+    if is_grouped:
+        group = GroupedSession.objects.filter(class_sections=class_section).first()
+        if group:
+            grouped_session_id = group.grouped_session_id
     detection_method = "integrated"
 
     # [ANTI-CACHE] Force browser to re-fetch from server to prevent stale Service Worker state
@@ -1511,6 +1486,7 @@ def debug_sessions(request, class_section_id):
 from django.utils import timezone
 
 @login_required
+@login_required
 def start_session(request, planned_session_id):
     """
     Start a session - Handle POST requests to conduct/cancel/holiday a session
@@ -1521,128 +1497,134 @@ def start_session(request, planned_session_id):
         
     planned = get_object_or_404(PlannedSession, id=planned_session_id)
     
+    # Retrieve class_section_id
+    class_section_id = request.POST.get('class_section_id') or request.GET.get('class_section_id')
+    from .models import ClassSection
+    if class_section_id:
+        class_section = get_object_or_404(ClassSection, id=class_section_id)
+    else:
+        # Fallback
+        class_section = ClassSection.objects.filter(school__facilitators__facilitator=request.user, school__facilitators__is_active=True).first()
+        
+    if not class_section:
+        messages.error(request, "No class section context found.")
+        return redirect("facilitator_classes")
+    
     if request.method != "POST":
-        return redirect("facilitator_class_today_session", class_section_id=planned.class_section.id)
+        return redirect("facilitator_class_today_session", class_section_id=class_section.id)
 
     status = request.POST.get("status", "conducted")
     remarks = request.POST.get("remarks", "")
     cancellation_reason = request.POST.get("cancellation_reason", "")
 
     # Import the new session management logic
-    from .session_management import SessionStatusManager
+    from .session_management import SessionStatusManager, get_grouped_classes_for_session
     from django.core.exceptions import ValidationError
 
     try:
         if status == SessionStatus.CONDUCTED.name.lower():
             actual_session = SessionStatusManager.conduct_session(
                 planned_session=planned,
+                class_section=class_section,
                 facilitator=request.user,
                 remarks=remarks
             )
-            #update try
-            # Clear grouped session cache for this planned session
-            cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{planned.class_section.id}"
+            # Clear cache
+            cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{class_section.id}"
             cache.delete(cache_key)
             
             # If this is a grouped session, also create ActualSession for all other classes in the group
-            if planned.grouped_session_id:
-                grouped_sessions = PlannedSession.objects.filter(
-                    grouped_session_id=planned.grouped_session_id,
-                    day_number=planned.day_number
-                ).exclude(id=planned.id)
-                
-                for grouped_session in grouped_sessions:
-                    SessionStatusManager.conduct_session(
-                        planned_session=grouped_session,
-                        facilitator=request.user,
-                        remarks=f"Grouped session - conducted with {planned.class_section.display_name}"
-                    )
-                    # Clear cache for each grouped session
-                    cache_key = f"grouped_session_{grouped_session.id}_{grouped_session.day_number}_{grouped_session.class_section.id}"
-                    cache.delete(cache_key)
+            grouped_classes = get_grouped_classes_for_session(class_section, timezone.localdate())
+            if len(grouped_classes) > 1:
+                for other_class in grouped_classes:
+                    if other_class != class_section:
+                        SessionStatusManager.conduct_session(
+                            planned_session=planned,
+                            class_section=other_class,
+                            facilitator=request.user,
+                            remarks=f"Grouped session - conducted with {class_section.display_name}"
+                        )
+                        cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{other_class.id}"
+                        cache.delete(cache_key)
             
             messages.success(request, "Session started!")
             # Redirect to today_session with step=4 to show attendance
-            return redirect(f"/facilitator/class/{planned.class_section.id}/today/?step=4")
+            return redirect(f"/facilitator/class/{class_section.id}/today/?step=4")
             
         elif status == SessionStatus.HOLIDAY.name.lower():
             actual_session = SessionStatusManager.mark_holiday(
                 planned_session=planned,
+                class_section=class_section,
                 facilitator=request.user,
                 reason=remarks
             )
             
-            # Clear grouped session cache for this planned session
-            cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{planned.class_section.id}"
+            # Clear cache
+            cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{class_section.id}"
             cache.delete(cache_key)
             
             # If this is a grouped session, also mark all other classes as holiday
-            if planned.grouped_session_id:
-                grouped_sessions = PlannedSession.objects.filter(
-                    grouped_session_id=planned.grouped_session_id,
-                    day_number=planned.day_number
-                ).exclude(id=planned.id)
-                
-                for grouped_session in grouped_sessions:
-                    SessionStatusManager.mark_holiday(
-                        planned_session=grouped_session,
-                        facilitator=request.user,
-                        reason=f"Grouped session holiday - marked with {planned.class_section.display_name}"
-                    )
-                    # Clear cache for each grouped session
-                    cache_key = f"grouped_session_{grouped_session.id}_{grouped_session.day_number}_{grouped_session.class_section.id}"
-                    cache.delete(cache_key)
+            grouped_classes = get_grouped_classes_for_session(class_section, timezone.localdate())
+            if len(grouped_classes) > 1:
+                for other_class in grouped_classes:
+                    if other_class != class_section:
+                        SessionStatusManager.mark_holiday(
+                            planned_session=planned,
+                            class_section=other_class,
+                            facilitator=request.user,
+                            reason=f"Grouped session holiday - marked with {class_section.display_name}"
+                        )
+                        cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{other_class.id}"
+                        cache.delete(cache_key)
             
             messages.success(request, "Session marked as holiday. You can conduct it later.")
             
         elif status == SessionStatus.CANCELLED.name.lower():
             if not cancellation_reason:
                 messages.error(request, "Please select a cancellation reason.")
-                return redirect("facilitator_class_today_session", class_section_id=planned.class_section.id)
+                return redirect("facilitator_class_today_session", class_section_id=class_section.id)
             
             actual_session = SessionStatusManager.cancel_session(
                 planned_session=planned,
+                class_section=class_section,
                 facilitator=request.user,
                 cancellation_reason=cancellation_reason,
                 remarks=remarks
             )
             
-            # Clear grouped session cache for this planned session
-            cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{planned.class_section.id}"
+            # Clear cache
+            cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{class_section.id}"
             cache.delete(cache_key)
             
             # If this is a grouped session, also cancel all other classes
-            if planned.grouped_session_id:
-                grouped_sessions = PlannedSession.objects.filter(
-                    grouped_session_id=planned.grouped_session_id,
-                    day_number=planned.day_number
-                ).exclude(id=planned.id)
-                
-                for grouped_session in grouped_sessions:
-                    SessionStatusManager.cancel_session(
-                        planned_session=grouped_session,
-                        facilitator=request.user,
-                        cancellation_reason=cancellation_reason,
-                        remarks=f"Grouped session cancelled - cancelled with {planned.class_section.display_name}"
-                    )
-                    # Clear cache for each grouped session
-                    cache_key = f"grouped_session_{grouped_session.id}_{grouped_session.day_number}_{grouped_session.class_section.id}"
-                    cache.delete(cache_key)
+            grouped_classes = get_grouped_classes_for_session(class_section, timezone.localdate())
+            if len(grouped_classes) > 1:
+                for other_class in grouped_classes:
+                    if other_class != class_section:
+                        SessionStatusManager.cancel_session(
+                            planned_session=planned,
+                            class_section=other_class,
+                            facilitator=request.user,
+                            cancellation_reason=cancellation_reason,
+                            remarks=f"Grouped session cancelled - cancelled with {class_section.display_name}"
+                        )
+                        cache_key = f"grouped_session_{planned.id}_{planned.day_number}_{other_class.id}"
+                        cache.delete(cache_key)
             
             messages.success(request, f"Session cancelled permanently: {dict(CANCELLATION_REASONS)[cancellation_reason]}")
         
         else:
             messages.error(request, "Invalid session status.")
-            return redirect("facilitator_class_today_session", class_section_id=planned.class_section.id)
+            return redirect("facilitator_class_today_session", class_section_id=class_section.id)
             
     except ValidationError as e:
         messages.error(request, str(e))
-        return redirect("facilitator_class_today_session", class_section_id=planned.class_section.id)
+        return redirect("facilitator_class_today_session", class_section_id=class_section.id)
     except Exception as e:
         messages.error(request, f"Error processing session: {str(e)}")
-        return redirect("facilitator_class_today_session", class_section_id=planned.class_section.id)
+        return redirect("facilitator_class_today_session", class_section_id=class_section.id)
 
-    return redirect("facilitator_class_today_session", class_section_id=planned.class_section.id)
+    return redirect("facilitator_class_today_session", class_section_id=class_section.id)
 
 
 @login_required
@@ -1772,7 +1754,7 @@ def mark_attendance(request, actual_session_id):
     # ----------------------------------------------------
     # ✅ Detect Grouped Session (Consistent with Today Session)
     # ----------------------------------------------------
-    grouped_classes = get_grouped_classes_for_session(session.planned_session, session.date)
+    grouped_classes = get_grouped_classes_for_session(session, session.date)
     is_grouped_session = len(grouped_classes) > 1
 
     # ----------------------------------------------------
@@ -1914,13 +1896,13 @@ def mark_attendance(request, actual_session_id):
         # This prevents 'leaking' attendance to other single classes that happen to 
         # have a None grouped_session_id.
         other_sessions = ActualSession.objects.filter(
-            planned_session__class_section__in=grouped_classes,
+            class_section__in=grouped_classes,
             date=session.date
         ).select_related('planned_session')
         
-        session_map = {session.planned_session.class_section_id: session}
+        session_map = {session.class_section_id: session}
         for s in other_sessions:
-            session_map[s.planned_session.class_section_id] = s
+            session_map[s.class_section_id] = s
             
         # Bulk Attendance Fetch for ALL sessions in the group
         attendance_map = {
@@ -1949,7 +1931,7 @@ def mark_attendance(request, actual_session_id):
                 else:
                     redirect_url = reverse(
                         "facilitator_class_today_session",
-                        kwargs={"class_section_id": session.planned_session.class_section.id}
+                        kwargs={"class_section_id": session.class_section_id}
                     ) + "?attendance_saved=true&step=5"
 
                 if is_ajax:
@@ -1991,7 +1973,7 @@ def mark_attendance(request, actual_session_id):
     else:
 
         enrollments = Enrollment.objects.filter(
-            class_section=session.planned_session.class_section,
+            class_section=session.class_section,
             is_active=True
         ).select_related("student")
 
@@ -2014,7 +1996,7 @@ def mark_attendance(request, actual_session_id):
                 else:
                     redirect_url = reverse(
                         "facilitator_class_today_session",
-                        kwargs={"class_section_id": session.planned_session.class_section.id}
+                        kwargs={"class_section_id": session.class_section_id}
                     ) + "?attendance_saved=true&step=5"
 
                 if is_ajax:
@@ -2065,7 +2047,7 @@ def mark_attendance_redirect(request, planned_session_id):
         return redirect("mark_attendance", actual_session_id=actual_session.id)
     else:
         messages.warning(request, "Please start the session before marking attendance.")
-        return redirect("facilitator_class_today_session", class_section_id=planned.class_section.id)
+        return redirect("facilitator_classes")
 
 
 @login_required
@@ -2082,19 +2064,14 @@ def get_previous_day_attendance(request, actual_session_id):
     # Get the planned session
     planned_session = session.planned_session
     
-    # Detect if grouped session
-    is_grouped = planned_session.grouped_session_id is not None
-    
-    if is_grouped:
-        # For grouped sessions, find all classes in the group
-        grouped_sessions = PlannedSession.objects.filter(
-            grouped_session_id=planned_session.grouped_session_id,
-            day_number=planned_session.day_number
-        ).select_related('class_section')
-        
-        class_sections = [gs.class_section for gs in grouped_sessions]
+    # Detect if grouped session using the actual session's class_section
+    is_grouped = False
+    grouped_classes_qs = get_grouped_classes_for_session(session, session.date)
+    if len(grouped_classes_qs) > 1:
+        is_grouped = True
+        class_sections = grouped_classes_qs
     else:
-        class_sections = [planned_session.class_section]
+        class_sections = [session.class_section]
     
     # Find previous day's sessions for these classes
     previous_day_number = planned_session.day_number - 1
@@ -2106,27 +2083,27 @@ def get_previous_day_attendance(request, actual_session_id):
             'data': {}
         })
     
-    # Get previous planned sessions
-    previous_planned_sessions = PlannedSession.objects.filter(
-        class_section__in=class_sections,
+    # Get previous planned session from the global master table
+    previous_planned_session = PlannedSession.objects.filter(
         day_number=previous_day_number
-    ).select_related('class_section')
+    ).first()
     
-    if not previous_planned_sessions.exists():
+    if not previous_planned_session:
         return JsonResponse({
             'success': False,
             'message': 'No previous session found for this day',
             'data': {}
         })
     
-    # Get the most recent actual session for each planned session
+    # Get the most recent actual session for each class in the group
     previous_attendance_data = {}
     total_populated = 0
     
-    for prev_planned in previous_planned_sessions:
-        # Get the most recent actual session for this planned session
+    for class_section in class_sections:
+        # Get the most recent conducted actual session for this class on the previous day
         prev_actual = ActualSession.objects.filter(
-            planned_session=prev_planned,
+            class_section=class_section,
+            planned_session=previous_planned_session,
             date__lt=session.date,
             status=SessionStatus.CONDUCTED
         ).order_by('-date').first()
@@ -2181,15 +2158,13 @@ def mark_facilitator_attendance(request, actual_session_id):
             # Handles both persistent groups (GroupedSession) and dynamic groups (CalendarDate)
             from .session_management import get_grouped_classes_for_session
             
-            planned = session.planned_session
-            if planned:
-                group_members = get_grouped_classes_for_session(planned, session.date)
-                if len(group_members) > 1:
-                    # Sync attendance to all ActualSession records for these classes on the same date
-                    ActualSession.objects.filter(
-                        date=session.date,
-                        planned_session__class_section__in=group_members
-                    ).exclude(id=session.id).update(facilitator_attendance=facilitator_attendance)
+            group_members = get_grouped_classes_for_session(session, session.date)
+            if len(group_members) > 1:
+                # Sync attendance to all ActualSession records for these classes on the same date
+                ActualSession.objects.filter(
+                    date=session.date,
+                    class_section__in=group_members
+                ).exclude(id=session.id).update(facilitator_attendance=facilitator_attendance)
             # --- END ROBUST GROUP ATTENDANCE SYNC ---
             
             # Clear facilitator attendance cache so the UI updates instantly
@@ -2198,7 +2173,7 @@ def mark_facilitator_attendance(request, actual_session_id):
             
             # ✅ ALSO invalidate progress metrics cache for the class
             from .session_management import SessionStatusManager
-            SessionStatusManager._invalidate_progress_cache(session.planned_session.class_section)
+            SessionStatusManager._invalidate_progress_cache(session.class_section)
             
             # Check if it's an AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -2209,15 +2184,15 @@ def mark_facilitator_attendance(request, actual_session_id):
             else:
                 # Regular form submission - show message and stay on same page
                 messages.success(request, f'[OK] Your attendance marked as {facilitator_attendance.title()}')
-                return redirect('facilitator_class_today_session', class_section_id=session.planned_session.class_section.id)
+                return redirect('facilitator_class_today_session', class_section_id=session.class_section.id)
         else:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'message': 'Invalid attendance status'}, status=400)
             else:
                 messages.error(request, 'Invalid attendance status')
-                return redirect('facilitator_class_today_session', class_section_id=session.planned_session.class_section.id)
+                return redirect('facilitator_class_today_session', class_section_id=session.class_section.id)
     
-    return redirect('facilitator_class_today_session', class_section_id=session.planned_session.class_section.id)
+    return redirect('facilitator_class_today_session', class_section_id=session.class_section.id)
 
 
 
@@ -2247,47 +2222,36 @@ def facilitator_class_attendance_only(request, class_section_id):
     if group_info:
         classes_to_process = list(group_info.class_sections.all())
         
-    # 1. Get or Create static PlannedSession for all classes in group
-    # OPTIMIZATION: Check existing in 1 query to reduce network round trips to remote DB
-    existing_day_classes = set(PlannedSession.objects.filter(
-        class_section__in=classes_to_process,
-        day_number=day_number
-    ).values_list('class_section_id', flat=True))
-    
-    for cls in classes_to_process:
-        if cls.id not in existing_day_classes:
-            PlannedSession.objects.create(
-                class_section=cls,
-                day_number=day_number,
-                title=title,
-                is_active=False, # Hide from normal sequences
-                grouped_session_id=grouped_session_id
-            )
-        
-    # Re-fetch primary PlannedSession for anchor
-    planned_session = PlannedSession.objects.get(class_section=class_section, day_number=day_number)
+    # 1. Get the global master PlannedSession for day_number (998 or 999)
+    planned_session = PlannedSession.objects.filter(day_number=day_number).first()
+    if not planned_session:
+        planned_session = PlannedSession.objects.create(
+            day_number=day_number,
+            title=title,
+            is_active=False
+        )
     
     # Ensure any PENDING or conflicting sessions for today are cleared out
     ActualSession.objects.filter(
-        planned_session__class_section__in=classes_to_process,
+        class_section__in=classes_to_process,
         date=today
     ).exclude(planned_session__day_number=day_number).delete()
     
-    # 2. Get or Create ActualSession for TODAY
-    actual_session = ActualSession.objects.filter(
-        planned_session=planned_session,
-        date=today
-    ).first()
-    
-    if not actual_session:
-        # Create new ActualSession starting as CONDUCTED to hold attendance
-        actual_session = ActualSession.objects.create(
+    # 2. Get or Create ActualSession for TODAY for all classes in group
+    actual_session = None
+    for cls in classes_to_process:
+        act_sess, created = ActualSession.objects.get_or_create(
             planned_session=planned_session,
+            class_section=cls,
             date=today,
-            facilitator=request.user,
-            status=SessionStatus.CONDUCTED,
-            remarks=f"Automatic {session_type.upper()} attendance session"
+            defaults={
+                'facilitator': request.user,
+                'status': SessionStatus.CONDUCTED,
+                'remarks': f"Automatic {session_type.upper()} attendance session"
+            }
         )
+        if cls == class_section:
+            actual_session = act_sess
         
     # 3. Direct Redirect to mark_attendance
     return redirect('mark_attendance', actual_session_id=actual_session.id)
@@ -2302,7 +2266,7 @@ def class_attendance(request, class_section_id):
     class_section = get_object_or_404(ClassSection, id=class_section_id)
 
     sessions = ActualSession.objects.filter(
-        planned_session__class_section=class_section
+        class_section=class_section
     ).select_related("planned_session").order_by("-date")
 
     return render(request, "admin/classes/class_attendance.html", {
@@ -2342,9 +2306,9 @@ def facilitator_classes(request):
     # Fetch existing sessions for today to prevent overlapping attendances
     from .models import ActualSession
     todays_sessions = ActualSession.objects.filter(
-        planned_session__class_section__in=class_sections,
+        class_section__in=class_sections,
         date=today
-    ).values_list('planned_session__class_section_id', 'planned_session__day_number', 'status', 'facilitator_attendance')
+    ).values_list('class_section_id', 'planned_session__day_number', 'status', 'facilitator_attendance')
     
     # A session is considered "marked" only if facilitator attendance is recorded
     fln_by_class = {str(id).lower() for id, day, status, att in todays_sessions if day == 999 and att != ''}
@@ -2609,10 +2573,7 @@ def facilitator_attendance(request):
             # NOTE: We deduplicate by 'date' to ensure grouped sessions (which share a date) 
             # are counted as a single instructional instance for the summary cards.
             sessions_base_query = ActualSession.objects.filter(
-                Q(planned_session__class_section=class_section) |
-                Q(planned_session__grouped_session_id__in=GroupedSession.objects.filter(
-                    class_sections=class_section
-                ).values_list('grouped_session_id', flat=True))
+                class_section=class_section
             ).filter(
                 Q(status=SessionStatus.CONDUCTED) | Q(attendance_marked=True)
             )
@@ -2668,7 +2629,7 @@ def facilitator_attendance(request):
             # Get recent attendance sessions for this class (detailed list)
             # Reuse logic from sessions_base_query
             recent_sessions = sessions_base_query.select_related(
-                "planned_session", "planned_session__class_section"
+                "planned_session", "class_section"
             ).order_by("-date")[:20]
             
             recent_sessions_data = []
@@ -2677,17 +2638,13 @@ def facilitator_attendance(request):
                 if session.date in seen_dates:
                     continue
                 seen_dates.add(session.date)
-                # For grouped sessions, count attendance from all students in the group
-                if session.planned_session.grouped_session_id:
-                    # Get all classes in the grouped session
-                    grouped_planned_sessions = PlannedSession.objects.filter(
-                        grouped_session_id=session.planned_session.grouped_session_id,
-                        day_number=session.planned_session.day_number
-                    )
-                    # Get all actual sessions for these planned sessions on the same date
+                grouped_classes = get_grouped_classes_for_session(session, session.date)
+                if len(grouped_classes) > 1:
+                    # Get all actual sessions for these classes on the same date
                     grouped_actual_sessions = ActualSession.objects.filter(
-                        planned_session__in=grouped_planned_sessions,
-                        date=session.date
+                        class_section__in=grouped_classes,
+                        date=session.date,
+                        planned_session=session.planned_session
                     )
                     present_count = Attendance.objects.filter(
                         actual_session__in=grouped_actual_sessions,
@@ -2799,7 +2756,7 @@ def admin_attendance_filter(request):
             ).select_related("student").order_by("student__full_name")
 
             total_sessions = ActualSession.objects.filter(
-                planned_session__class_section=class_section
+                class_section=class_section
             ).filter(Q(status=SessionStatus.CONDUCTED) | Q(attendance_marked=True)).count()
 
             attendance_stats = Attendance.objects.filter(
@@ -2830,27 +2787,27 @@ def admin_attendance_filter(request):
             context["enrollment_stats"] = stats
 
             context["recent_sessions"] = ActualSession.objects.filter(
-                planned_session__class_section__school=school,
+                class_section__school=school,
                 status=SessionStatus.CONDUCTED
-            ).select_related("planned_session", "planned_session__class_section").order_by("-date")[:10]
+            ).select_related("planned_session", "class_section").order_by("-date")[:10]
 
         else:
             # OPTIMIZATION: Get class-wise summary for the school
             classes = ClassSection.objects.filter(school=school, is_active=True).order_by("class_level", "section")
             
-            # Fetch all conducted sessions counts for these classes
+            # Fetch conducted sessions counts for these classes
             session_counts = ActualSession.objects.filter(
-                planned_session__class_section__school=school,
+                class_section__school=school,
                 status=SessionStatus.CONDUCTED
-            ).values('planned_session__class_section_id').annotate(count=Count('id'))
-            sessions_dict = {item['planned_session__class_section_id']: item['count'] for item in session_counts}
+            ).values('class_section_id').annotate(count=Count('id'))
+            sessions_dict = {item['class_section_id']: item['count'] for item in session_counts}
             
             # Fetch attendance statistics per class
             from django.db.models import Avg
             class_attendance = Attendance.objects.filter(
-                actual_session__planned_session__class_section__school=school,
+                actual_session__class_section__school=school,
                 actual_session__status=SessionStatus.CONDUCTED
-            ).values('actual_session__planned_session__class_section_id').annotate(
+            ).values('actual_session__class_section_id').annotate(
                 avg_attendance=Count('id', filter=Q(status=AttendanceStatus.PRESENT)) * 100.0 / 
                 Count('enrollment_id', distinct=True) / 
                 Count('actual_session_id', distinct=True)
@@ -2865,7 +2822,7 @@ def admin_attendance_filter(request):
                 
                 # Calculate attendance % for this class in a robust way
                 attendance_records = Attendance.objects.filter(
-                    actual_session__planned_session__class_section=c,
+                    actual_session__class_section=c,
                     actual_session__status=SessionStatus.CONDUCTED
                 ).values('status').annotate(count=Count('id'))
                 
@@ -3401,7 +3358,7 @@ def admin_sessions_filter(request):
 
     # Get recent activity from both systems
     recent_class_sessions = ActualSession.objects.select_related(
-        'planned_session', 'facilitator', 'planned_session__class_section__school'
+        'planned_session', 'facilitator', 'class_section__school'
     ).order_by('-created_at')[:5]
 
     recent_curriculum_updates = CurriculumSession.objects.select_related(
@@ -3477,8 +3434,8 @@ def dashboard(request):
         context["recent_activities"] = ActualSession.objects.select_related(
             "facilitator",
             "planned_session",
-            "planned_session__class_section",
-            "planned_session__class_section__school"
+            "class_section",
+            "class_section__school"
         ).order_by("-created_at")[:10]
 
         # For Create User Modal
@@ -3943,7 +3900,7 @@ def facilitator_students_list(request, class_section_id):
     
     # Get total conducted sessions for this class (single query)
     total_sessions = ActualSession.objects.filter(
-        planned_session__class_section=class_section,
+        class_section=class_section,
         status=SessionStatus.CONDUCTED
     ).count()
     
@@ -3953,13 +3910,13 @@ def facilitator_students_list(request, class_section_id):
         # Count attendance records for this student (using prefetched data when possible)
         present_count = Attendance.objects.filter(
             enrollment=enrollment,
-            actual_session__planned_session__class_section=class_section,
+            actual_session__class_section=class_section,
             status=AttendanceStatus.PRESENT
         ).count()
         
         absent_count = Attendance.objects.filter(
             enrollment=enrollment,
-            actual_session__planned_session__class_section=class_section,
+            actual_session__class_section=class_section,
             status=AttendanceStatus.ABSENT
         ).count()
         
@@ -4020,7 +3977,7 @@ def facilitator_student_detail(request, class_section_id, student_id):
 
     # Calculate attendance stats
     total_sessions = ActualSession.objects.filter(
-        planned_session__class_section=class_section,
+        class_section=class_section,
         status=SessionStatus.CONDUCTED
     ).count()
     
@@ -4694,7 +4651,7 @@ def api_dashboard_recent_sessions(request):
         recent_sessions = ActualSession.objects.select_related(
             'planned_session',
             'facilitator', 
-            'planned_session__class_section__school'
+            'class_section__school'
         ).order_by('-date', '-created_at')[:limit]
         
         sessions_data = []
@@ -4702,8 +4659,8 @@ def api_dashboard_recent_sessions(request):
             sessions_data.append({
                 'id': str(session.id),
                 'topic': session.planned_session.title if session.planned_session else 'N/A',
-                'class_section': str(session.planned_session.class_section) if session.planned_session else 'N/A',
-                'school': session.planned_session.class_section.school.name if session.planned_session and session.planned_session.class_section else 'N/A',
+                'class_section': str(session.class_section) if session.class_section else 'N/A',
+                'school': session.class_section.school.name if session.class_section and session.class_section.school else 'N/A',
                 'facilitator': session.facilitator.full_name if session.facilitator else 'N/A',
                 'status': session.status,
                 'date': session.date.strftime('%Y-%m-%d') if session.date else None,
@@ -4814,7 +4771,7 @@ def admin_sessions_overview(request):
 
     # Recent activity from both systems
     recent_class_sessions = ActualSession.objects.select_related(
-        'planned_session', 'facilitator', 'planned_session__class_section__school'
+        'planned_session', 'facilitator', 'class_section__school'
     ).order_by('-created_at')[:5]
 
     recent_curriculum_updates = CurriculumSession.objects.select_related(
@@ -5036,15 +4993,33 @@ def get_lesson_plan_uploads(request):
     
     try:
         planned_session_id = request.GET.get('planned_session_id')
+        class_section_id = request.GET.get('class_section_id')
+        
         if not planned_session_id:
             return JsonResponse({"success": False, "error": "planned_session_id required"}, status=400)
         
         planned_session = get_object_or_404(PlannedSession, id=planned_session_id)
         
+        from .models import ClassSection
+        class_section = None
+        if class_section_id:
+            try:
+                class_section = ClassSection.objects.select_related('school').get(id=class_section_id)
+            except ClassSection.DoesNotExist:
+                return JsonResponse({"success": False, "error": "Class section not found"}, status=404)
+        else:
+            class_section = ClassSection.objects.filter(
+                school__facilitators__facilitator=request.user,
+                school__facilitators__is_active=True
+            ).first()
+            
+        if not class_section:
+            return JsonResponse({"success": False, "error": "Class section context required"}, status=400)
+        
         # Verify facilitator has access
         if not FacilitatorSchool.objects.filter(
             facilitator=request.user,
-            school=planned_session.class_section.school,
+            school=class_section.school,
             is_active=True
         ).exists():
             return JsonResponse({"success": False, "error": "Access denied"}, status=403)
@@ -5053,21 +5028,25 @@ def get_lesson_plan_uploads(request):
         from .session_management import get_grouped_classes_for_session
         from django.utils import timezone
         
-        today = timezone.now().date()
-        grouped_classes = get_grouped_classes_for_session(planned_session, today)
-        
-        related_planned_sessions = PlannedSession.objects.filter(
-            class_section__in=grouped_classes,
-            day_number=planned_session.day_number
-        )
+        today = timezone.localdate()
+        grouped_classes = get_grouped_classes_for_session(class_section, today)
         
         # [SYNC FIX] Only fetch uploads from TODAY to ensure a fresh start each day
         today = timezone.now().date()
         
-        uploads = LessonPlanUpload.objects.filter(
-            planned_session__in=related_planned_sessions,
-            upload_date=today
-        ).order_by('-upload_date')
+        is_grouped = len(grouped_classes) > 1
+        if is_grouped:
+            uploads = LessonPlanUpload.objects.filter(
+                planned_session=planned_session,
+                class_section__in=grouped_classes,
+                upload_date=today
+            ).order_by('-upload_date')
+        else:
+            uploads = LessonPlanUpload.objects.filter(
+                planned_session=planned_session,
+                class_section=class_section,
+                upload_date=today
+            ).order_by('-upload_date')
         
         serialized_uploads = []
         for upload in uploads:
@@ -5129,10 +5108,20 @@ def upload_lesson_plan(request):
             logger.error(f"PlannedSession not found: {planned_session_id}")
             return JsonResponse({"success": False, "error": "Session not found"}, status=404)
         
-        # Verify facilitator has access to this class
+        # Get class_section_id from POST (required under global curriculum model)
+        class_section_id = request.POST.get('class_section_id')
+        if not class_section_id:
+            return JsonResponse({"success": False, "error": "class_section_id is required"}, status=400)
+        
+        try:
+            class_section = ClassSection.objects.select_related('school').get(id=class_section_id)
+        except ClassSection.DoesNotExist:
+            return JsonResponse({"success": False, "error": "Class section not found"}, status=404)
+        
+        # Verify facilitator has access to this class's school
         if not FacilitatorSchool.objects.filter(
             facilitator=request.user,
-            school=planned_session.class_section.school,
+            school=class_section.school,
             is_active=True
         ).exists():
             return JsonResponse({"success": False, "error": "Access denied"}, status=403)
@@ -5155,27 +5144,16 @@ def upload_lesson_plan(request):
         
         from .models import LessonPlanUpload
         from django.utils import timezone
-        
-        # Determine target session (primary if ACTIVELY grouped today)
-        target_session = planned_session
-        
         from .session_management import get_grouped_classes_for_session
-        grouped_classes = get_grouped_classes_for_session(planned_session, timezone.now().date())
         
-        if len(grouped_classes) > 1 and planned_session.grouped_session_id:
-            primary_session = PlannedSession.objects.filter(
-                grouped_session_id=planned_session.grouped_session_id,
-                day_number=planned_session.day_number,
-                class_section__in=grouped_classes
-            ).order_by('id').first()
-            if primary_session:
-                target_session = primary_session
+        target_session = planned_session
+        grouped_classes = get_grouped_classes_for_session(class_section, timezone.localdate())
+        is_grouped = len(grouped_classes) > 1
         
-        # CRITICAL: Delete ALL old uploads for this session (regardless of date)
-        # Since unique_together constraint is (planned_session, facilitator),
-        # we can only have ONE upload per facilitator per session
+        # Delete old uploads for this session+class (one upload per facilitator per session per class)
         old_uploads = LessonPlanUpload.objects.filter(
             planned_session=target_session,
+            class_section=class_section,
             facilitator=request.user
         )
         
@@ -5183,7 +5161,6 @@ def upload_lesson_plan(request):
         for old_upload in old_uploads:
             try:
                 if old_upload.lesson_plan_file:
-                    # Delete file from storage
                     old_upload.lesson_plan_file.delete(save=False)
             except Exception as e:
                 logger.warning(f"Failed to delete old lesson plan file: {e}")
@@ -5194,6 +5171,7 @@ def upload_lesson_plan(request):
         # Save new upload
         lesson_plan_upload = LessonPlanUpload.objects.create(
             planned_session=target_session,
+            class_section=class_section,
             facilitator=request.user,
             lesson_plan_file=lesson_plan_file,
             file_name=lesson_plan_file.name,
@@ -5212,7 +5190,7 @@ def upload_lesson_plan(request):
             logger.warning(f"Failed to capture direct URL: {e}")
         
         message = "[OK] Lesson plan uploaded successfully"
-        if planned_session.grouped_session_id:
+        if is_grouped:
             message += " (shared with all grouped classes)"
         
         return JsonResponse({
@@ -5368,12 +5346,26 @@ def save_preparation_checklist(request):
     
     try:
         planned_session_id = request.POST.get('planned_session_id')
+        class_section_id = request.POST.get('class_section_id')
+        
         planned_session = get_object_or_404(PlannedSession, id=planned_session_id)
+        
+        from .models import ClassSection
+        if class_section_id:
+            class_section = get_object_or_404(ClassSection, id=class_section_id)
+        else:
+            class_section = ClassSection.objects.filter(
+                school__facilitators__facilitator=request.user,
+                school__facilitators__is_active=True
+            ).first()
+            
+        if not class_section:
+            return JsonResponse({"success": False, "error": "Class section context required"}, status=400)
         
         # Verify facilitator has access to this class
         if not FacilitatorSchool.objects.filter(
             facilitator=request.user,
-            school=planned_session.class_section.school,
+            school=class_section.school,
             is_active=True
         ).exists():
             return JsonResponse({"success": False, "error": "Access denied"}, status=403)
@@ -5383,6 +5375,7 @@ def save_preparation_checklist(request):
         # Get or create preparation checklist
         checklist, created = SessionPreparationChecklist.objects.get_or_create(
             planned_session=planned_session,
+            class_section=class_section,
             facilitator=request.user,
             defaults={
                 'preparation_start_time': timezone.now()
@@ -5725,7 +5718,7 @@ def api_mark_conduct_complete(request):
                 planned_session = get_object_or_404(PlannedSession, id=planned_session_id)
                 actual_session = ActualSession.objects.filter(
                     planned_session=planned_session,
-                    date=timezone.now().date()
+                    date=timezone.localdate()
                 ).first()
                 
                 if not actual_session:
@@ -5739,10 +5732,10 @@ def api_mark_conduct_complete(request):
         if not actual_session:
             return JsonResponse({"success": False, "error": "Actual session not found and could not be auto-started"}, status=404)
         
-        # Verify facilitator access
+        # Verify facilitator access via the actual session's class_section
         if not FacilitatorSchool.objects.filter(
             facilitator=request.user,
-            school=actual_session.planned_session.class_section.school,
+            school=actual_session.class_section.school,
             is_active=True
         ).exists() and request.user.role.name.upper() not in ["ADMIN", "SUPERVISOR"]:
             return JsonResponse({"success": False, "error": "Access denied"}, status=403)
@@ -5782,32 +5775,43 @@ def api_session_state(request):
         planned_session = get_object_or_404(PlannedSession, id=planned_session_id)
         
         # Get actual session for today (do NOT create if it doesn't exist)
-        # Only mark as conducted if it actually exists
-        actual_session = ActualSession.objects.filter(
-            planned_session=planned_session,
-            date=timezone.now().date()
-        ).first()
+        class_section_id = request.GET.get('class_section_id')
+        actual_session = None
+        if class_section_id:
+            actual_session = ActualSession.objects.filter(
+                planned_session=planned_session,
+                class_section_id=class_section_id,
+                date=timezone.localdate()
+            ).first()
+        else:
+            actual_session = ActualSession.objects.filter(
+                planned_session=planned_session,
+                date=timezone.localdate()
+            ).first()
         
-        # Get lesson plan uploads
-        # For grouped sessions, also check other sessions in the active group
-        upload_sessions = [planned_session]
-        
-        # [ACTIVE GROUPING ONLY] Check for active grouping today
+        # Get lesson plan uploads - use class_section if available
         from .session_management import get_grouped_classes_for_session
-        grouped_classes = get_grouped_classes_for_session(planned_session, timezone.now().date())
+        if class_section_id:
+            try:
+                cs = ClassSection.objects.get(id=class_section_id)
+                grouped_classes = get_grouped_classes_for_session(cs, timezone.localdate())
+            except ClassSection.DoesNotExist:
+                grouped_classes = []
+        else:
+            grouped_classes = []
         
-        if len(grouped_classes) > 1:
-            primary_session = PlannedSession.objects.filter(
+        # Fetch uploads for this planned session (global) and today
+        if grouped_classes:
+            uploads = LessonPlanUpload.objects.filter(
+                planned_session=planned_session,
                 class_section__in=grouped_classes,
-                day_number=planned_session.day_number
-            ).order_by('id').first()
-            if primary_session and primary_session.id != planned_session.id:
-                upload_sessions.append(primary_session)
-        
-        uploads = LessonPlanUpload.objects.filter(
-            planned_session__in=upload_sessions,
-            upload_date=timezone.now().date()
-        ).order_by('-upload_date')
+                upload_date=timezone.localdate()
+            ).order_by('-upload_date')
+        else:
+            uploads = LessonPlanUpload.objects.filter(
+                planned_session=planned_session,
+                upload_date=timezone.localdate()
+            ).order_by('-upload_date')
         
         uploads_list = []
         for upload in uploads:
@@ -6061,10 +6065,10 @@ def save_teacher_feedback(request):
         
         # [FIX] GROUP-AWARE STEP CHECK:
         # For grouped sessions, check if steps were completed by ANY member of the group
-        group_members = get_grouped_classes_for_session(planned_session, session_date)
+        group_members = get_grouped_classes_for_session(actual_session, session_date)
         
         completed_step_numbers = SessionStepStatus.objects.filter(
-            planned_session__class_section__in=group_members,
+            Q(class_section__in=group_members) | Q(class_section__isnull=True),
             planned_session__day_number=planned_session.day_number,
             session_date=session_date,
             step_number__in=[1, 2, 3, 4],
@@ -6085,7 +6089,7 @@ def save_teacher_feedback(request):
             actual_session.save()
         
         # Verify facilitator has access to this session's school
-        if actual_session.planned_session.class_section.school.facilitators.filter(
+        if actual_session.class_section.school.facilitators.filter(
             facilitator=request.user,
             is_active=True
         ).count() == 0 and request.user.role.name.upper() not in ["ADMIN", "SUPERVISOR"]:
@@ -6360,7 +6364,7 @@ def admin_feedback_dashboard(request):
     recent_student_feedback = StudentFeedback.objects.filter(
         student_date_filter
     ).select_related(
-        'actual_session__planned_session__class_section__school'
+        'actual_session__class_section__school'
     ).order_by('-submitted_at')[:10]
     
     # Order by feedback_date DESC to get latest teacher feedback first
@@ -6368,7 +6372,7 @@ def admin_feedback_dashboard(request):
     recent_teacher_feedback = SessionFeedback.objects.filter(
         teacher_date_filter
     ).select_related(
-        'actual_session__planned_session__class_section__school',
+        'actual_session__class_section__school',
         'facilitator'
     ).order_by('-feedback_date')[:10]
     
@@ -6395,7 +6399,7 @@ def admin_student_feedback_list(request):
     
     # Get all student feedback with related data
     feedback_list = StudentFeedback.objects.select_related(
-        'actual_session__planned_session__class_section__school',
+        'actual_session__class_section__school',
         'student'
     ).order_by('-submitted_at')
     
@@ -6406,7 +6410,7 @@ def admin_student_feedback_list(request):
     
     if school_filter:
         feedback_list = feedback_list.filter(
-            actual_session__planned_session__class_section__school_id=school_filter
+            actual_session__class_section__school_id=school_filter
         )
     
     if date_filter:
@@ -6441,7 +6445,7 @@ def admin_teacher_feedback_list(request):
     # CRITICAL FIX: Use SessionFeedback instead of TeacherFeedback
     # SessionFeedback is the correct model for facilitator session feedback
     feedback_list = SessionFeedback.objects.select_related(
-        'actual_session__planned_session__class_section__school',
+        'actual_session__class_section__school',
         'facilitator'
     ).order_by('-feedback_date')
     
@@ -6453,7 +6457,7 @@ def admin_teacher_feedback_list(request):
     
     if school_filter:
         feedback_list = feedback_list.filter(
-            actual_session__planned_session__class_section__school_id=school_filter
+            actual_session__class_section__school_id=school_filter
         )
     
     if facilitator_filter:
@@ -6526,8 +6530,8 @@ def admin_feedback_analytics(request):
     school_analytics_data = StudentFeedback.objects.filter(
         student_date_filter
     ).values(
-        'actual_session__planned_session__class_section__school_id',
-        'actual_session__planned_session__class_section__school__name'
+        'actual_session__class_section__school_id',
+        'actual_session__class_section__school__name'
     ).annotate(
         student_feedback_count=Count('id')
     )
@@ -6536,14 +6540,14 @@ def admin_feedback_analytics(request):
     teacher_feedback_by_school = SessionFeedback.objects.filter(
         teacher_date_filter
     ).values(
-        'actual_session__planned_session__class_section__school_id'
+        'actual_session__class_section__school_id'
     ).annotate(
         teacher_feedback_count=Count('id')
     )
     
     # Convert to dict for fast lookup
     teacher_feedback_dict = {
-        item['actual_session__planned_session__class_section__school_id']: 
+        item['actual_session__class_section__school_id']: 
         item['teacher_feedback_count'] 
         for item in teacher_feedback_by_school
     }
@@ -6551,10 +6555,10 @@ def admin_feedback_analytics(request):
     # Build school analytics list
     school_analytics = []
     for item in school_analytics_data:
-        school_id = item['actual_session__planned_session__class_section__school_id']
+        school_id = item['actual_session__class_section__school_id']
         school_analytics.append({
             'school_id': school_id,
-            'school_name': item['actual_session__planned_session__class_section__school__name'],
+            'school_name': item['actual_session__class_section__school__name'],
             'student_feedback_count': item['student_feedback_count'],
             'teacher_feedback_count': teacher_feedback_dict.get(school_id, 0),
             'avg_student_rating': 0,  # No longer available
@@ -6681,7 +6685,7 @@ def admin_dashboard_optimized(request):
     
     # Get recent activities (last 10 actual sessions)
     recent_activities = ActualSession.objects.select_related(
-        'facilitator', 'planned_session', 'planned_session__class_section', 'planned_session__class_section__school'
+        'facilitator', 'planned_session', 'class_section', 'class_section__school'
     ).order_by('-created_at')[:10]
     
     context = {
@@ -6758,17 +6762,12 @@ def facilitator_dashboard_optimized(request):
     
     # Count conducted sessions (aggregation)
     conducted_sessions = ActualSession.objects.filter(
-        planned_session__class_section__in=all_classes,
+        class_section__in=all_classes,
         status=SessionStatus.CONDUCTED
     ).count()
     
-    # Count total planned sessions - exclude placeholders (day_number=1 for grouped classes)
-    # Single class: 150 sessions, Grouped class: 150 sessions (shared, not duplicated)
-    total_planned_sessions = PlannedSession.objects.filter(
-        class_section__in=all_classes,
-        is_active=True,
-        day_number__gt=1  # Skip placeholders
-    ).count()
+    # Count total planned sessions - 150 days per class section
+    total_planned_sessions = total_classes * 150
     
     # Calculate remaining sessions
     remaining_sessions = total_planned_sessions - conducted_sessions
@@ -6780,7 +6779,7 @@ def facilitator_dashboard_optimized(request):
     
     # Get attendance stats with aggregation (single query)
     attendance_stats = Attendance.objects.filter(
-        actual_session__planned_session__class_section__in=all_classes
+        actual_session__class_section__in=all_classes
     ).aggregate(
         total_records=Count('id'),
         present_count=Count('id', filter=Q(status=AttendanceStatus.PRESENT))
@@ -6803,12 +6802,12 @@ def facilitator_dashboard_optimized(request):
     # Get class-wise attendance stats in BULK (single query optimization)
     # This avoids the N+1 problem when iterating through classes
     attendance_data = Attendance.objects.filter(
-        actual_session__planned_session__class_section__in=all_classes
-    ).values('actual_session__planned_session__class_section').annotate(
+        actual_session__class_section__in=all_classes
+    ).values('actual_session__class_section').annotate(
         total=Count('id'),
         present=Count('id', filter=Q(status=AttendanceStatus.PRESENT))
     )
-    attendance_map = {str(a['actual_session__planned_session__class_section']): a for a in attendance_data}
+    attendance_map = {str(a['actual_session__class_section']): a for a in attendance_data}
     
     class_attendance_stats = []
     for class_stat in class_stats:
@@ -6837,9 +6836,10 @@ def facilitator_dashboard_optimized(request):
     ).select_related('student').order_by('-start_date')[:5]
     
     # Get recent sessions (last 7 days)
+    from datetime import date
     seven_days_ago = date.today() - timedelta(days=7)
     recent_sessions = ActualSession.objects.filter(
-        planned_session__class_section__in=all_classes,
+        class_section__in=all_classes,
         date__gte=seven_days_ago,
         status=SessionStatus.CONDUCTED
     ).count()
@@ -7539,11 +7539,11 @@ def admin_dashboard_stats_ajax(request):
         sessions_qs = sessions_qs.filter(date=custom_date)
         
     if school_ids:
-        attendance_qs = attendance_qs.filter(actual_session__planned_session__class_section__school_id__in=school_ids)
-        sessions_qs = sessions_qs.filter(planned_session__class_section__school_id__in=school_ids)
+        attendance_qs = attendance_qs.filter(actual_session__class_section__school_id__in=school_ids)
+        sessions_qs = sessions_qs.filter(class_section__school_id__in=school_ids)
     if class_ids:
-        attendance_qs = attendance_qs.filter(actual_session__planned_session__class_section_id__in=class_ids)
-        sessions_qs = sessions_qs.filter(planned_session__class_section_id__in=class_ids)
+        attendance_qs = attendance_qs.filter(actual_session__class_section_id__in=class_ids)
+        sessions_qs = sessions_qs.filter(class_section_id__in=class_ids)
         
     attendance_stats = attendance_qs.aggregate(
         total=Count('id'),
@@ -7589,9 +7589,9 @@ def admin_system_snapshot_ajax(request):
     sessions_qs = ActualSession.objects.filter(date=today)
     
     if school_ids:
-        sessions_qs = sessions_qs.filter(planned_session__class_section__school_id__in=school_ids)
+        sessions_qs = sessions_qs.filter(class_section__school_id__in=school_ids)
     if class_ids:
-        sessions_qs = sessions_qs.filter(planned_session__class_section_id__in=class_ids)
+        sessions_qs = sessions_qs.filter(class_section_id__in=class_ids)
 
     session_stats = sessions_qs.aggregate(
         present_class=Count('id', filter=Q(status=1) & ~Q(planned_session__day_number__in=[997, 998, 999])),

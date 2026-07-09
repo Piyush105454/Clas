@@ -868,7 +868,7 @@ def _facilitator_detail_logic(request, facilitator_id, base_template='supervisor
         facilitator_tasks = FacilitatorTask.objects.filter(
             facilitator=facilitator,
             created_at__date=task_date_obj
-        ).select_related('actual_session', 'actual_session__planned_session', 'actual_session__planned_session__class_section').order_by('-created_at')
+        ).select_related('actual_session', 'actual_session__planned_session', 'actual_session__class_section').order_by('-created_at')
     else:
         # No date selected, return empty
         facilitator_tasks = FacilitatorTask.objects.none()
@@ -887,7 +887,7 @@ def _facilitator_detail_logic(request, facilitator_id, base_template='supervisor
         actual_session__facilitator=facilitator,
         feedback_date__gte=start_date,
         feedback_date__lte=end_date
-    ).select_related('actual_session', 'actual_session__planned_session', 'actual_session__planned_session__class_section').order_by('-feedback_date')[:10]
+    ).select_related('actual_session', 'actual_session__planned_session', 'actual_session__class_section').order_by('-feedback_date')[:10]
     
     # Get lesson plan uploads - FILTERED BY DATE
     lesson_date_filter = request.GET.get('lesson_date_filter', '30')
@@ -904,7 +904,7 @@ def _facilitator_detail_logic(request, facilitator_id, base_template='supervisor
         facilitator=facilitator,
         upload_date__gte=lesson_start_date,
         upload_date__lte=lesson_end_date
-    ).select_related('planned_session', 'planned_session__class_section', 'planned_session__class_section__school').order_by('-upload_date')
+    ).select_related('planned_session', 'class_section', 'class_section__school').order_by('-upload_date')
     
     # Get facilitator attendance stats - FILTERED BY DATE
     from django.db.models import Count, Q
@@ -1996,48 +1996,41 @@ def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
     date_filter = request.GET.get('date_filter', 'all')
     page = request.GET.get('page', 1)
     
-    # Build base query for PlannedSession - OPTIMIZED with minimal joins
-    planned_sessions = PlannedSession.objects.filter(is_active=True)
+    # Build base query for ActualSession
+    base_sessions = ActualSession.objects.all().select_related(
+        'planned_session', 'class_section', 'class_section__school', 'facilitator'
+    )
     
     if school_id:
-        planned_sessions = planned_sessions.filter(class_section__school_id=school_id)
+        base_sessions = base_sessions.filter(class_section__school_id=school_id)
     
     if class_id:
-        planned_sessions = planned_sessions.filter(class_section_id=class_id)
+        base_sessions = base_sessions.filter(class_section_id=class_id)
     
-    # Apply status filter - check ActualSession for conducted/holiday/cancelled
+    # Apply status filter
     if status_filter:
         if status_filter == 'conducted':
-            # Sessions that have been conducted (status = 1)
-            planned_sessions = planned_sessions.filter(
-                actual_sessions__status=SessionStatus.CONDUCTED
-            )
+            base_sessions = base_sessions.filter(status=SessionStatus.CONDUCTED)
         elif status_filter == 'holiday':
-            # Sessions marked as holiday (status = 2)
-            planned_sessions = planned_sessions.filter(
-                actual_sessions__status=SessionStatus.HOLIDAY
-            )
+            base_sessions = base_sessions.filter(status=SessionStatus.HOLIDAY)
         elif status_filter == 'cancelled':
-            # Sessions marked as cancelled (status = 3)
-            planned_sessions = planned_sessions.filter(
-                actual_sessions__status=SessionStatus.CANCELLED
-            )
+            base_sessions = base_sessions.filter(status=SessionStatus.CANCELLED)
     
     # Apply date filter - only filter if date_filter is not 'all'
     today = timezone.localdate()
     if date_filter and date_filter != 'all':
         if date_filter == 'today':
-            planned_sessions = planned_sessions.filter(actual_sessions__date=today)
+            base_sessions = base_sessions.filter(date=today)
         elif date_filter == 'past':
-            planned_sessions = planned_sessions.filter(actual_sessions__date__lt=today)
+            base_sessions = base_sessions.filter(date__lt=today)
         elif date_filter == 'future':
-            planned_sessions = planned_sessions.filter(actual_sessions__date__gt=today)
+            base_sessions = base_sessions.filter(date__gt=today)
         elif date_filter == 'week':
             week_start = today - timedelta(days=today.weekday())
             week_end = week_start + timedelta(days=6)
-            planned_sessions = planned_sessions.filter(
-                actual_sessions__date__gte=week_start,
-                actual_sessions__date__lte=week_end
+            base_sessions = base_sessions.filter(
+                date__gte=week_start,
+                date__lte=week_end
             )
         elif date_filter == 'month':
             month_start = today.replace(day=1)
@@ -2045,21 +2038,19 @@ def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
                 month_end = month_start.replace(year=today.year + 1, month=1) - timedelta(days=1)
             else:
                 month_end = month_start.replace(month=today.month + 1) - timedelta(days=1)
-            planned_sessions = planned_sessions.filter(
-                actual_sessions__date__gte=month_start,
-                actual_sessions__date__lte=month_end
+            base_sessions = base_sessions.filter(
+                date__gte=month_start,
+                date__lte=month_end
             )
     
-    # Remove duplicates and order by latest date first (NULLs last), then day number
-    planned_sessions = planned_sessions.distinct().select_related(
-        'class_section', 'class_section__school'
-    ).order_by(F('actual_sessions__date').desc(nulls_last=True), '-day_number')
+    # Order by latest date first, then day number
+    base_sessions = base_sessions.order_by('-date', '-planned_session__day_number')
         
     # Get total count before pagination
-    total_count = planned_sessions.count()
+    total_count = base_sessions.count()
     
     # Paginate: 5 sessions per page for faster initial load
-    paginator = Paginator(planned_sessions, 5)
+    paginator = Paginator(base_sessions, 5)
     try:
         sessions_page = paginator.page(page)
     except PageNotAnInteger:
@@ -2067,22 +2058,9 @@ def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
     except EmptyPage:
         sessions_page = paginator.page(paginator.num_pages)
     
-    # Prefetch related data only for current page sessions
-    session_ids = [s.id for s in sessions_page.object_list]
-    actual_sessions_map = {}
-    if session_ids:
-        # Get all actual sessions for these planned sessions
-        actual_sessions = ActualSession.objects.filter(
-            planned_session_id__in=session_ids
-        ).select_related('facilitator').values('planned_session_id', 'status', 'date', 'facilitator__full_name')
-        
-        for actual in actual_sessions:
-            actual_sessions_map[actual['planned_session_id']] = actual
-    
-    # Attach actual session data to planned sessions
-    # If no ActualSession exists, set to None (will show as "Planned" in template)
+    # Map ActualSession to itself for template compatibility
     for session in sessions_page.object_list:
-        session.actual_session_data = actual_sessions_map.get(session.id)
+        session.actual_session_data = session
     
     # Get all schools for filter dropdown
     supervisor_schools = School.objects.all().order_by('name')
@@ -2099,9 +2077,8 @@ def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
             school_id=school_id
         ).annotate(
             has_grouped_session=Exists(
-                PlannedSession.objects.filter(
-                    class_section=OuterRef('pk'),
-                    grouped_session_id__isnull=False
+                GroupedSession.objects.filter(
+                    class_sections=OuterRef('pk')
                 )
             )
         ).order_by('class_level')
@@ -2112,15 +2089,9 @@ def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
         for cls in classes_with_grouping:
             grouped_count = 0
             if cls.has_grouped_session:
-                grouped_session_id = PlannedSession.objects.filter(
-                    class_section=cls,
-                    grouped_session_id__isnull=False
-                ).values_list('grouped_session_id', flat=True).first()
-                
-                if grouped_session_id:
-                    grouped_count = PlannedSession.objects.filter(
-                        grouped_session_id=grouped_session_id
-                    ).values('class_section').distinct().count()
+                group = GroupedSession.objects.filter(class_sections=cls).first()
+                if group:
+                    grouped_count = group.class_sections.count()
             
             class_data[str(school_id)].append({
                 'id': str(cls.id),
@@ -2177,9 +2148,8 @@ def get_classes_by_school(request):
         school_id=school_id
     ).annotate(
         has_grouped_session=Exists(
-            PlannedSession.objects.filter(
-                class_section=OuterRef('pk'),
-                grouped_session_id__isnull=False
+            GroupedSession.objects.filter(
+                class_sections=OuterRef('pk')
             )
         )
     ).order_by('class_level').values('id', 'display_name', 'has_grouped_session')
@@ -2188,15 +2158,9 @@ def get_classes_by_school(request):
     for cls in classes:
         grouped_count = 0
         if cls['has_grouped_session']:
-            grouped_session_id = PlannedSession.objects.filter(
-                class_section_id=cls['id'],
-                grouped_session_id__isnull=False
-            ).values_list('grouped_session_id', flat=True).first()
-            
-            if grouped_session_id:
-                grouped_count = PlannedSession.objects.filter(
-                    grouped_session_id=grouped_session_id
-                ).values('class_section').distinct().count()
+            group = GroupedSession.objects.filter(class_sections__id=cls['id']).first()
+            if group:
+                grouped_count = group.class_sections.count()
         
         classes_list.append({
             'id': str(cls['id']),
@@ -2225,26 +2189,23 @@ def supervisor_school_sessions_analytics(request, school_id):
     # Get all classes in this school
     classes = ClassSection.objects.filter(school=school)
     
-    # Get all sessions for this school
-    sessions = PlannedSession.objects.filter(
-        class_section__school=school
-    )
+    # Total planned sessions is classes count * 150
+    total_sessions = classes.count() * 150
     
     # Calculate statistics
     from .models import SessionStatus, AttendanceStatus
-    total_sessions = sessions.count()
     conducted_sessions = ActualSession.objects.filter(
-        planned_session__class_section__school=school,
+        class_section__school=school,
         status=SessionStatus.CONDUCTED
     ).count()
     
     holiday_sessions = ActualSession.objects.filter(
-        planned_session__class_section__school=school,
+        class_section__school=school,
         status=SessionStatus.HOLIDAY
     ).count()
     
     cancelled_sessions = ActualSession.objects.filter(
-        planned_session__class_section__school=school,
+        class_section__school=school,
         status=SessionStatus.CANCELLED
     ).count()
     
@@ -2252,11 +2213,11 @@ def supervisor_school_sessions_analytics(request, school_id):
     
     # Calculate average attendance
     total_attendance = Attendance.objects.filter(
-        actual_session__planned_session__class_section__school=school
+        actual_session__class_section__school=school
     ).count()
     
     present_count = Attendance.objects.filter(
-        actual_session__planned_session__class_section__school=school,
+        actual_session__class_section__school=school,
         status=AttendanceStatus.PRESENT
     ).count()
     
@@ -2267,17 +2228,17 @@ def supervisor_school_sessions_analytics(request, school_id):
     # Get class-wise breakdown
     class_stats = []
     for class_section in classes:
-        class_sessions = PlannedSession.objects.filter(class_section=class_section)
+        class_total = 150
         class_conducted = ActualSession.objects.filter(
-            planned_session__class_section=class_section,
+            class_section=class_section,
             status=SessionStatus.CONDUCTED
         ).count()
         
-        class_pending = class_sessions.count() - class_conducted
+        class_pending = class_total - class_conducted
         
         class_stats.append({
             'class': class_section,
-            'total_sessions': class_sessions.count(),
+            'total_sessions': class_total,
             'conducted': class_conducted,
             'pending': class_pending
         })
@@ -2472,7 +2433,7 @@ def supervisor_get_notifications(request):
         db_sessions = ActualSession.objects.filter(
             date=today,
             status=SessionStatus.CANCELLED
-        ).select_related('planned_session__class_section__school', 'facilitator').order_by('-created_at')
+        ).select_related('planned_session', 'class_section__school', 'facilitator').order_by('-created_at')
         
         db_notifications = []
         for s in db_sessions:
@@ -2481,9 +2442,9 @@ def supervisor_get_notifications(request):
             db_notifications.append({
                 'id': str(s.id),
                 'type': 'class_unavailable',
-                'class_name': s.planned_session.class_section.display_name,
+                'class_name': s.class_section.display_name,
                 'facilitator_name': s.facilitator.full_name if s.facilitator else 'Unknown',
-                'school_name': s.planned_session.class_section.school.name,
+                'school_name': s.class_section.school.name,
                 'timestamp': s.created_at.isoformat(),
                 'message': s.remarks.replace('NOTIFICATION: ', '') if s.remarks else f"Class not available reported"
             })
@@ -2582,7 +2543,7 @@ def admin_get_notifications(request):
         db_sessions = ActualSession.objects.filter(
             date=today,
             status=SessionStatus.CANCELLED
-        ).select_related('planned_session__class_section__school', 'facilitator').order_by('-created_at')
+        ).select_related('planned_session', 'class_section__school', 'facilitator').order_by('-created_at')
         
         db_notifications = []
         for s in db_sessions:
@@ -2591,9 +2552,9 @@ def admin_get_notifications(request):
             db_notifications.append({
                 'id': str(s.id),
                 'type': 'class_unavailable',
-                'class_name': s.planned_session.class_section.display_name,
+                'class_name': s.class_section.display_name,
                 'facilitator_name': s.facilitator.full_name if s.facilitator else 'Unknown',
-                'school_name': s.planned_session.class_section.school.name,
+                'school_name': s.class_section.school.name,
                 'timestamp': s.created_at.isoformat(),
                 'message': s.remarks.replace('NOTIFICATION: ', '') if s.remarks else f"Class not available reported"
             })

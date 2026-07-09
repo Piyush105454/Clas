@@ -9,10 +9,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Q
 import json
 import logging
 
-from .models import PlannedSession, SessionStepStatus, ActualSession
+from .models import PlannedSession, SessionStepStatus, ActualSession, ClassSection
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,8 @@ def save_step_status(request):
         "session_date": "YYYY-MM-DD",
         "step_number": 1-7,
         "is_completed": true/false,
-        "step_content": {...}  # Optional JSON data
+        "step_content": {...},  # Optional JSON data
+        "class_section_id": "uuid" # Optional but highly recommended under global master curriculum model
     }
     """
     try:
@@ -40,6 +42,7 @@ def save_step_status(request):
         step_number = data.get('step_number')
         is_completed = data.get('is_completed', False)
         step_content = data.get('step_content', {})
+        class_section_id = data.get('class_section_id')
         
         # Validate required fields
         if not all([planned_session_id, session_date, step_number]):
@@ -63,11 +66,35 @@ def save_step_status(request):
                 'success': False,
                 'error': f'Planned session {planned_session_id} not found'
             }, status=404)
+            
+        # Get class section
+        class_section = None
+        if class_section_id:
+            try:
+                class_section = ClassSection.objects.get(id=class_section_id)
+            except ClassSection.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Class section {class_section_id} not found'
+                }, status=404)
+        else:
+            # Fallback: get first active class assigned to facilitator
+            class_section = ClassSection.objects.filter(
+                school__facilitators__facilitator=request.user,
+                school__facilitators__is_active=True
+            ).first()
+            
+        if not class_section:
+            return JsonResponse({
+                'success': False,
+                'error': 'No class section associated with this request'
+            }, status=400)
         
         # Create or update the step status for the primary session
         with transaction.atomic():
             step_status, created = SessionStepStatus.objects.update_or_create(
                 planned_session=planned_session,
+                class_section=class_section,
                 session_date=session_date,
                 step_number=step_number,
                 defaults={
@@ -82,73 +109,62 @@ def save_step_status(request):
             # If a step is completed today, ensure the ActualSession exists
             if is_completed and str(session_date) == str(timezone.now().date()):
                 from .session_management import SessionStatusManager, get_grouped_classes_for_session
-                from .models import ActualSession
                 
                 # Check if session already exists
                 actual_exists = ActualSession.objects.filter(
                     planned_session=planned_session,
-                    date=session_date,
-                    facilitator=request.user
+                    class_section=class_section,
+                    date=session_date
                 ).exists()
                 
                 if not actual_exists:
                     # Start it!
                     actual_session = SessionStatusManager.conduct_session(
                         planned_session=planned_session,
+                        class_section=class_section,
                         facilitator=request.user,
                         remarks=f"Session started by marking Step {step_number} complete"
                     )
                     
                     # Handle grouping - if this class is in an active group today, start them all
-                    group_members = get_grouped_classes_for_session(planned_session, session_date)
-                    if len(group_members) > 1 and planned_session.grouped_session_id:
-                        other_grouped_planned = PlannedSession.objects.filter(
-                            grouped_session_id=planned_session.grouped_session_id,
-                            day_number=planned_session.day_number,
-                            class_section__in=group_members
-                        ).exclude(id=planned_session.id)
-                        
-                        for other_ps in other_grouped_planned:
-                            SessionStatusManager.conduct_session(
-                                planned_session=other_ps,
-                                facilitator=request.user,
-                                remarks=f"Grouped session started by {planned_session.class_section.display_name} action"
-                            )
+                    group_members = get_grouped_classes_for_session(class_section, timezone.localdate())
+                    if len(group_members) > 1:
+                        for other_cls in group_members:
+                            if other_cls != class_section:
+                                SessionStatusManager.conduct_session(
+                                    planned_session=planned_session,
+                                    class_section=other_cls,
+                                    facilitator=request.user,
+                                    remarks=f"Grouped session started by {class_section.display_name} action"
+                                )
             
             # [GROUP SYNC] If this class is part of a group today, sync status to others
             from .session_management import get_grouped_classes_for_session
-            from .models import ActualSession
             
-            # Find any actual session for this planned session today to get the group context
-            # (Step status is logically tied to a specific day of execution)
-            group_members = get_grouped_classes_for_session(planned_session, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
+            group_members = get_grouped_classes_for_session(class_section, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
             
-            if len(group_members) > 1 and planned_session.grouped_session_id:
-                # Sync to other classes in the group that share the same grouped_session_id
-                # This ensures we don't bleed into unrelated single classes (where ID is None)
-                other_planned_sessions = PlannedSession.objects.filter(
-                    grouped_session_id=planned_session.grouped_session_id,
-                    day_number=planned_session.day_number,
-                    class_section__in=group_members
-                ).exclude(id=planned_session.id)
-                
-                for other_ps in other_planned_sessions:
-                    SessionStepStatus.objects.update_or_create(
-                        planned_session=other_ps,
-                        session_date=session_date,
-                        step_number=step_number,
-                        defaults={
-                            'is_completed': is_completed,
-                            'step_content': step_content,
-                            'facilitator': request.user,
-                            'completed_at': step_status.completed_at,
-                        }
-                    )
-                logger.info(f"Step {step_number} synced to {other_planned_sessions.count()} other sessions in group")
+            if len(group_members) > 1:
+                # Sync to other classes in the group
+                for other_cls in group_members:
+                    if other_cls != class_section:
+                        SessionStepStatus.objects.update_or_create(
+                            planned_session=planned_session,
+                            class_section=other_cls,
+                            session_date=session_date,
+                            step_number=step_number,
+                            defaults={
+                                'is_completed': is_completed,
+                                'step_content': step_content,
+                                'facilitator': request.user,
+                                'completed_at': step_status.completed_at,
+                            }
+                        )
+                logger.info(f"Step {step_number} synced to {len(group_members) - 1} other sessions in group")
         
         # Find the actual session for this planned session today to return the ID for live UI updates
         actual_session = ActualSession.objects.filter(
             planned_session=planned_session,
+            class_section=class_section,
             date=timezone.now().date()
         ).first()
         
@@ -186,6 +202,7 @@ def get_step_status(request):
     Query parameters:
     - planned_session_id: UUID of the planned session
     - session_date: YYYY-MM-DD format
+    - class_section_id: UUID of the class section
     
     Returns:
     {
@@ -200,6 +217,7 @@ def get_step_status(request):
     try:
         planned_session_id = request.GET.get('planned_session_id')
         session_date = request.GET.get('session_date')
+        class_section_id = request.GET.get('class_section_id')
         
         if not all([planned_session_id, session_date]):
             return JsonResponse({
@@ -216,11 +234,20 @@ def get_step_status(request):
                 'error': f'Planned session {planned_session_id} not found'
             }, status=404)
         
-        # Get all step statuses for this session and date
-        step_statuses = SessionStepStatus.objects.filter(
-            planned_session=planned_session,
-            session_date=session_date
-        ).order_by('step_number')
+        # Get all step statuses for this session, date and class section (or legacy null ones)
+        q = Q(planned_session=planned_session, session_date=session_date)
+        if class_section_id:
+            q &= Q(Q(class_section_id=class_section_id) | Q(class_section__isnull=True))
+        else:
+            # Fallback: get first active class section for this facilitator
+            class_section = ClassSection.objects.filter(
+                school__facilitators__facilitator=request.user,
+                school__facilitators__is_active=True
+            ).first()
+            if class_section:
+                q &= Q(Q(class_section=class_section) | Q(class_section__isnull=True))
+            
+        step_statuses = SessionStepStatus.objects.filter(q).order_by('step_number')
         
         # Build response
         steps = {}
@@ -271,6 +298,7 @@ def clear_step_status(request):
         "planned_session_id": "uuid",
         "session_date": "YYYY-MM-DD",
         "step_number": 1-7,  # Optional - if not provided, clears all steps
+        "class_section_id": "uuid" # Optional
     }
     """
     try:
@@ -279,6 +307,7 @@ def clear_step_status(request):
         planned_session_id = data.get('planned_session_id')
         session_date = data.get('session_date')
         step_number = data.get('step_number')  # Optional
+        class_section_id = data.get('class_section_id')
         
         if not all([planned_session_id, session_date]):
             return JsonResponse({
@@ -294,6 +323,28 @@ def clear_step_status(request):
                 'success': False,
                 'error': f'Planned session {planned_session_id} not found'
             }, status=404)
+            
+        # Get class section
+        class_section = None
+        if class_section_id:
+            try:
+                class_section = ClassSection.objects.get(id=class_section_id)
+            except ClassSection.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Class section {class_section_id} not found'
+                }, status=404)
+        else:
+            class_section = ClassSection.objects.filter(
+                school__facilitators__facilitator=request.user,
+                school__facilitators__is_active=True
+            ).first()
+            
+        if not class_section:
+            return JsonResponse({
+                'success': False,
+                'error': 'No class section associated with this request'
+            }, status=400)
         
         with transaction.atomic():
             if step_number:
@@ -306,6 +357,7 @@ def clear_step_status(request):
                 
                 step_status, _ = SessionStepStatus.objects.get_or_create(
                     planned_session=planned_session,
+                    class_section=class_section,
                     session_date=session_date,
                     step_number=step_number,
                 )
@@ -313,16 +365,13 @@ def clear_step_status(request):
                 
                 # [GROUP SYNC] Clear for other group members
                 from .session_management import get_grouped_classes_for_session
-                group_members = get_grouped_classes_for_session(planned_session, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
+                group_members = get_grouped_classes_for_session(class_section, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
                 
-                if len(group_members) > 1 and planned_session.grouped_session_id:
-                    other_planned_sessions = PlannedSession.objects.filter(
-                        grouped_session_id=planned_session.grouped_session_id,
-                        day_number=planned_session.day_number
-                    ).exclude(id=planned_session.id)
-                    
+                if len(group_members) > 1:
+                    other_classes = [c for c in group_members if c != class_section]
                     SessionStepStatus.objects.filter(
-                        planned_session__in=other_planned_sessions,
+                        planned_session=planned_session,
+                        class_section__in=other_classes,
                         session_date=session_date,
                         step_number=step_number
                     ).update(is_completed=False, completed_at=None)
@@ -335,21 +384,19 @@ def clear_step_status(request):
                 # Clear all steps
                 SessionStepStatus.objects.filter(
                     planned_session=planned_session,
+                    class_section=class_section,
                     session_date=session_date,
                 ).update(is_completed=False, completed_at=None)
                 
                 # [GROUP SYNC] Clear all for other group members
                 from .session_management import get_grouped_classes_for_session
-                group_members = get_grouped_classes_for_session(planned_session, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
+                group_members = get_grouped_classes_for_session(class_section, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
                 
-                if len(group_members) > 1 and planned_session.grouped_session_id:
-                    other_planned_sessions = PlannedSession.objects.filter(
-                        grouped_session_id=planned_session.grouped_session_id,
-                        day_number=planned_session.day_number
-                    ).exclude(id=planned_session.id)
-                    
+                if len(group_members) > 1:
+                    other_classes = [c for c in group_members if c != class_section]
                     SessionStepStatus.objects.filter(
-                        planned_session__in=other_planned_sessions,
+                        planned_session=planned_session,
+                        class_section__in=other_classes,
                         session_date=session_date
                     ).update(is_completed=False, completed_at=None)
 

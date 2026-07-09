@@ -75,7 +75,7 @@ def admin_dashboard_optimized(request):
     
     # Get recent activities (last 10 actual sessions)
     recent_activities = ActualSession.objects.select_related(
-        'facilitator', 'planned_session', 'planned_session__class_section', 'planned_session__class_section__school'
+        'facilitator', 'planned_session', 'class_section', 'class_section__school'
     ).order_by('-created_at')[:10]
     
     context = {
@@ -152,17 +152,12 @@ def facilitator_dashboard_optimized(request):
     
     # Count conducted sessions (aggregation)
     conducted_sessions = ActualSession.objects.filter(
-        planned_session__class_section__in=all_classes,
+        class_section__in=all_classes,
         status=SessionStatus.CONDUCTED
     ).count()
     
-    # Count total planned sessions - exclude placeholders (day_number=1 for grouped classes)
-    # Single class: 150 sessions, Grouped class: 150 sessions (shared, not duplicated)
-    total_planned_sessions = PlannedSession.objects.filter(
-        class_section__in=all_classes,
-        is_active=True,
-        day_number__gt=1  # Skip placeholders
-    ).count()
+    # Count total planned sessions - 150 days per class section
+    total_planned_sessions = total_classes * 150
     
     # Calculate remaining sessions
     remaining_sessions = total_planned_sessions - conducted_sessions
@@ -174,7 +169,7 @@ def facilitator_dashboard_optimized(request):
     
     # Get attendance stats with aggregation (single query)
     attendance_stats = Attendance.objects.filter(
-        actual_session__planned_session__class_section__in=all_classes
+        actual_session__class_section__in=all_classes
     ).aggregate(
         total_records=Count('id'),
         present_count=Count('id', filter=Q(status=AttendanceStatus.PRESENT))
@@ -200,7 +195,7 @@ def facilitator_dashboard_optimized(request):
         
         # Get attendance rate for this class
         class_attendance = Attendance.objects.filter(
-            actual_session__planned_session__class_section=class_section
+            actual_session__class_section=class_section
         ).aggregate(
             total=Count('id'),
             present=Count('id', filter=Q(status=AttendanceStatus.PRESENT))
@@ -225,9 +220,10 @@ def facilitator_dashboard_optimized(request):
     ).select_related('student').order_by('-start_date')[:5]
     
     # Get recent sessions (last 7 days)
+    from datetime import date
     seven_days_ago = date.today() - timedelta(days=7)
     recent_sessions = ActualSession.objects.filter(
-        planned_session__class_section__in=all_classes,
+        class_section__in=all_classes,
         date__gte=seven_days_ago,
         status=SessionStatus.CONDUCTED
     ).count()
