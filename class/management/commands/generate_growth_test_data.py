@@ -120,7 +120,7 @@ class Command(BaseCommand):
             # Find a session on this date for this class
             sessions = ActualSession.objects.filter(
                 date=attendance_date,
-                planned_session__class_section=enrollment.class_section
+                class_section=enrollment.class_section
             )
             
             if sessions.exists():

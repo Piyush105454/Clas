@@ -30,7 +30,7 @@ class FacilitatorAssignmentHistory:
         try:
             # Get all actual sessions with facilitators, ordered by day number
             sessions = ActualSession.objects.filter(
-                planned_session__class_section=self.class_section,
+                class_section=self.class_section,
                 facilitator__isnull=False
             ).select_related('facilitator', 'planned_session').order_by('planned_session__day_number')
             
@@ -88,7 +88,7 @@ class FacilitatorAssignmentHistory:
             # Step 2: Fallback to ActualSession history if no tracker record exists
             from ..models import SessionStatus
             last_session = ActualSession.objects.filter(
-                planned_session__class_section=self.class_section,
+                class_section=self.class_section,
                 status__in=[SessionStatus.CONDUCTED, SessionStatus.CANCELLED]
             ).select_related('planned_session').order_by('-planned_session__day_number').first()
             
@@ -111,7 +111,7 @@ class FacilitatorAssignmentHistory:
         try:
             # Get the most recent actual session with a facilitator
             latest_session = ActualSession.objects.filter(
-                planned_session__class_section=self.class_section,
+                class_section=self.class_section,
                 facilitator__isnull=False
             ).select_related('facilitator').order_by('-date').first()
             
@@ -147,23 +147,39 @@ class FacilitatorSessionContinuation:
         If new to class: returns continuation day (not day 1)
         If already working: returns next pending session
         """
+        from ..models import SessionStatus
         try:
             history = FacilitatorAssignmentHistory(class_section)
             
             # Check if this facilitator has worked on this class before
             has_worked_before = ActualSession.objects.filter(
-                planned_session__class_section=class_section,
+                class_section=class_section,
                 facilitator=facilitator
             ).exists()
             
             if has_worked_before:
                 # Facilitator already worked on this class, get next pending session
-                next_session = PlannedSession.objects.filter(
+                # Count conducted sessions to determine the next day
+                conducted_count = ActualSession.objects.filter(
                     class_section=class_section,
+                    status=SessionStatus.CONDUCTED,
+                    planned_session__day_number__lte=150
+                ).values('planned_session__day_number').distinct().count()
+                
+                next_day = conducted_count + 1
+                
+                next_session = PlannedSession.objects.filter(
+                    day_number=next_day,
                     is_active=True
-                ).exclude(
-                    actual_sessions__status__in=[SessionStatus.CONDUCTED, SessionStatus.CANCELLED]
-                ).order_by('day_number').first()
+                ).first()
+                
+                # Fallback to first available if exact day not found
+                if not next_session:
+                    next_session = PlannedSession.objects.filter(
+                        day_number__gte=next_day,
+                        day_number__lte=150,
+                        is_active=True
+                    ).order_by('day_number').first()
                 
                 logger.info(f"Facilitator {facilitator} has worked before on {class_section}, next session: {next_session}")
                 return next_session
@@ -172,9 +188,8 @@ class FacilitatorSessionContinuation:
                 # New facilitator to this class, get continuation day
                 continuation_day = history.get_continuation_day()
                 
-                # Get the planned session for continuation day
+                # Get the planned session for continuation day from global master table
                 next_session = PlannedSession.objects.filter(
-                    class_section=class_section,
                     day_number=continuation_day,
                     is_active=True
                 ).first()
@@ -268,7 +283,7 @@ class FacilitatorSessionContinuation:
             
             # Check if old facilitator actually worked on this class
             old_fac_sessions = ActualSession.objects.filter(
-                planned_session__class_section=class_section,
+                class_section=class_section,
                 facilitator=old_facilitator
             ).count()
             
@@ -277,7 +292,7 @@ class FacilitatorSessionContinuation:
             
             # Check if new facilitator is already assigned
             new_fac_sessions = ActualSession.objects.filter(
-                planned_session__class_section=class_section,
+                class_section=class_section,
                 facilitator=new_facilitator
             ).count()
             
@@ -318,9 +333,10 @@ class FacilitatorSessionContinuation:
         }
         
         try:
-            # Get all classes this facilitator has worked on
+            from ..models import SessionStatus
+            # Get all classes this facilitator has worked on (via direct class_section on ActualSession)
             class_sections = ClassSection.objects.filter(
-                planned_sessions__actual_sessions__facilitator=facilitator
+                actual_sessions__facilitator=facilitator
             ).distinct()
             
             result['total_classes'] = class_sections.count()
@@ -328,14 +344,14 @@ class FacilitatorSessionContinuation:
             for class_section in class_sections:
                 # Get days conducted by this facilitator
                 days_conducted = ActualSession.objects.filter(
-                    planned_session__class_section=class_section,
+                    class_section=class_section,
                     facilitator=facilitator,
                     status=SessionStatus.CONDUCTED
                 ).count()
                 
                 # Get last day worked
                 last_session = ActualSession.objects.filter(
-                    planned_session__class_section=class_section,
+                    class_section=class_section,
                     facilitator=facilitator
                 ).select_related('planned_session').order_by('-planned_session__day_number').first()
                 

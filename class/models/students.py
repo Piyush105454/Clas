@@ -1,6 +1,21 @@
 import uuid
+import datetime
 from django.db import models
 from django.conf import settings
+
+def lesson_plan_upload_path(instance, filename):
+    now = datetime.datetime.now()
+    user = 'unknown_user'
+    if instance.facilitator and instance.facilitator.email:
+        user = instance.facilitator.email.split('@')[0]
+    return f"CLAS/{now.strftime('%Y')}/{now.strftime('%m')}/lessonplan/{user}/{filename}"
+
+def session_reward_upload_path(instance, filename):
+    now = datetime.datetime.now()
+    user = 'unknown_user'
+    if instance.facilitator and instance.facilitator.email:
+        user = instance.facilitator.email.split('@')[0]
+    return f"CLAS/{now.strftime('%Y')}/{now.strftime('%m')}/rewards/{user}/{filename}"
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
@@ -136,17 +151,13 @@ class PlannedSession(models.Model):
     """
     Represents ONE logical teaching day (Day 1, Day 2, ...)
     Enhanced with sequence tracking and validation
+    Now shared globally as a master curriculum session table.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    class_section = models.ForeignKey(
-        "class.ClassSection",
-        on_delete=models.CASCADE,
-        related_name="planned_sessions"
-    )
-
     day_number = models.PositiveIntegerField(
+        unique=True,
         help_text="Logical day number (Day 1, Day 2, ...)"
     )
 
@@ -180,13 +191,6 @@ class PlannedSession(models.Model):
         help_text="Days that must be completed first"
     )
     
-    # Grouped session support
-    grouped_session_id = models.UUIDField(
-        null=True,
-        blank=True,
-        help_text="If set, this session is part of a grouped session. All classes with same grouped_session_id share this session."
-    )
-    
     # PHASE 2: Content Versioning Fields
     curriculum_session = models.ForeignKey(
         'CurriculumSession',
@@ -213,31 +217,14 @@ class PlannedSession(models.Model):
 
     class Meta:
         ordering = ["day_number"]
-        # Allow multiple sessions per day_number if they have different grouped_session_id
-        # For non-grouped sessions (grouped_session_id=None), enforce unique (class_section, day_number)
-        # For grouped sessions, allow multiple classes to have same day_number with same grouped_session_id
-        constraints = [
-            models.UniqueConstraint(
-                fields=['class_section', 'day_number'],
-                condition=models.Q(grouped_session_id__isnull=True),
-                name='unique_planned_session_non_grouped'
-            ),
-            models.UniqueConstraint(
-                fields=['class_section', 'day_number', 'grouped_session_id'],
-                condition=models.Q(grouped_session_id__isnull=False),
-                name='unique_planned_session_grouped'
-            ),
-        ]
         verbose_name = "Planned Session (Day)"
         verbose_name_plural = "Planned Sessions (Days)"
         indexes = [
-            models.Index(fields=['class_section', 'day_number']),
-            models.Index(fields=['class_section', 'is_active']),
-            models.Index(fields=['grouped_session_id', 'day_number']),  # OPTIMIZATION: For grouped session detection
+            models.Index(fields=['day_number']),
         ]
 
     def __str__(self):
-        return f"{self.class_section} - Day {self.day_number}"
+        return f"Day {self.day_number} - {self.title}"
 
 
 # =========================
@@ -330,6 +317,14 @@ class ActualSession(models.Model):
         PlannedSession,
         on_delete=models.CASCADE,
         related_name="actual_sessions"
+    )
+
+    class_section = models.ForeignKey(
+        "class.ClassSection",
+        on_delete=models.CASCADE,
+        related_name="actual_sessions",
+        null=True,
+        blank=True
     )
 
     date = models.DateField()
@@ -427,7 +422,7 @@ class ActualSession(models.Model):
     )
 
     class Meta:
-        unique_together = ("planned_session", "date")
+        unique_together = ("class_section", "date")
         verbose_name = "Actual Session"
         
     @property
@@ -763,6 +758,15 @@ class LessonPlanUpload(models.Model):
         related_name="lesson_plan_uploads",
         help_text="Reference to the session"
     )
+
+    class_section = models.ForeignKey(
+        "class.ClassSection",
+        on_delete=models.CASCADE,
+        related_name="lesson_plan_uploads",
+        null=True,
+        blank=True,
+        help_text="Reference to the class section"
+    )
     
     facilitator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -777,7 +781,7 @@ class LessonPlanUpload(models.Model):
     )
     
     lesson_plan_file = models.FileField(
-        upload_to='clas/lessonplan/%Y/%m/',
+        upload_to=lesson_plan_upload_path,
         help_text="The actual lesson plan file"
     )
     
@@ -824,7 +828,7 @@ class LessonPlanUpload(models.Model):
     )
     
     class Meta:
-        unique_together = ('planned_session', 'facilitator')
+        unique_together = ('class_section', 'planned_session', 'facilitator')
         verbose_name = "Lesson Plan Upload"
         verbose_name_plural = "Lesson Plan Uploads"
         ordering = ['-upload_date']
@@ -868,7 +872,7 @@ class SessionReward(models.Model):
     )
     
     reward_photo = models.ImageField(
-        upload_to='session_rewards/%Y/%m/',
+        upload_to=session_reward_upload_path,
         null=True,
         blank=True,
         help_text="Photo of reward/student"
@@ -967,6 +971,15 @@ class SessionPreparationChecklist(models.Model):
         related_name="preparation_checklists",
         help_text="Reference to session"
     )
+
+    class_section = models.ForeignKey(
+        "class.ClassSection",
+        on_delete=models.CASCADE,
+        related_name="preparation_checklists",
+        null=True,
+        blank=True,
+        help_text="Reference to class section"
+    )
     
     facilitator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1010,7 +1023,7 @@ class SessionPreparationChecklist(models.Model):
     special_requirements = models.TextField(blank=True)
     
     class Meta:
-        unique_together = ('planned_session', 'facilitator')
+        unique_together = ('class_section', 'planned_session', 'facilitator')
         verbose_name = "Session Preparation Checklist"
         verbose_name_plural = "Session Preparation Checklists"
         ordering = ['-preparation_start_time']
@@ -1316,6 +1329,15 @@ class SessionStepStatus(models.Model):
         related_name="step_statuses",
         help_text="Reference to the planned session (day)"
     )
+
+    class_section = models.ForeignKey(
+        "class.ClassSection",
+        on_delete=models.CASCADE,
+        related_name="step_statuses",
+        null=True,
+        blank=True,
+        help_text="Reference to class section"
+    )
     
     # Date of execution
     session_date = models.DateField(
@@ -1370,13 +1392,13 @@ class SessionStepStatus(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        # Unique constraint: one status per step per session per date
-        unique_together = ('planned_session', 'session_date', 'step_number')
+        # Unique constraint: one status per step per session per class section per date
+        unique_together = ('class_section', 'planned_session', 'session_date', 'step_number')
         verbose_name = "Session Step Status"
         verbose_name_plural = "Session Step Statuses"
         ordering = ['session_date', 'step_number']
         indexes = [
-            models.Index(fields=['planned_session', 'session_date']),
+            models.Index(fields=['class_section', 'planned_session', 'session_date']),
             models.Index(fields=['session_date', 'step_number']),
             models.Index(fields=['facilitator', 'session_date']),
         ]

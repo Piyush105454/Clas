@@ -216,34 +216,28 @@ def get_students_report_data(filters, date_filter, offset=0, limit=20):
         
         all_relevant_classes = set(current_class_ids)
         
-        # 🚀 OPTIMIZATION: Collect grouped_session_ids first to avoid N+1 queries
-        g_session_ids = [g.grouped_session_id for g in group_infos if g.grouped_session_id]
-        
-        # Fetch all primary class IDs for these groups in ONE query
-        primary_sessions = PlannedSession.objects.filter(
-            grouped_session_id__in=g_session_ids
-        ).values('grouped_session_id', 'class_section_id').distinct()
-        
-        # Pre-process into a fast lookup dict
-        g_to_primary = {p['grouped_session_id']: p['class_section_id'] for p in primary_sessions}
-        
+        # Pre-process into a fast lookup dict of grouped_session_id -> primary_class_id
+        g_to_primary = {}
         for g in group_infos:
-            primary_id = g_to_primary.get(g.grouped_session_id)
-            if primary_id:
+            members = list(g.class_sections.all())
+            if members:
+                primary_class = sorted(members, key=lambda c: str(c.id))[0]
+                primary_id = primary_class.id
+                g_to_primary[g.grouped_session_id] = primary_id
                 all_relevant_classes.add(primary_id)
-                for c in g.class_sections.all():
+                for c in members:
                     if c.id in current_class_ids:
                         class_to_primary[c.id] = primary_id
 
         # Class-level session counts (much smaller than individual attendance)
         session_counts = ActualSession.objects.filter(
             status=SessionStatus.CONDUCTED,
-            planned_session__class_section_id__in=list(all_relevant_classes)
-        ).values('planned_session__class_section_id').annotate(
+            class_section_id__in=list(all_relevant_classes)
+        ).values('class_section_id').annotate(
             total=Count('id')
         )
         
-        primary_counts = {item['planned_session__class_section_id']: item['total'] for item in session_counts}
+        primary_counts = {item['class_section_id']: item['total'] for item in session_counts}
         session_counts_dict = {c_id: primary_counts.get(class_to_primary[c_id], 0) for c_id in current_class_ids}
         
         students_data = []
@@ -354,12 +348,12 @@ def get_attendance_report_data(filters, date_filter, offset=0, limit=20):
         # Apply school filter (Multiple)
         school_ids = filters.get('school_id')
         if school_ids:
-            queryset = queryset.filter(planned_session__class_section__school_id__in=school_ids)
+            queryset = queryset.filter(class_section__school_id__in=school_ids)
         
         # Apply class filter (Multiple)
         class_ids = filters.get('class_id')
         if class_ids:
-            queryset = queryset.filter(planned_session__class_section_id__in=class_ids)
+            queryset = queryset.filter(class_section_id__in=class_ids)
             
         # ✅ PERFORMANCE FIX: Only include conducted sessions (which have attendance)
         # Avoids expensive 'attendances__isnull=False' check and 'distinct()'
@@ -367,7 +361,7 @@ def get_attendance_report_data(filters, date_filter, offset=0, limit=20):
         queryset = queryset.filter(status=SessionStatus.CONDUCTED)
         
         sessions = queryset.select_related(
-            'planned_session__class_section__school',
+            'class_section__school',
             'facilitator'
         ).order_by('-date')[offset : offset + limit]
         
@@ -413,7 +407,7 @@ def get_attendance_report_data(filters, date_filter, offset=0, limit=20):
                     continue
                     
                 # Get data from dicts (no DB queries)
-                total_students = enrollment_dict.get(session.planned_session.class_section_id, 0)
+                total_students = enrollment_dict.get(session.class_section_id, 0)
                 present_count = attendance_dict.get(session.id, 0)
                 
                 # Safeguards: ensure present doesn't exceed total
@@ -425,8 +419,8 @@ def get_attendance_report_data(filters, date_filter, offset=0, limit=20):
                 
                 attendance_data_list.append({
                     'date': session.date.strftime('%Y-%m-%d'),
-                    'school_name': session.planned_session.class_section.school.name,
-                    'class_name': f"{session.planned_session.class_section.class_level} - {session.planned_session.class_section.section}",
+                    'school_name': session.class_section.school.name,
+                    'class_name': f"{session.class_section.class_level} - {session.class_section.section}",
                     'total_students': total_students,
                     'present': present_count,
                     'absent': absent_count,
@@ -440,7 +434,7 @@ def get_attendance_report_data(filters, date_filter, offset=0, limit=20):
                     daily_attendance[date_str] = []
                 daily_attendance[date_str].append(attendance_percentage)
                 
-                class_key = f"{session.planned_session.class_section.class_level} - {session.planned_session.class_section.section}"
+                class_key = f"{session.class_section.class_level} - {session.class_section.section}"
                 if class_key not in class_attendance:
                     class_attendance[class_key] = []
                 class_attendance[class_key].append(attendance_percentage)
@@ -479,7 +473,7 @@ def get_sessions_report_data(filters, date_filter, offset=0, limit=20):
     try:
         # Build the query
         queryset = ActualSession.objects.select_related(
-            'planned_session__class_section__school',
+            'class_section__school',
             'facilitator'
         )
         
@@ -490,12 +484,12 @@ def get_sessions_report_data(filters, date_filter, offset=0, limit=20):
         # Apply school filter (Multiple)
         school_ids = filters.get('school_id')
         if school_ids:
-            queryset = queryset.filter(planned_session__class_section__school_id__in=school_ids)
+            queryset = queryset.filter(class_section__school_id__in=school_ids)
         
         # Apply class filter (Multiple)
         class_ids = filters.get('class_id')
         if class_ids:
-            queryset = queryset.filter(planned_session__class_section_id__in=class_ids)
+            queryset = queryset.filter(class_section_id__in=class_ids)
 
         # [FIX] GHOST FILTER: Exclude "Pending" sessions that have zero activity
         from .models import SessionStatus, Attendance, SessionStepStatus
@@ -504,6 +498,7 @@ def get_sessions_report_data(filters, date_filter, offset=0, limit=20):
         # Fast subqueries using Exists
         has_attendance = Attendance.objects.filter(actual_session_id=OuterRef('id'))
         has_steps = SessionStepStatus.objects.filter(
+            class_section_id=OuterRef('class_section_id'),
             planned_session_id=OuterRef('planned_session_id'),
             session_date=OuterRef('date')
         )
@@ -540,7 +535,7 @@ def get_sessions_report_data(filters, date_filter, offset=0, limit=20):
                     'date': session.date.strftime('%Y-%m-%d'),
                     'topic': session.planned_session.title if session.planned_session else 'N/A',
                     'day_number': session.planned_session.day_number if session.planned_session else 1,
-                    'class_name': f"{session.planned_session.class_section.class_level} - {session.planned_session.class_section.section}" if session.planned_session else 'N/A',
+                    'class_name': f"{session.class_section.class_level} - {session.class_section.section}" if session.class_section else 'N/A',
                     'facilitator_name': session.facilitator.full_name if session.facilitator else 'N/A',
                     'status': session.get_status_display() if hasattr(session, 'get_status_display') else str(session.status),
                     'session_type': session_type,
@@ -561,7 +556,7 @@ def get_feedback_report_data(filters, date_filter, offset=0, limit=20):
     try:
         # Build the query with select_related to avoid N+1 queries
         queryset = SessionFeedback.objects.select_related(
-            'actual_session__planned_session__class_section__school',
+            'actual_session__class_section__school',
             'actual_session__facilitator'
         )
         
@@ -572,12 +567,12 @@ def get_feedback_report_data(filters, date_filter, offset=0, limit=20):
         # Apply school filter (Multiple)
         school_ids = filters.get('school_id')
         if school_ids:
-            queryset = queryset.filter(actual_session__planned_session__class_section__school_id__in=school_ids)
+            queryset = queryset.filter(actual_session__class_section__school_id__in=school_ids)
         
         # Apply class filter (Multiple)
         class_ids = filters.get('class_id')
         if class_ids:
-            queryset = queryset.filter(actual_session__planned_session__class_section_id__in=class_ids)
+            queryset = queryset.filter(actual_session__class_section_id__in=class_ids)
         
         feedback_records = queryset.order_by('-feedback_date')[offset : offset + limit]
         

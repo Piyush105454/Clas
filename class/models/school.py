@@ -1,5 +1,14 @@
 from django.db import models
 import uuid
+import datetime
+
+def school_profile_image_path(instance, filename):
+    now = datetime.datetime.now()
+    return f"CLAS/{now.strftime('%Y')}/{now.strftime('%m')}/schools/profile/{filename}"
+
+def school_logo_path(instance, filename):
+    now = datetime.datetime.now()
+    return f"CLAS/{now.strftime('%Y')}/{now.strftime('%m')}/schools/logos/{filename}"
 
 class School(models.Model):
 
@@ -63,13 +72,13 @@ class School(models.Model):
     )
 
     profile_image = models.ImageField(
-        upload_to="schools/",
+        upload_to=school_profile_image_path,
         null=True,
         blank=True
     )
     
     logo = models.ImageField(
-        upload_to="schools/logos/",
+        upload_to=school_logo_path,
         null=True,
         blank=True
     )

@@ -195,24 +195,14 @@ class OptimizedQueries:
             }
         }
         """
-        # Get planned sessions
-        planned = PlannedSession.objects.filter(
-            class_section_id__in=class_ids,
-            is_active=True
-        ).values('class_section_id').annotate(count=Count('id'))
-        planned_by_class = {
-            item['class_section_id']: item['count'] 
-            for item in planned
-        }
-        
         # Get actual sessions by status
         actual = ActualSession.objects.filter(
-            planned_session__class_section_id__in=class_ids
-        ).values('planned_session__class_section_id', 'status').annotate(count=Count('id'))
+            class_section_id__in=class_ids
+        ).values('class_section_id', 'status').annotate(count=Count('id'))
         
         actual_by_class = {}
         for item in actual:
-            class_id = item['planned_session__class_section_id']
+            class_id = item['class_section_id']
             status = item['status']
             count = item['count']
             
@@ -233,7 +223,7 @@ class OptimizedQueries:
         result = {}
         for class_id in class_ids:
             result[class_id] = {
-                'total_sessions': planned_by_class.get(class_id, 0),
+                'total_sessions': 150,  # Global master curriculum has exactly 150 days
                 'conducted_sessions': actual_by_class.get(class_id, {}).get('conducted', 0),
                 'cancelled_sessions': actual_by_class.get(class_id, {}).get('cancelled', 0),
                 'holiday_sessions': actual_by_class.get(class_id, {}).get('holiday', 0)

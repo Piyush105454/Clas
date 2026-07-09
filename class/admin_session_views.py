@@ -317,7 +317,7 @@ def admin_session_analytics(request):
     
     # Recent activity
     recent_sessions = ActualSession.objects.select_related(
-        'planned_session__class_section__school', 'facilitator'
+        'class_section__school', 'facilitator'
     ).order_by('-created_at')[:20]
     
     context = {

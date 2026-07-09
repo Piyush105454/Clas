@@ -1663,6 +1663,7 @@
                             const formData = new FormData();
                             formData.append('lesson_plan_file', compressedFile, file.name);
                             formData.append('planned_session_id', sessionId);
+                            formData.append('class_section_id', '{{ class_section.id }}');
 
                             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
@@ -1800,11 +1801,17 @@
 
             <!-- PREPARATION TAB -->
             <div class="tab-pane fade" id="preparation" role="tabpanel">
-              <h6><i class="fas fa-check-circle me-2"></i>Session Preparation Checklist</h6>
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Session Preparation Checklist</h6>
+                <button type="button" class="btn btn-sm btn-outline-success" onclick="markAllCheckpoints()">
+                  <i class="fas fa-check-double me-1"></i>Select All
+                </button>
+              </div>
 
               <form id="preparationForm">
                 {% csrf_token %}
                 <input type="hidden" name="planned_session_id" value="{{ planned_session.id }}">
+                <input type="hidden" name="class_section_id" value="{{ class_section.id }}">
 
                 <div class="checklist-container">
                   <div class="form-check mb-3">
@@ -1900,6 +1907,19 @@
               </div>
 
               <script>
+                function markAllCheckpoints() {
+                  const checkpoints = document.querySelectorAll('.checkpoint-item');
+                  checkpoints.forEach(item => {
+                    item.checked = true;
+                  });
+                  if (typeof window.updatePreparationProgress === 'function') {
+                    window.updatePreparationProgress();
+                  }
+                  if (typeof window.saveCheckpointProgress === 'function') {
+                    window.saveCheckpointProgress();
+                  }
+                }
+
                 function markPreparationComplete() {
                   // Mark step 2 (Preparation) as completed
                   markStepCompleted(2);
@@ -2967,6 +2987,7 @@
         <form method="post" action="{% if planned_session %}{% url 'start_session' planned_session.id %}{% endif %}" id="cancelSessionForm">
           {% csrf_token %}
           <input type="hidden" name="status" value="cancelled">
+          <input type="hidden" name="class_section_id" value="{{ class_section.id }}">
 
           <div class="mb-3">
             <label class="form-label"><strong>Cancellation Reason: <span class="text-danger">*</span></strong></label>
@@ -3504,6 +3525,8 @@
 
       document.getElementById('preparationProgressBar').style.width = progress + '%';
       document.getElementById('preparationProgressText').textContent = Math.round(progress) + '%';
+      
+      window.updatePreparationProgress = updatePreparationProgress;
 
       const nextBtn = document.getElementById('preparationNextBtn');
       const completeBtn = document.getElementById('preparationCompleteBtn');
@@ -3531,9 +3554,15 @@
       const sessionId = document.querySelector('input[name="planned_session_id"]')?.value;
       if (!sessionId) return;
 
-      // Fetch the latest uploaded files
+      const classSectionId = typeof stepStatusAPI !== 'undefined' ? stepStatusAPI.getClassSectionId() : null;
+      let url = `/api/get-lesson-plan-uploads/?planned_session_id=${sessionId}`;
+      if (classSectionId) {
+        url += `&class_section_id=${classSectionId}`;
+      }
       const cacheBuster = new Date().getTime();
-      fetch(`/api/get-lesson-plan-uploads/?planned_session_id=${sessionId}&t=${cacheBuster}`)
+      url += `&t=${cacheBuster}`;
+
+      fetch(url)
         .then(r => r.json())
         .then(data => {
           console.log('📡 [API DATA] Received uploads:', data);
@@ -3571,6 +3600,7 @@
     }
 
     async function saveCheckpointProgress() {
+      window.saveCheckpointProgress = saveCheckpointProgress;
       const formData = new FormData(document.getElementById('preparationForm'));
       const classId = '{{ class_section.id }}'; // Get current class ID
       

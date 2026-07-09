@@ -11,6 +11,18 @@ class StepStatusAPI {
     }
 
     /**
+     * Helper to parse class_section_id from url
+     */
+    getClassSectionId() {
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        const classIdx = pathParts.indexOf('class');
+        if (classIdx !== -1 && pathParts[classIdx + 1]) {
+            return pathParts[classIdx + 1];
+        }
+        return null;
+    }
+
+    /**
      * Save step completion status to database
      * @param {string} plannedSessionId - UUID of the planned session
      * @param {string} sessionDate - Date in YYYY-MM-DD format
@@ -21,19 +33,25 @@ class StepStatusAPI {
      */
     async saveStepStatus(plannedSessionId, sessionDate, stepNumber, isCompleted, stepContent = {}) {
         try {
+            const classSectionId = this.getClassSectionId();
+            const bodyObj = {
+                planned_session_id: plannedSessionId,
+                session_date: sessionDate,
+                step_number: stepNumber,
+                is_completed: isCompleted,
+                step_content: stepContent,
+            };
+            if (classSectionId) {
+                bodyObj.class_section_id = classSectionId;
+            }
+
             const response = await fetch(`${this.baseUrl}/save/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': this.getCsrfToken(),
                 },
-                body: JSON.stringify({
-                    planned_session_id: plannedSessionId,
-                    session_date: sessionDate,
-                    step_number: stepNumber,
-                    is_completed: isCompleted,
-                    step_content: stepContent,
-                }),
+                body: JSON.stringify(bodyObj),
             });
 
             if (!response.ok) {
@@ -72,8 +90,14 @@ class StepStatusAPI {
                 return this.cache[cacheKey];
             }
 
+            const classSectionId = this.getClassSectionId();
+            let url = `${this.baseUrl}/get/?planned_session_id=${plannedSessionId}&session_date=${sessionDate}`;
+            if (classSectionId) {
+                url += `&class_section_id=${classSectionId}`;
+            }
+
             const response = await fetch(
-                `${this.baseUrl}/get/?planned_session_id=${plannedSessionId}&session_date=${sessionDate}`,
+                url,
                 {
                     method: 'GET',
                     headers: {
@@ -155,10 +179,14 @@ class StepStatusAPI {
      */
     async clearStepStatus(plannedSessionId, sessionDate, stepNumber = null) {
         try {
+            const classSectionId = this.getClassSectionId();
             const body = {
                 planned_session_id: plannedSessionId,
                 session_date: sessionDate,
             };
+            if (classSectionId) {
+                body.class_section_id = classSectionId;
+            }
             
             if (stepNumber) {
                 body.step_number = stepNumber;

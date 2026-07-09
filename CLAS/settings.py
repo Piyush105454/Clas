@@ -146,8 +146,11 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     DATABASES['default']['OPTIONS'] = {
         'sslmode': env('DB_SSLMODE', default='require'),
         'connect_timeout': 10,
-        'options': '-c statement_timeout=60000'
     }
+    # Neon pooled connections (using pgBouncer) do not support statement_timeout in startup options
+    db_host = DATABASES['default'].get('HOST', '')
+    if '-pooler' not in db_host:
+        DATABASES['default']['OPTIONS']['options'] = '-c statement_timeout=60000'
 DATABASES['default']['CONN_MAX_AGE'] = 60
 DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 DATABASES['default']['AUTOCOMMIT'] = True
@@ -316,51 +319,34 @@ if os.path.exists(MEDIA_ROOT):
     except Exception as e:
         logger.warning(f"Could not set media directory permissions: {e}")
 
-# AWS S3 Configuration for Media Files (User Uploads)
-# Note: We use WhiteNoise for Static files (CSS/JS) and S3 only for Media (Uploads)
-AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default='').strip()
-AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default='').strip()
-AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='').strip()
-AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='ap-south-1').strip()
-AWS_S3_FILE_OVERWRITE = False
-AWS_DEFAULT_ACL = None
-AWS_S3_VERIFY = True
-AWS_QUERYSTRING_AUTH = True  # Generate secure expiring links
+# Google Drive Configuration for Media Files (User Uploads)
+GOOGLE_SERVICE_ACCOUNT_EMAIL = env('GOOGLE_SERVICE_ACCOUNT_EMAIL', default='').strip()
+GOOGLE_PRIVATE_KEY = env('GOOGLE_PRIVATE_KEY', default='').strip()
+GOOGLE_DRIVE_HOMEWORK_FOLDER_ID = env('GOOGLE_DRIVE_HOMEWORK_FOLDER_ID', default='').strip()
 
-# When AWS keys are present, use S3 for media storage
-# [DIAGNOSTIC] Check if keys are valid (not placeholders)
-is_s3_ready = (
-    AWS_ACCESS_KEY_ID and 
-    AWS_SECRET_ACCESS_KEY and 
-    "your_access_key" not in AWS_ACCESS_KEY_ID and
-    "your_secret_key" not in AWS_SECRET_ACCESS_KEY
+is_gdrive_ready = (
+    GOOGLE_SERVICE_ACCOUNT_EMAIL and 
+    GOOGLE_PRIVATE_KEY and 
+    GOOGLE_DRIVE_HOMEWORK_FOLDER_ID
 )
 
-if is_s3_ready:
-    print("SUCCESS: S3 STORAGE ACTIVE: Using Amazon S3 for media files.")
-    
-    # Explicitly set these for django-storages compatibility
-    AWS_S3_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
-    AWS_S3_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
-    
-    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
-    print(f"LINK: MEDIA URL set to: {MEDIA_URL}")
-    
-    # [FINAL] Combined modern and legacy settings for absolute certainty
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# Keep legacy S3 URL fallback for existing files (to ensure old URLs still work)
+MEDIA_URL = 'https://wes-files-123507875889-ap-south-1-an.s3.amazonaws.com/'
+
+if is_gdrive_ready:
+    print("SUCCESS: GOOGLE DRIVE STORAGE ACTIVE: Using Google Drive for media files.")
+    DEFAULT_FILE_STORAGE = 'class.google_drive_storage.GoogleDriveStorage'
     STORAGES = {
         "default": {
-            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "BACKEND": "class.google_drive_storage.GoogleDriveStorage",
         },
         "staticfiles": {
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
 else:
-    print("WARNING: S3 STORAGE INACTIVE: Using local filesystem (Missing or invalid keys in .env).")
+    print("WARNING: GOOGLE DRIVE STORAGE INACTIVE: Using local filesystem.")
     MEDIA_URL = '/media/'
-    print(f"LINK: MEDIA URL set to: {MEDIA_URL}")
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     STORAGES = {
         "default": {
