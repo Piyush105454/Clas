@@ -104,7 +104,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/step-status-api.js' %}"></script>
+<script src="{% static 'js/step-status-api.js' %}?v=4.1"></script>
 {% endblock %}
 
 {% block content %}
@@ -3554,7 +3554,7 @@
       const sessionId = document.querySelector('input[name="planned_session_id"]')?.value;
       if (!sessionId) return;
 
-      const classSectionId = typeof stepStatusAPI !== 'undefined' ? stepStatusAPI.getClassSectionId() : null;
+      const classSectionId = typeof stepStatusAPI !== 'undefined' && typeof stepStatusAPI.getClassSectionId === 'function' ? stepStatusAPI.getClassSectionId() : null;
       let url = `/api/get-lesson-plan-uploads/?planned_session_id=${sessionId}`;
       if (classSectionId) {
         url += `&class_section_id=${classSectionId}`;

@@ -20,6 +20,7 @@ from .views import (
     
     # Optimized views (performance)
     admin_dashboard_optimized, admin_dashboard_stats_ajax, admin_system_snapshot_ajax, facilitator_dashboard_optimized, supervisor_dashboard_optimized,
+    admin_set_batch,
 
     # Admin – users & setup
     users_view, add_user, edit_user, delete_user, create_user_ajax,
@@ -92,7 +93,14 @@ from .supervisor_views import (
     # Supervisor - Student Import
     supervisor_student_import,
     supervisor_download_sample_csv,
-    
+)
+from .volunteer_views import (
+    admin_volunteers_list,
+    admin_volunteer_add,
+    admin_volunteer_edit,
+    admin_volunteer_delete,
+)
+from .supervisor_views import (
     # Supervisor - Sessions
     supervisor_sessions_list,
     supervisor_session_detail,
@@ -256,6 +264,7 @@ urlpatterns = [
     path("admin/dashboard/", admin_dashboard_optimized, name="admin_dashboard"),
     path("admin/dashboard/stats/ajax/", admin_dashboard_stats_ajax, name="admin_dashboard_stats_ajax"),
     path("admin/dashboard/system-snapshot/ajax/", admin_system_snapshot_ajax, name="admin_system_snapshot_ajax"),
+    path("admin/set-batch/", admin_set_batch, name="admin_set_batch"),
 
     path("supervisor/dashboard/", supervisor_dashboard_optimized, name="supervisor_dashboard"),
     path("facilitator/dashboard/", facilitator_dashboard_optimized, name="facilitator_dashboard"),
@@ -341,6 +350,14 @@ urlpatterns = [
     path("admin/users/edit/<uuid:user_id>/", edit_user, name="edit_user"),
     path("admin/users/delete/<uuid:user_id>/", delete_user, name="delete_user"),
     path("admin/users/create-ajax/", create_user_ajax, name="create_user_ajax"),
+
+    # ======================
+    # Volunteers (ADMIN)
+    # ======================
+    path("admin/volunteers/", admin_volunteers_list, name="admin_volunteers"),
+    path("admin/volunteers/add/", admin_volunteer_add, name="admin_volunteer_add"),
+    path("admin/volunteers/edit/<uuid:volunteer_id>/", admin_volunteer_edit, name="admin_volunteer_edit"),
+    path("admin/volunteers/delete/<uuid:volunteer_id>/", admin_volunteer_delete, name="admin_volunteer_delete"),
 
     # ======================
     # Schools (ADMIN)
