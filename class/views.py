@@ -2745,6 +2745,9 @@ def admin_attendance_filter(request):
     if school_id:
         school = get_object_or_404(School, id=school_id)
         context["selected_school"] = school
+        
+        # Get selected batch date range
+        start_date, end_date = get_selected_batch_dates(request)
 
         if class_section_id:
             class_section = get_object_or_404(ClassSection, id=class_section_id)
@@ -2756,11 +2759,13 @@ def admin_attendance_filter(request):
             ).select_related("student").order_by("student__full_name")
 
             total_sessions = ActualSession.objects.filter(
-                class_section=class_section
+                class_section=class_section,
+                date__range=(start_date, end_date)
             ).filter(Q(status=SessionStatus.CONDUCTED) | Q(attendance_marked=True)).count()
 
             attendance_stats = Attendance.objects.filter(
-                enrollment__class_section=class_section
+                enrollment__class_section=class_section,
+                actual_session__date__range=(start_date, end_date)
             ).values('enrollment_id').annotate(
                 present_count=Count('id', filter=Q(status=AttendanceStatus.PRESENT)),
                 absent_count=Count('id', filter=Q(status=AttendanceStatus.ABSENT)),
@@ -2788,42 +2793,32 @@ def admin_attendance_filter(request):
 
             context["recent_sessions"] = ActualSession.objects.filter(
                 class_section__school=school,
-                status=SessionStatus.CONDUCTED
+                status=SessionStatus.CONDUCTED,
+                date__range=(start_date, end_date)
             ).select_related("planned_session", "class_section").order_by("-date")[:10]
 
         else:
             # OPTIMIZATION: Get class-wise summary for the school
             classes = ClassSection.objects.filter(school=school, is_active=True).order_by("class_level", "section")
             
-            # Fetch conducted sessions counts for these classes
+            # Fetch conducted sessions counts for these classes within the batch
             session_counts = ActualSession.objects.filter(
                 class_section__school=school,
-                status=SessionStatus.CONDUCTED
+                status=SessionStatus.CONDUCTED,
+                date__range=(start_date, end_date)
             ).values('class_section_id').annotate(count=Count('id'))
             sessions_dict = {item['class_section_id']: item['count'] for item in session_counts}
-            
-            # Fetch attendance statistics per class
-            from django.db.models import Avg
-            class_attendance = Attendance.objects.filter(
-                actual_session__class_section__school=school,
-                actual_session__status=SessionStatus.CONDUCTED
-            ).values('actual_session__class_section_id').annotate(
-                avg_attendance=Count('id', filter=Q(status=AttendanceStatus.PRESENT)) * 100.0 / 
-                Count('enrollment_id', distinct=True) / 
-                Count('actual_session_id', distinct=True)
-            )
-            # Actually a simpler group by class:
-            # We want: (Total Presents) / (Total Conducted Sessions * Enrolled Students in that class)
             
             class_stats = []
             for c in classes:
                 enrollment_count = Enrollment.objects.filter(class_section=c, is_active=True).count()
                 conducted_sessions = sessions_dict.get(c.id, 0)
                 
-                # Calculate attendance % for this class in a robust way
+                # Calculate attendance % for this class in a robust way within the batch
                 attendance_records = Attendance.objects.filter(
                     actual_session__class_section=c,
-                    actual_session__status=SessionStatus.CONDUCTED
+                    actual_session__status=SessionStatus.CONDUCTED,
+                    actual_session__date__range=(start_date, end_date)
                 ).values('status').annotate(count=Count('id'))
                 
                 total_recs = 0
@@ -6640,8 +6635,9 @@ def admin_dashboard_optimized(request):
     if request.user.role.name.upper() != "ADMIN":
         return render(request, 'errors/403.html', status=403)
     
-    # Check cache with user-specific key
-    cache_key = f"admin_dashboard_{request.user.id}"
+    # Check cache with user-specific key and selected batch
+    selected_batch = request.session.get('selected_batch', '2026-27')
+    cache_key = f"admin_dashboard_v3_{request.user.id}_{selected_batch}"
     cached_response = cache.get(cache_key)
     if cached_response:
         return cached_response
@@ -6683,10 +6679,11 @@ def admin_dashboard_optimized(request):
         not_available=Count('id', filter=Q(status=3))
     )
     
-    # Get recent activities (last 10 actual sessions)
+    # Get recent activities (last 10 actual sessions) filtered by selected batch
+    start_date, end_date = get_selected_batch_dates(request)
     recent_activities = ActualSession.objects.select_related(
         'facilitator', 'planned_session', 'class_section', 'class_section__school'
-    ).order_by('-created_at')[:10]
+    ).filter(date__range=(start_date, end_date)).order_by('-created_at')[:10]
     
     context = {
         'active_schools': school_stats['active_schools'],
@@ -7537,6 +7534,10 @@ def admin_dashboard_stats_ajax(request):
     if custom_date:
         attendance_qs = attendance_qs.filter(actual_session__date=custom_date)
         sessions_qs = sessions_qs.filter(date=custom_date)
+    else:
+        start_date, end_date = get_selected_batch_dates(request)
+        attendance_qs = attendance_qs.filter(actual_session__date__range=(start_date, end_date))
+        sessions_qs = sessions_qs.filter(date__range=(start_date, end_date))
         
     if school_ids:
         attendance_qs = attendance_qs.filter(actual_session__class_section__school_id__in=school_ids)
@@ -7682,4 +7683,52 @@ def facilitator_fill_past_attendance(request, class_section_id, date_str):
         )
         
     return redirect('mark_attendance', actual_session_id=actual_session.id)
+
+
+def get_selected_batch_dates(request):
+    """
+    Returns (start_date, end_date) for the batch selected in request.session.
+    Defaults to 2026-27 (2026-07-01 to 2027-06-30).
+    """
+    from datetime import date
+    batch = request.session.get('selected_batch', '2026-27')
+    try:
+        parts = batch.split('-')
+        start_year = int(parts[0])
+        # The academic year runs from July 1st to June 30th of next year (covering the July to March batch and everything under it)
+        end_year = start_year + 1
+        return date(start_year, 7, 1), date(end_year, 6, 30)
+    except Exception:
+        # Fallback to default 2026-27
+        return date(2026, 7, 1), date(2027, 6, 30)
+
+
+@login_required
+def admin_set_batch(request):
+    """
+    Sets the selected academic batch in the session.
+    """
+    if request.user.role.name.upper() != "ADMIN":
+        from django.contrib import messages
+        messages.error(request, "Permission denied.")
+        return redirect("no_permission")
+        
+    batch = request.GET.get('batch')
+    next_url = request.GET.get('next', '/admin/dashboard/')
+    if batch in ['2026-27', '2025-26', '2024-25', '2023-24']:
+        request.session['selected_batch'] = batch
+        # Clear dashboard cache for this user
+        from django.core.cache import cache
+        cache_key = f"admin_dashboard_v3_{request.user.id}_{batch}"
+        cache.delete(cache_key)
+        # Also clear the old batch cache key just in case
+        cache.delete(f"admin_dashboard_v3_{request.user.id}")
+        
+        from django.contrib import messages
+        messages.success(request, f"Academic batch set to {batch} successfully.")
+    else:
+        from django.contrib import messages
+        messages.error(request, "Invalid batch selection.")
+        
+    return redirect(next_url)
 

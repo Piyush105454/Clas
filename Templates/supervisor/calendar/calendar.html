@@ -460,6 +460,131 @@ function handleDateClick(date, facilitatorId) {
     {% endif %}
 }
 
+// Serialization of calendar entries for details modal
+const calendarEntries = {
+    {% for day in calendar_grid %}
+        {% for d in day %}
+            {% if d and d.calendar_date %}
+                {% for entry in d.calendar_date %}
+                    "{{ entry.id }}": {
+                        "date": "{{ entry.date|date:'l, F j, Y' }}",
+                        "time": "{% if entry.time %}{{ entry.time }}{% else %}N/A{% endif %}",
+                        "end_time": "{% if entry.end_time %}{{ entry.end_time }}{% else %}N/A{% endif %}",
+                        "type_display": "{{ entry.get_date_type_display }}",
+                        "type_id": {{ entry.date_type }},
+                        "notes": "{{ entry.notes|escapejs }}",
+                        "task_desc": "{{ entry.office_task_description|escapejs }}",
+                        "holiday_name": "{{ entry.holiday_name|escapejs }}",
+                        "coordinator": "{% if entry.coordinator %}{{ entry.coordinator.full_name|escapejs }}{% else %}N/A{% endif %}",
+                        "facilitator": "{% if entry.facilitator %}{{ entry.facilitator.full_name|escapejs }}{% else %}N/A{% endif %}",
+                        "topic": "{{ entry.topic|escapejs }}",
+                        "meeting_title": "{{ entry.meeting_title|escapejs }}",
+                        "meeting_link": "{{ entry.meeting_link|escapejs }}",
+                        "centre": "{% if entry.school %}{{ entry.school.name|escapejs }}{% else %}N/A{% endif %}",
+                        {% if entry.volunteer %}
+                            "volunteer": {
+                                "name": "{{ entry.volunteer.full_name|escapejs }}",
+                                "role_type": "{{ entry.volunteer.get_role_type_display }}",
+                                "org": "{{ entry.volunteer.organization_name|escapejs }}",
+                                "email_p": "{{ entry.volunteer.personal_email|escapejs }}",
+                                "email_w": "{{ entry.volunteer.work_email|escapejs }}",
+                                "phone": "{{ entry.volunteer.phone_number|escapejs }}",
+                                "linkedin": "{{ entry.volunteer.linkedin_profile|escapejs }}"
+                            }
+                        {% else %}
+                            "volunteer": null
+                        {% endif %}
+                    },
+                {% endfor %}
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+};
+
+function showEventDetails(entryId, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    const entry = calendarEntries[entryId];
+    if (!entry) return;
+    
+    document.getElementById('modal-event-title').textContent = entry.type_display + ' Details';
+    
+    let timeRange = entry.time;
+    if (entry.end_time && entry.end_time !== 'N/A') {
+        timeRange += ` - ${entry.end_time}`;
+    }
+    document.getElementById('modal-event-datetime').textContent = `${entry.date} (${timeRange})`;
+    
+    // Notes or description
+    let notesText = '';
+    if (entry.type_id === 2) {
+        notesText = `Holiday Name: ${entry.holiday_name}\n\nNotes: ${entry.notes || 'None'}`;
+    } else if (entry.type_id === 3) {
+        notesText = entry.task_desc;
+    } else {
+        notesText = entry.notes || 'No notes provided.';
+    }
+    document.getElementById('modal-event-notes').textContent = notesText;
+    
+    // Coordination and Meeting details section
+    const detailsGrid = document.getElementById('modal-session-details-grid');
+    if ([4, 5, 6].includes(entry.type_id)) {
+        detailsGrid.classList.remove('hidden');
+        document.getElementById('modal-meeting-title').textContent = entry.meeting_title || 'N/A';
+        document.getElementById('modal-centre').textContent = entry.centre || 'N/A';
+        document.getElementById('modal-coordinator').textContent = entry.coordinator || 'N/A';
+        document.getElementById('modal-facilitator').textContent = entry.facilitator || 'N/A';
+        document.getElementById('modal-topic').textContent = entry.topic || 'N/A';
+        
+        const linkContainer = document.getElementById('modal-meeting-link-container');
+        const linkEl = document.getElementById('modal-meeting-link');
+        if (entry.meeting_link) {
+            linkContainer.classList.remove('hidden');
+            linkEl.href = entry.meeting_link;
+            linkEl.textContent = entry.meeting_link;
+        } else {
+            linkContainer.classList.add('hidden');
+        }
+    } else {
+        detailsGrid.classList.add('hidden');
+    }
+    
+    // Volunteer section
+    const volunteerSec = document.getElementById('modal-volunteer-section');
+    if (entry.volunteer) {
+        volunteerSec.classList.remove('hidden');
+        document.getElementById('modal-volunteer-name').textContent = entry.volunteer.name;
+        document.getElementById('modal-volunteer-role').textContent = entry.volunteer.role_type;
+        document.getElementById('modal-volunteer-org').textContent = entry.volunteer.org || 'Self';
+        
+        let emails = [];
+        if (entry.volunteer.email_p) emails.push(`Personal: ${entry.volunteer.email_p}`);
+        if (entry.volunteer.email_w) emails.push(`Work: ${entry.volunteer.email_w}`);
+        document.getElementById('modal-volunteer-email').textContent = emails.join(' | ') || 'N/A';
+        
+        document.getElementById('modal-volunteer-phone').textContent = entry.volunteer.phone || 'N/A';
+        
+        const liContainer = document.getElementById('modal-volunteer-linkedin-container');
+        const liLink = document.getElementById('modal-volunteer-linkedin');
+        if (entry.volunteer.linkedin) {
+            liContainer.classList.remove('hidden');
+            liLink.href = entry.volunteer.linkedin;
+        } else {
+            liContainer.classList.add('hidden');
+        }
+    } else {
+        volunteerSec.classList.add('hidden');
+    }
+    
+    document.getElementById('event-details-modal').classList.remove('hidden');
+}
+
+function closeEventModal() {
+    document.getElementById('event-details-modal').classList.add('hidden');
+}
+
 // Make calendar dates clickable
 document.addEventListener('DOMContentLoaded', function() {
     const facilitatorId = document.getElementById('facilitator_filter').value;
@@ -572,11 +697,17 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <div class="flex gap-1 mb-2">
                                         {% for entry in day.calendar_date %}
                                             {% if entry.date_type == 1 %}
-                                                <span title="Session">📚</span>
+                                                <span title="Planned Session">📚</span>
                                             {% elif entry.date_type == 2 %}
                                                 <span title="Holiday">🎉</span>
                                             {% elif entry.date_type == 3 %}
                                                 <span title="Office Work">💼</span>
+                                            {% elif entry.date_type == 4 %}
+                                                <span title="Guest Teacher">👨‍🏫</span>
+                                            {% elif entry.date_type == 5 %}
+                                                <span title="Guest Speaker">🎙️</span>
+                                            {% elif entry.date_type == 6 %}
+                                                <span title="Other Event">🗓️</span>
                                             {% endif %}
                                         {% endfor %}
                                     </div>
@@ -603,16 +734,35 @@ document.addEventListener('DOMContentLoaded', function() {
                                                 <div class="font-bold text-yellow-800">Office Task</div>
                                                 <div class="text-yellow-700 truncate">{{ first_entry.office_task_description }}</div>
                                             </div>
+                                        {% elif first_entry.date_type == 4 %}
+                                            <div class="bg-orange-100 border border-orange-300 rounded p-1.5 mb-1 text-xs cursor-pointer hover:bg-orange-200 transition-colors" onclick="showEventDetails('{{ first_entry.id }}', event)">
+                                                <div class="font-bold text-orange-800">👨‍🏫 Guest Teacher</div>
+                                                <div class="text-orange-700 truncate">
+                                                    {% if first_entry.volunteer %}{{ first_entry.volunteer.full_name }}{% else %}No volunteer assigned{% endif %}
+                                                </div>
+                                            </div>
+                                        {% elif first_entry.date_type == 5 %}
+                                            <div class="bg-purple-100 border border-purple-300 rounded p-1.5 mb-1 text-xs cursor-pointer hover:bg-purple-200 transition-colors" onclick="showEventDetails('{{ first_entry.id }}', event)">
+                                                <div class="font-bold text-purple-800">🎙️ Guest Speaker</div>
+                                                <div class="text-purple-700 truncate">
+                                                    {% if first_entry.volunteer %}{{ first_entry.volunteer.full_name }}{% else %}No volunteer assigned{% endif %}
+                                                </div>
+                                            </div>
+                                        {% elif first_entry.date_type == 6 %}
+                                            <div class="bg-indigo-100 border border-indigo-300 rounded p-1.5 mb-1 text-xs cursor-pointer hover:bg-indigo-200 transition-colors" onclick="showEventDetails('{{ first_entry.id }}', event)">
+                                                <div class="font-bold text-indigo-800">🗓️ Other Event</div>
+                                                <div class="text-indigo-700 truncate">{{ first_entry.notes|default:"View Details" }}</div>
+                                            </div>
                                         {% endif %}
                                     {% endwith %}
                                     
                                     <div class="flex gap-1 mt-auto pt-2">
                                         {% if request.resolver_match.url_name == 'admin_view_calendar' %}
-                                            <a href="{% url 'admin_calendar_edit_date' day.calendar_date.0.id %}" class="flex-1 bg-blue-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Edit</a>
-                                            <a href="{% url 'admin_calendar_delete_date' day.calendar_date.0.id %}" class="flex-1 bg-red-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Del</a>
+                                            <a href="{% url 'admin_calendar_edit_date' day.calendar_date.0.id %}" onclick="event.stopPropagation();" class="flex-1 bg-blue-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Edit</a>
+                                            <a href="{% url 'admin_calendar_delete_date' day.calendar_date.0.id %}" onclick="event.stopPropagation();" class="flex-1 bg-red-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Del</a>
                                         {% else %}
-                                            <a href="{% url 'supervisor_calendar_edit_date' day.calendar_date.0.id %}" class="flex-1 bg-blue-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Edit</a>
-                                            <a href="{% url 'supervisor_calendar_delete_date' day.calendar_date.0.id %}" class="flex-1 bg-red-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Del</a>
+                                            <a href="{% url 'supervisor_calendar_edit_date' day.calendar_date.0.id %}" onclick="event.stopPropagation();" class="flex-1 bg-blue-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Edit</a>
+                                            <a href="{% url 'supervisor_calendar_delete_date' day.calendar_date.0.id %}" onclick="event.stopPropagation();" class="flex-1 bg-red-600 text-white rounded text-[10px] py-1 px-1 text-center font-semibold">Del</a>
                                         {% endif %}
                                     </div>
                                 {% endif %}
@@ -635,8 +785,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span class="text-gray-700 text-sm md:text-base">Planned Session</span>
                 </div>
                 <div class="legend-item flex items-center gap-3">
+                    <div class="w-4 h-4 bg-orange-100 border border-orange-300 rounded"></div>
+                    <span class="text-gray-700 text-sm md:text-base">Guest Teacher Session</span>
+                </div>
+                <div class="legend-item flex items-center gap-3">
                     <div class="w-4 h-4 bg-purple-100 border border-purple-300 rounded"></div>
-                    <span class="text-gray-700 text-sm md:text-base">Grouped Session (Multiple Classes)</span>
+                    <span class="text-gray-700 text-sm md:text-base">Guest Speaker Session</span>
                 </div>
                 <div class="legend-item flex items-center gap-3">
                     <div class="w-4 h-4 bg-red-100 border border-red-300 rounded"></div>
@@ -645,6 +799,108 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="legend-item flex items-center gap-3">
                     <div class="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded"></div>
                     <span class="text-gray-700 text-sm md:text-base">Office Work / Task</span>
+                </div>
+                <div class="legend-item flex items-center gap-3">
+                    <div class="w-4 h-4 bg-indigo-100 border border-indigo-300 rounded"></div>
+                    <span class="text-gray-700 text-sm md:text-base">Other Custom Event</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Event Details Modal -->
+        <div id="event-details-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <!-- Backdrop -->
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeEventModal()"></div>
+                
+                <!-- Center element -->
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                <!-- Modal Content Box -->
+                <div class="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                    <div class="flex justify-between items-start mb-4 pb-2 border-b">
+                        <h3 class="text-lg leading-6 font-bold text-gray-900" id="modal-event-title">
+                            Event Details
+                        </h3>
+                        <button type="button" class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none" onclick="closeEventModal()">
+                            <span class="sr-only">Close</span>
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <!-- Date & Time -->
+                        <div class="flex items-center text-sm text-gray-500 gap-2">
+                            <span class="material-symbols-outlined text-gray-400 text-base">calendar_today</span>
+                            <span id="modal-event-datetime">Wednesday, July 29, 2026</span>
+                        </div>
+
+                        <!-- Notes / Description -->
+                        <div>
+                            <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Topic / Notes</h4>
+                            <p id="modal-event-notes" class="text-sm text-gray-700 mt-1 whitespace-pre-line bg-gray-50 p-3 rounded-lg border">
+                                Topic details go here...
+                            </p>
+                        </div>
+
+                        <!-- Session Details Grid -->
+                        <div id="modal-session-details-grid" class="hidden border-t pt-4 space-y-2">
+                            <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Session Info</h4>
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-gray-700 bg-gray-50 p-3 rounded-lg border">
+                                <div><span class="font-semibold text-gray-500">Meeting Title:</span> <span id="modal-meeting-title" class="font-medium text-gray-900">N/A</span></div>
+                                <div><span class="font-semibold text-gray-500">Centre:</span> <span id="modal-centre" class="font-medium text-gray-900">N/A</span></div>
+                                <div><span class="font-semibold text-gray-500">Coordinator:</span> <span id="modal-coordinator" class="font-medium text-gray-900">N/A</span></div>
+                                <div><span class="font-semibold text-gray-500">Facilitator:</span> <span id="modal-facilitator" class="font-medium text-gray-900">N/A</span></div>
+                                <div class="col-span-2"><span class="font-semibold text-gray-500">Topic:</span> <span id="modal-topic" class="font-medium text-gray-900">N/A</span></div>
+                                <div class="col-span-2" id="modal-meeting-link-container">
+                                    <span class="font-semibold text-gray-500">Meeting Link:</span> 
+                                    <a id="modal-meeting-link" href="#" target="_blank" class="text-blue-600 hover:underline inline-flex items-center gap-0.5">
+                                        Link <span class="material-symbols-outlined text-xs">open_in_new</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Assigned Volunteer Section -->
+                        <div id="modal-volunteer-section" class="hidden border-t pt-4">
+                            <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Assigned Volunteer</h4>
+                            <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start gap-3">
+                                <span class="material-symbols-outlined text-blue-600 text-3xl">account_circle</span>
+                                <div class="space-y-2 flex-1">
+                                    <div>
+                                        <div id="modal-volunteer-name" class="font-bold text-gray-900 text-sm">Manisha Jhunjhunwala</div>
+                                        <div id="modal-volunteer-role" class="text-xs text-blue-700 font-medium">Guest Teacher</div>
+                                    </div>
+                                    <div class="text-xs text-gray-600 space-y-1">
+                                        <div class="flex items-center gap-1">
+                                            <span class="font-semibold">Org:</span>
+                                            <span id="modal-volunteer-org">Self</span>
+                                        </div>
+                                        <div class="flex items-center gap-1">
+                                            <span class="font-semibold">Email:</span>
+                                            <span id="modal-volunteer-email">p: email@gmail.com</span>
+                                        </div>
+                                        <div class="flex items-center gap-1">
+                                            <span class="font-semibold">Phone:</span>
+                                            <span id="modal-volunteer-phone">+91 8340777197</span>
+                                        </div>
+                                        <div id="modal-volunteer-linkedin-container" class="pt-1 flex items-center gap-1">
+                                            <span class="font-semibold">LinkedIn:</span>
+                                            <a id="modal-volunteer-linkedin" href="#" target="_blank" class="text-blue-600 hover:underline flex items-center gap-0.5">
+                                                Profile <span class="material-symbols-outlined text-xs">open_in_new</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                    </div>
+                </div>
+
+                    <div class="mt-5 sm:mt-6 flex justify-end">
+                        <button type="button" class="w-full sm:w-auto inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:text-sm" onclick="closeEventModal()">
+                            Close
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

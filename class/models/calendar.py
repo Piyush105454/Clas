@@ -11,6 +11,9 @@ class DateType(models.IntegerChoices):
     SESSION = 1, "Planned Session"
     HOLIDAY = 2, "Holiday / No Session"
     OFFICE_WORK = 3, "Office Work / Task"
+    GUEST_TEACHER = 4, "Guest Teacher"
+    GUEST_SPEAKER = 5, "Guest Speaker"
+    OTHER = 6, "Other"
 
 
 class SupervisorCalendar(models.Model):
@@ -52,14 +55,48 @@ class CalendarDate(models.Model):
     time = models.TimeField(
         null=True,
         blank=True,
-        help_text="Time for the session/office work"
+        help_text="Start time for the session/office work"
+    )
+    
+    end_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="End time for the session/office work"
     )
     # PHASE 1 OPTIMIZATION: Use SmallIntegerField with IntegerChoices
     date_type = models.SmallIntegerField(
         choices=DateType.choices,
         default=DateType.SESSION,
-        help_text="Type: 1=Session, 2=Holiday, 3=Office Work"
+        help_text="Type: 1=Session, 2=Holiday, 3=Office Work, 4=Guest Teacher, 5=Guest Speaker, 6=Other"
     )
+    
+    volunteer = models.ForeignKey(
+        'class.Volunteer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='calendar_dates'
+    )
+    
+    coordinator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='coordinated_dates'
+    )
+    
+    facilitator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='guest_facilitated_dates'
+    )
+    
+    topic = models.CharField(max_length=255, blank=True)
+    meeting_title = models.CharField(max_length=255, blank=True)
+    meeting_link = models.URLField(max_length=500, blank=True)
     
     # For session type - support multiple classes (grouped sessions)
     class_sections = models.ManyToManyField(

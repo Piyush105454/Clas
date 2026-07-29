@@ -24,4 +24,5 @@ from .student_performance import (
 from .student_growth import (
     StudentQuiz, StudentGrowthAnalysis
 )
+from .volunteer import Volunteer
 

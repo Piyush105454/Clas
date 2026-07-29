@@ -68,6 +68,13 @@
             <span>Calendar</span>
         </a>
 
+        <!-- Volunteers -->
+        <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors {% if 'volunteer' in request.resolver_match.url_name %}bg-blue-50 text-blue-600{% endif %}"
+           href="{% url 'admin_volunteers' %}">
+            <span class="material-symbols-outlined text-[20px]">volunteer_activism</span>
+            <span>Volunteers</span>
+        </a>
+
         <!-- Notifications -->
         <a href="#" id="notificationsLink" class="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 transition-colors">
             <div class="flex items-center gap-3">

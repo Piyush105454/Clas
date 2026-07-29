@@ -1375,58 +1375,36 @@ def _calendar_add_date_logic(request, redirect_url_name='supervisor_calendar'):
     if request.method == "POST":
         # Parse dates
         date_str = request.POST.get('date')
-        end_date_str = request.POST.get('end_date', '')
         time_str = request.POST.get('time', '')
+        end_time_str = request.POST.get('end_time', '')
         date_type = request.POST.get('date_type')
-        is_bulk = request.POST.get('is_bulk') == 'on'
         
         try:
             date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
         except:
             messages.error(request, "Invalid date format")
-            return redirect("supervisor_calendar")
+            return redirect(redirect_url_name)
         
-        # Parse time if provided
+        # Parse start time if provided
         time_obj = None
         if time_str:
             try:
                 time_obj = datetime.strptime(time_str, '%H:%M').time()
             except:
-                messages.error(request, "Invalid time format")
-                return redirect("supervisor_calendar")
+                messages.error(request, "Invalid start time format")
+                return redirect(redirect_url_name)
         
-        # Get list of dates to create
-        dates_to_create = [date_obj]
-        
-        if is_bulk and end_date_str:
+        # Parse end time if provided
+        end_time_obj = None
+        if end_time_str:
             try:
-                end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-                if end_date_obj < date_obj:
-                    messages.error(request, "End date must be after start date")
-                    return redirect("supervisor_calendar")
-                
-                # Get selected days of week
-                selected_days = request.POST.getlist('days_of_week')
-                if not selected_days:
-                    messages.error(request, "Please select at least one day of week for bulk creation")
-                    return redirect("supervisor_calendar")
-                
-                selected_days = [int(d) for d in selected_days]
-                
-                # Generate dates for selected days
-                current = date_obj
-                dates_to_create = []
-                while current <= end_date_obj:
-                    if current.weekday() in selected_days:
-                        dates_to_create.append(current)
-                    current += timedelta(days=1)
-                
-                if not dates_to_create:
-                    messages.error(request, "No dates match the selected criteria")
-                    return redirect("supervisor_calendar")
+                end_time_obj = datetime.strptime(end_time_str, '%H:%M').time()
             except:
-                messages.error(request, "Invalid date range")
-                return redirect("supervisor_calendar")
+                messages.error(request, "Invalid end time format")
+                return redirect(redirect_url_name)
+        
+        # Get list of dates to create (only single date, bulk options removed)
+        dates_to_create = [date_obj]
         
         # Process based on date type
         created_count = 0
@@ -1507,6 +1485,7 @@ def _calendar_add_date_logic(request, redirect_url_name='supervisor_calendar'):
                     calendar=calendar,
                     date=date_to_create,
                     time=time_obj,
+                    end_time=end_time_obj,
                     date_type=DateType.SESSION,
                     school=school
                 )
@@ -1537,6 +1516,7 @@ def _calendar_add_date_logic(request, redirect_url_name='supervisor_calendar'):
                     calendar=calendar,
                     date=date_to_create,
                     time=time_obj,
+                    end_time=end_time_obj,
                     date_type=DateType.HOLIDAY,
                     holiday_name=holiday_name,
                     notes=holiday_notes
@@ -1573,6 +1553,7 @@ def _calendar_add_date_logic(request, redirect_url_name='supervisor_calendar'):
                     calendar=calendar,
                     date=date_to_create,
                     time=time_obj,
+                    end_time=end_time_obj,
                     date_type=DateType.OFFICE_WORK,
                     office_task_description=task_desc,
                     school=school
@@ -1583,6 +1564,67 @@ def _calendar_add_date_logic(request, redirect_url_name='supervisor_calendar'):
                     facilitators = User.objects.filter(id__in=facilitator_ids, role__name__iexact="FACILITATOR")
                     calendar_date.assigned_facilitators.set(facilitators)
                 
+                created_count += 1
+
+        elif date_type in ['guest_teacher', 'guest_speaker', 'other']:
+            from .models import Volunteer
+            volunteer_id = request.POST.get('volunteer')
+            volunteer = None
+            if volunteer_id:
+                try:
+                    volunteer = Volunteer.objects.get(id=volunteer_id)
+                except Volunteer.DoesNotExist:
+                    pass
+            
+            coordinator_id = request.POST.get('coordinator')
+            coordinator = None
+            if coordinator_id:
+                try:
+                    coordinator = User.objects.get(id=coordinator_id)
+                except User.DoesNotExist:
+                    pass
+            
+            facilitator_id = request.POST.get('facilitator')
+            facilitator = None
+            if facilitator_id:
+                try:
+                    facilitator = User.objects.get(id=facilitator_id)
+                except User.DoesNotExist:
+                    pass
+            
+            topic = request.POST.get('topic', '').strip()
+            meeting_title = request.POST.get('meeting_title', '').strip()
+            meeting_link = request.POST.get('meeting_link', '').strip()
+            school_id = request.POST.get('school')
+            
+            try:
+                school = School.objects.get(id=school_id) if school_id else None
+            except:
+                school = None
+            
+            # Map type string to numeric DateType value
+            numeric_type = DateType.OTHER
+            if date_type == 'guest_teacher':
+                numeric_type = DateType.GUEST_TEACHER
+            elif date_type == 'guest_speaker':
+                numeric_type = DateType.GUEST_SPEAKER
+                
+            for date_to_create in dates_to_create:
+                CalendarDate.objects.create(
+                    calendar=calendar,
+                    date=date_to_create,
+                    time=time_obj,
+                    end_time=end_time_obj,
+                    date_type=numeric_type,
+                    volunteer=volunteer,
+                    coordinator=coordinator,
+                    facilitator=facilitator,
+                    topic=topic,
+                    meeting_title=meeting_title,
+                    meeting_link=meeting_link,
+                    school=school,
+                    notes=topic # Also save to notes for compatibility
+                )
                 created_count += 1
         
         # Show summary message
@@ -1595,9 +1637,12 @@ def _calendar_add_date_logic(request, redirect_url_name='supervisor_calendar'):
         return redirect(redirect_url_name)
     
     # GET request - show form
+    from .models import Volunteer
     schools = School.objects.filter(status=1).order_by('name')
     classes = ClassSection.objects.filter(is_active=True).select_related('school').order_by('school__name', 'class_level', 'section')
     facilitators = User.objects.filter(role__name__iexact="FACILITATOR", is_active=True).order_by('full_name')
+    coordinators = User.objects.filter(role__name__iexact="SUPERVISOR", is_active=True).order_by('full_name')
+    volunteers = Volunteer.objects.filter(status='ACTIVE').order_by('full_name')
     
     # Check if class IDs were passed from bulk add
     pre_selected_class_ids = request.GET.getlist('class_ids')
@@ -1606,6 +1651,8 @@ def _calendar_add_date_logic(request, redirect_url_name='supervisor_calendar'):
         'schools': schools,
         'classes': classes,
         'facilitators': facilitators,
+        'coordinators': coordinators,
+        'volunteers': volunteers,
         'pre_selected_class_ids': pre_selected_class_ids,
     }
     
@@ -1631,6 +1678,40 @@ def _calendar_edit_date_logic(request, date_id, redirect_url_name='supervisor_ca
     
     if request.method == "POST":
         date_type = request.POST.get('date_type')
+        date_str = request.POST.get('date')
+        time_str = request.POST.get('time', '')
+        end_time_str = request.POST.get('end_time', '')
+        
+        # Parse date if provided
+        if date_str:
+            try:
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+                calendar_date.date = date_obj
+            except:
+                messages.error(request, "Invalid date format")
+                return redirect(redirect_url_name)
+        
+        # Parse start time if provided
+        time_obj = None
+        if time_str:
+            try:
+                time_obj = datetime.strptime(time_str, '%H:%M').time()
+            except:
+                messages.error(request, "Invalid start time format")
+                return redirect(redirect_url_name)
+        
+        # Parse end time if provided
+        end_time_obj = None
+        if end_time_str:
+            try:
+                end_time_obj = datetime.strptime(end_time_str, '%H:%M').time()
+            except:
+                messages.error(request, "Invalid end time format")
+                return redirect(redirect_url_name)
+        
+        # Update common fields
+        calendar_date.time = time_obj
+        calendar_date.end_time = end_time_obj
         
         if date_type == 'session':
             class_ids = request.POST.getlist('class_section')
@@ -1669,21 +1750,88 @@ def _calendar_edit_date_logic(request, date_id, redirect_url_name='supervisor_ca
                 calendar_date.date_type = DateType.OFFICE_WORK
                 calendar_date.class_sections.clear()
                 calendar_date.holiday_name = ''
+                calendar_date.volunteer = None
                 calendar_date.save()
                 messages.success(request, "Date updated successfully")
             else:
                 messages.error(request, "Please enter office task description")
+
+        elif date_type in ['guest_teacher', 'guest_speaker', 'other']:
+            from .models import Volunteer
+            volunteer_id = request.POST.get('volunteer')
+            volunteer = None
+            if volunteer_id:
+                try:
+                    volunteer = Volunteer.objects.get(id=volunteer_id)
+                except Volunteer.DoesNotExist:
+                    pass
+            
+            coordinator_id = request.POST.get('coordinator')
+            coordinator = None
+            if coordinator_id:
+                try:
+                    coordinator = User.objects.get(id=coordinator_id)
+                except User.DoesNotExist:
+                    pass
+            
+            facilitator_id = request.POST.get('facilitator')
+            facilitator = None
+            if facilitator_id:
+                try:
+                    facilitator = User.objects.get(id=facilitator_id)
+                except User.DoesNotExist:
+                    pass
+            
+            topic = request.POST.get('topic', '').strip()
+            meeting_title = request.POST.get('meeting_title', '').strip()
+            meeting_link = request.POST.get('meeting_link', '').strip()
+            school_id = request.POST.get('school')
+            
+            try:
+                school = School.objects.get(id=school_id) if school_id else None
+            except:
+                school = None
+            
+            numeric_type = DateType.OTHER
+            if date_type == 'guest_teacher':
+                numeric_type = DateType.GUEST_TEACHER
+            elif date_type == 'guest_speaker':
+                numeric_type = DateType.GUEST_SPEAKER
+                
+            calendar_date.date_type = numeric_type
+            calendar_date.volunteer = volunteer
+            calendar_date.coordinator = coordinator
+            calendar_date.facilitator = facilitator
+            calendar_date.topic = topic
+            calendar_date.meeting_title = meeting_title
+            calendar_date.meeting_link = meeting_link
+            calendar_date.school = school
+            calendar_date.notes = topic # Also save to notes for compatibility
+            calendar_date.class_sections.clear()
+            calendar_date.holiday_name = ''
+            calendar_date.office_task_description = ''
+            calendar_date.save()
+            messages.success(request, "Date updated successfully")
         
         return redirect(redirect_url_name)
     
+    from .models import Volunteer
+    schools = School.objects.filter(status=1).order_by('name')
     classes = ClassSection.objects.filter(is_active=True).select_related('school').order_by('school__name', 'class_level', 'section')
+    facilitators = User.objects.filter(role__name__iexact="FACILITATOR", is_active=True).order_by('full_name')
+    coordinators = User.objects.filter(role__name__iexact="SUPERVISOR", is_active=True).order_by('full_name')
+    volunteers = Volunteer.objects.filter(status='ACTIVE').order_by('full_name')
     
     # Get selected class IDs for grouped sessions
     selected_class_ids = list(calendar_date.class_sections.values_list('id', flat=True)) if calendar_date.date_type == 'session' else []
     
     context = {
         'calendar_date': calendar_date,
+        'schools': schools,
         'classes': classes,
+        'facilitators': facilitators,
+        'coordinators': coordinators,
+        'volunteers': volunteers,
         'selected_class_ids': selected_class_ids,
     }
     
@@ -1982,7 +2130,7 @@ def cluster_delete(request, cluster_id):
 # =====================================================
 def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
     """Core logic for sessions list (undecorated) - Supports filtering by any combination of parameters."""
-    from .models import ActualSession, PlannedSession, Attendance, AttendanceStatus, SessionStatus
+    from .models import ActualSession, PlannedSession, Attendance, AttendanceStatus, SessionStatus, CalendarDate, DateType
     from django.db.models import Count, Q, Exists, OuterRef, Prefetch, F
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     from django.utils import timezone
@@ -2000,6 +2148,17 @@ def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
     base_sessions = ActualSession.objects.all().select_related(
         'planned_session', 'class_section', 'class_section__school', 'facilitator'
     )
+    
+    # Filter base sessions to only show guest teacher, guest speaker, and other calendar sessions
+    calendar_exists = CalendarDate.objects.filter(
+        date=OuterRef('date'),
+        date_type__in=[DateType.GUEST_TEACHER, DateType.GUEST_SPEAKER, DateType.OTHER]
+    ).filter(
+        Q(class_sections=OuterRef('class_section')) |
+        Q(class_section=OuterRef('class_section')) |
+        Q(school=OuterRef('class_section__school'))
+    )
+    base_sessions = base_sessions.filter(Exists(calendar_exists))
     
     if school_id:
         base_sessions = base_sessions.filter(class_section__school_id=school_id)
@@ -2042,6 +2201,10 @@ def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
                 date__gte=month_start,
                 date__lte=month_end
             )
+    else:
+        from .views import get_selected_batch_dates
+        start_date, end_date = get_selected_batch_dates(request)
+        base_sessions = base_sessions.filter(date__range=(start_date, end_date))
     
     # Order by latest date first, then day number
     base_sessions = base_sessions.order_by('-date', '-planned_session__day_number')
