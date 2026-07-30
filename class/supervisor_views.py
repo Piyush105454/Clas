@@ -1385,20 +1385,20 @@ def _calendar_add_date_logic(request, redirect_url_name='supervisor_calendar'):
             messages.error(request, "Invalid date format")
             return redirect(redirect_url_name)
         
-        # Parse start time if provided
+        # Parse start time if provided (handle both HH:MM and HH:MM:SS)
         time_obj = None
         if time_str:
             try:
-                time_obj = datetime.strptime(time_str, '%H:%M').time()
+                time_obj = datetime.strptime(time_str[:5], '%H:%M').time()
             except:
                 messages.error(request, "Invalid start time format")
                 return redirect(redirect_url_name)
         
-        # Parse end time if provided
+        # Parse end time if provided (handle both HH:MM and HH:MM:SS)
         end_time_obj = None
         if end_time_str:
             try:
-                end_time_obj = datetime.strptime(end_time_str, '%H:%M').time()
+                end_time_obj = datetime.strptime(end_time_str[:5], '%H:%M').time()
             except:
                 messages.error(request, "Invalid end time format")
                 return redirect(redirect_url_name)
@@ -1691,20 +1691,20 @@ def _calendar_edit_date_logic(request, date_id, redirect_url_name='supervisor_ca
                 messages.error(request, "Invalid date format")
                 return redirect(redirect_url_name)
         
-        # Parse start time if provided
+        # Parse start time if provided (handle both HH:MM and HH:MM:SS)
         time_obj = None
         if time_str:
             try:
-                time_obj = datetime.strptime(time_str, '%H:%M').time()
+                time_obj = datetime.strptime(time_str[:5], '%H:%M').time()
             except:
                 messages.error(request, "Invalid start time format")
                 return redirect(redirect_url_name)
         
-        # Parse end time if provided
+        # Parse end time if provided (handle both HH:MM and HH:MM:SS)
         end_time_obj = None
         if end_time_str:
             try:
-                end_time_obj = datetime.strptime(end_time_str, '%H:%M').time()
+                end_time_obj = datetime.strptime(end_time_str[:5], '%H:%M').time()
             except:
                 messages.error(request, "Invalid end time format")
                 return redirect(redirect_url_name)
@@ -1823,7 +1823,7 @@ def _calendar_edit_date_logic(request, date_id, redirect_url_name='supervisor_ca
     volunteers = Volunteer.objects.filter(status='ACTIVE').order_by('full_name')
     
     # Get selected class IDs for grouped sessions
-    selected_class_ids = list(calendar_date.class_sections.values_list('id', flat=True)) if calendar_date.date_type == 'session' else []
+    selected_class_ids = list(calendar_date.class_sections.values_list('id', flat=True)) if calendar_date.date_type == 1 else []
     
     context = {
         'calendar_date': calendar_date,
@@ -2129,157 +2129,91 @@ def cluster_delete(request, cluster_id):
 # Supervisor Sessions Management
 # =====================================================
 def _sessions_list_logic(request, base_template='supervisor/shared/base.html'):
-    """Core logic for sessions list (undecorated) - Supports filtering by any combination of parameters."""
-    from .models import ActualSession, PlannedSession, Attendance, AttendanceStatus, SessionStatus, CalendarDate, DateType
-    from django.db.models import Count, Q, Exists, OuterRef, Prefetch, F
+    """Core logic for sessions list - Shows Guest Teacher/Speaker/Other calendar entries."""
+    from .models import CalendarDate, DateType
+    from django.db.models import Q
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     from django.utils import timezone
-    import json
-    from datetime import datetime, timedelta
-    
+    from datetime import timedelta
+
     # Get filter parameters
     school_id = request.GET.get('school_id')
-    class_id = request.GET.get('class_id')
-    status_filter = request.GET.get('status', '')
     date_filter = request.GET.get('date_filter', 'all')
+    type_filter = request.GET.get('type_filter', '')
     page = request.GET.get('page', 1)
-    
-    # Build base query for ActualSession
-    base_sessions = ActualSession.objects.all().select_related(
-        'planned_session', 'class_section', 'class_section__school', 'facilitator'
-    )
-    
-    # Filter base sessions to only show guest teacher, guest speaker, and other calendar sessions
-    calendar_exists = CalendarDate.objects.filter(
-        date=OuterRef('date'),
+
+    # Base queryset: only Guest Teacher, Guest Speaker, Other calendar entries
+    base_qs = CalendarDate.objects.filter(
         date_type__in=[DateType.GUEST_TEACHER, DateType.GUEST_SPEAKER, DateType.OTHER]
-    ).filter(
-        Q(class_sections=OuterRef('class_section')) |
-        Q(class_section=OuterRef('class_section')) |
-        Q(school=OuterRef('class_section__school'))
-    )
-    base_sessions = base_sessions.filter(Exists(calendar_exists))
-    
+    ).select_related(
+        'school', 'volunteer', 'coordinator', 'facilitator', 'calendar__supervisor'
+    ).prefetch_related('class_sections')
+
+    # School filter
     if school_id:
-        base_sessions = base_sessions.filter(class_section__school_id=school_id)
-    
-    if class_id:
-        base_sessions = base_sessions.filter(class_section_id=class_id)
-    
-    # Apply status filter
-    if status_filter:
-        if status_filter == 'conducted':
-            base_sessions = base_sessions.filter(status=SessionStatus.CONDUCTED)
-        elif status_filter == 'holiday':
-            base_sessions = base_sessions.filter(status=SessionStatus.HOLIDAY)
-        elif status_filter == 'cancelled':
-            base_sessions = base_sessions.filter(status=SessionStatus.CANCELLED)
-    
-    # Apply date filter - only filter if date_filter is not 'all'
+        base_qs = base_qs.filter(school_id=school_id)
+
+    # Session type filter
+    if type_filter == 'guest_teacher':
+        base_qs = base_qs.filter(date_type=DateType.GUEST_TEACHER)
+    elif type_filter == 'guest_speaker':
+        base_qs = base_qs.filter(date_type=DateType.GUEST_SPEAKER)
+    elif type_filter == 'other':
+        base_qs = base_qs.filter(date_type=DateType.OTHER)
+
+    # Date filter
     today = timezone.localdate()
     if date_filter and date_filter != 'all':
         if date_filter == 'today':
-            base_sessions = base_sessions.filter(date=today)
+            base_qs = base_qs.filter(date=today)
         elif date_filter == 'past':
-            base_sessions = base_sessions.filter(date__lt=today)
+            base_qs = base_qs.filter(date__lt=today)
         elif date_filter == 'future':
-            base_sessions = base_sessions.filter(date__gt=today)
+            base_qs = base_qs.filter(date__gt=today)
         elif date_filter == 'week':
             week_start = today - timedelta(days=today.weekday())
             week_end = week_start + timedelta(days=6)
-            base_sessions = base_sessions.filter(
-                date__gte=week_start,
-                date__lte=week_end
-            )
+            base_qs = base_qs.filter(date__gte=week_start, date__lte=week_end)
         elif date_filter == 'month':
             month_start = today.replace(day=1)
             if today.month == 12:
                 month_end = month_start.replace(year=today.year + 1, month=1) - timedelta(days=1)
             else:
                 month_end = month_start.replace(month=today.month + 1) - timedelta(days=1)
-            base_sessions = base_sessions.filter(
-                date__gte=month_start,
-                date__lte=month_end
-            )
+            base_qs = base_qs.filter(date__gte=month_start, date__lte=month_end)
     else:
         from .views import get_selected_batch_dates
         start_date, end_date = get_selected_batch_dates(request)
-        base_sessions = base_sessions.filter(date__range=(start_date, end_date))
-    
-    # Order by latest date first, then day number
-    base_sessions = base_sessions.order_by('-date', '-planned_session__day_number')
-        
-    # Get total count before pagination
-    total_count = base_sessions.count()
-    
-    # Paginate: 5 sessions per page for faster initial load
-    paginator = Paginator(base_sessions, 5)
+        base_qs = base_qs.filter(date__range=(start_date, end_date))
+
+    base_qs = base_qs.order_by('-date', '-created_at')
+    total_count = base_qs.count()
+
+    paginator = Paginator(base_qs, 15)
     try:
         sessions_page = paginator.page(page)
     except PageNotAnInteger:
         sessions_page = paginator.page(1)
     except EmptyPage:
         sessions_page = paginator.page(paginator.num_pages)
-    
-    # Map ActualSession to itself for template compatibility
-    for session in sessions_page.object_list:
-        session.actual_session_data = session
-    
+
     # Get all schools for filter dropdown
     supervisor_schools = School.objects.all().order_by('name')
-    
-    # Get classes for selected school only (for cascading filter)
-    selected_school_classes = []
-    if school_id:
-        selected_school_classes = ClassSection.objects.filter(school_id=school_id).order_by('class_level', 'section')
-    
-    # Build class data for JavaScript - ONLY for selected school (not all schools)
-    class_data = {}
-    if school_id:
-        classes_with_grouping = ClassSection.objects.filter(
-            school_id=school_id
-        ).annotate(
-            has_grouped_session=Exists(
-                GroupedSession.objects.filter(
-                    class_sections=OuterRef('pk')
-                )
-            )
-        ).order_by('class_level')
-        
-        # Organize by school ID for JavaScript
-        class_data[str(school_id)] = []
-        
-        for cls in classes_with_grouping:
-            grouped_count = 0
-            if cls.has_grouped_session:
-                group = GroupedSession.objects.filter(class_sections=cls).first()
-                if group:
-                    grouped_count = group.class_sections.count()
-            
-            class_data[str(school_id)].append({
-                'id': str(cls.id),
-                'name': cls.display_name,
-                'is_grouped': cls.has_grouped_session,
-                'grouped_count': grouped_count
-            })
-            
-    # Check if current user is an admin for dynamic UI routing
+
     from .decorators import _is_admin
     is_admin = _is_admin(request.user)
-    
+
     return render(request, 'supervisor/sessions/list.html', {
         'sessions': sessions_page,
         'paginator': paginator,
         'schools': supervisor_schools,
-        'selected_school_classes': selected_school_classes,
-        'class_data_json': json.dumps(class_data),
         'selected_school': school_id,
-        'selected_class': class_id,
-        'selected_status': status_filter,
         'selected_date_filter': date_filter,
+        'selected_type_filter': type_filter,
         'total_count': total_count,
         'base_template': base_template,
         'is_admin': is_admin,
+        'is_calendar_view': True,
     })
 
 

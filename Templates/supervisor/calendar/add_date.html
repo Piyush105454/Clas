@@ -15,6 +15,9 @@
         <div class="bg-white rounded-lg shadow-sm p-8">
             <form method="POST" class="space-y-6">
                 {% csrf_token %}
+                <!-- Static hidden time inputs - JS sets values on submit to avoid duplicates -->
+                <input type="hidden" id="hidden_time" name="time" value="">
+                <input type="hidden" id="hidden_end_time" name="end_time" value="">
 
                 <!-- Step 1: Date Selection -->
                 <div class="border-b pb-6">
@@ -357,18 +360,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 endTimeVal = document.getElementById('end_time_office').value;
             }
             
-            // Create hidden inputs for POST parameters
-            const timeInput = document.createElement('input');
-            timeInput.type = 'hidden';
-            timeInput.name = 'time';
-            timeInput.value = timeVal;
-            form.appendChild(timeInput);
-
-            const endTimeInput = document.createElement('input');
-            endTimeInput.type = 'hidden';
-            endTimeInput.name = 'end_time';
-            endTimeInput.value = endTimeVal;
-            form.appendChild(endTimeInput);
+            // Set unified hidden time fields (pre-declared in form, no duplicates)
+            document.getElementById('hidden_time').value = timeVal;
+            document.getElementById('hidden_end_time').value = endTimeVal;
 
             // Validation details
             if (dateType === 'session') {
