@@ -7423,8 +7423,10 @@ def api_create_grouping(request):
             pending = SessionSequenceCalculator.get_next_pending_session(primary_class)
             target_day = pending.day_number if pending else 1
             
-            # Ensure today's ActualSession for ALL classes in the group point to the same day
-            # This aligns their "Today" view immediately.
+            # Ensure today's ActualSession for ALL classes in the group point to the same day.
+            # IMPORTANT: Look up by (class_section, date) which matches the unique_together
+            # constraint on ActualSession. Keying by (planned_session, date) leaves stale
+            # sessions with existing Attendance rows, causing duplicate-key violations.
             for cls in classes:
                 # Get the planned session for this class and this day
                 cls_target_ps = PlannedSession.objects.filter(
@@ -7433,10 +7435,24 @@ def api_create_grouping(request):
                 ).first()
                 
                 if cls_target_ps:
+                    # Delete any stale ActualSession for this class today that points
+                    # to a DIFFERENT planned_session — it would block update_or_create
+                    # and its Attendance rows would cause duplicate-key errors.
+                    ActualSession.objects.filter(
+                        class_section=cls,
+                        date=today
+                    ).exclude(planned_session=cls_target_ps).delete()
+
+                    # status=0 is invalid (valid: 1=Conducted, 2=Holiday, 3=Cancelled).
+                    # Use CONDUCTED (1) so the session appears as active today.
                     ActualSession.objects.update_or_create(
-                        planned_session=cls_target_ps,
+                        class_section=cls,
                         date=today,
-                        defaults={'status': 0, 'facilitator': request.user}
+                        defaults={
+                            'planned_session': cls_target_ps,
+                            'status': SessionStatus.CONDUCTED,
+                            'facilitator': request.user,
+                        }
                     )
             
             # 7. UPDATE PROGRESS: Create logs for ALL classes
