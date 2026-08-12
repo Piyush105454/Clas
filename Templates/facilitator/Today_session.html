@@ -3554,7 +3554,7 @@
       const sessionId = document.querySelector('input[name="planned_session_id"]')?.value;
       if (!sessionId) return;
 
-      const classSectionId = typeof stepStatusAPI !== 'undefined' && typeof stepStatusAPI.getClassSectionId === 'function' ? stepStatusAPI.getClassSectionId() : null;
+      const classSectionId = '{{ class_section.id|default:"" }}';
       let url = `/api/get-lesson-plan-uploads/?planned_session_id=${sessionId}`;
       if (classSectionId) {
         url += `&class_section_id=${classSectionId}`;

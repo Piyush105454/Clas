@@ -414,16 +414,19 @@ class SessionSequenceCalculator:
             # even if a session was repeated or multiple actual sessions exist for one day.
             
             metrics.conducted_sessions = ActualSession.objects.filter(
+                class_section=lookup_class,
                 planned_session__in=curriculum_sessions,
                 status=SessionStatus.CONDUCTED
             ).values('planned_session__day_number').distinct().count()
             
             metrics.cancelled_sessions = ActualSession.objects.filter(
+                class_section=lookup_class,
                 planned_session__in=curriculum_sessions,
                 status=SessionStatus.CANCELLED
             ).values('planned_session__day_number').distinct().count()
             
             metrics.holiday_sessions = ActualSession.objects.filter(
+                class_section=lookup_class,
                 planned_session__in=curriculum_sessions,
                 status=SessionStatus.HOLIDAY
             ).values('planned_session__day_number').distinct().count()

@@ -5128,9 +5128,9 @@ def upload_lesson_plan(request):
         grouped_classes = get_grouped_classes_for_session(class_section, timezone.localdate())
         is_grouped = len(grouped_classes) > 1
         
-        # Delete old uploads for this session+class (one upload per facilitator per session per class)
+        # Delete old uploads for this class today (one upload per facilitator per day per class)
         old_uploads = LessonPlanUpload.objects.filter(
-            planned_session=target_session,
+            upload_date=timezone.localdate(),
             class_section=class_section,
             facilitator=request.user
         )
