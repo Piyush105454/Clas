@@ -402,7 +402,6 @@ class SessionSequenceCalculator:
             # Use lookup_class for metric calculation
             # Get all planned sessions
             planned_sessions = PlannedSession.objects.filter(
-                class_section=lookup_class,
                 is_active=True
             )
             

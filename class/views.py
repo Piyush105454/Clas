@@ -1209,13 +1209,13 @@ def today_session(request, class_section_id):
     integration_service = SessionIntegrationService()
     
     try:
-        integrated_data = integration_service.get_integrated_session_data(planned_session)
+        integrated_data = integration_service.get_integrated_session_data(planned_session, class_section)
     except Exception as e:
         logger.error(f"Error getting integrated data: {e}")
         integrated_data = IntegratedSessionData(planned_session=planned_session, content_source='error', sync_status='failed')
     
     try:
-        integration_service.log_curriculum_access(planned_session, request.user, request)
+        integration_service.log_curriculum_access(planned_session, class_section, request.user, request)
     except Exception as e:
         logger.error(f"Error logging curriculum access: {e}")
     
@@ -1242,16 +1242,10 @@ def today_session(request, class_section_id):
     # For grouped sessions, get uploads from ANY grouped session class
     try:
         today = timezone.localdate()
-        if is_grouped:
-            lesson_plan_uploads = LessonPlanUpload.objects.filter(
-                class_section__in=grouped_classes,
-                upload_date=today
-            ).order_by('-upload_date')
-        else:
-            lesson_plan_uploads = LessonPlanUpload.objects.filter(
-                class_section=class_section,
-                upload_date=today
-            ).order_by('-upload_date')
+        lesson_plan_uploads = LessonPlanUpload.objects.filter(
+            class_section=class_section,
+            upload_date=today
+        ).order_by('-upload_date')
     except Exception as e:
         logger.error(f"Error getting lesson plan uploads: {e}")
         lesson_plan_uploads = []
@@ -5027,17 +5021,10 @@ def get_lesson_plan_uploads(request):
         # [SYNC FIX] Only fetch uploads from TODAY to ensure a fresh start each day
         today = timezone.now().date()
         
-        is_grouped = len(grouped_classes) > 1
-        if is_grouped:
-            uploads = LessonPlanUpload.objects.filter(
-                class_section__in=grouped_classes,
-                upload_date=today
-            ).order_by('-upload_date')
-        else:
-            uploads = LessonPlanUpload.objects.filter(
-                class_section=class_section,
-                upload_date=today
-            ).order_by('-upload_date')
+        uploads = LessonPlanUpload.objects.filter(
+            class_section=class_section,
+            upload_date=today
+        ).order_by('-upload_date')
         
         serialized_uploads = []
         for upload in uploads:
@@ -7431,13 +7418,13 @@ def api_create_grouping(request):
                     ).exclude(planned_session=cls_target_ps).delete()
 
                     # status=0 is invalid (valid: 1=Conducted, 2=Holiday, 3=Cancelled).
-                    # Use CONDUCTED (1) so the session appears as active today.
+                    # Use PENDING so the session is initialized but not yet marked conducted.
                     ActualSession.objects.update_or_create(
                         class_section=cls,
                         date=today,
                         defaults={
                             'planned_session': cls_target_ps,
-                            'status': SessionStatus.CONDUCTED,
+                            'status': SessionStatus.PENDING,
                             'facilitator': request.user,
                         }
                     )

@@ -96,43 +96,41 @@ class SessionIntegrationService:
             self.logger.error(f"Error linking planned session {planned_session.id} to curriculum: {str(e)}")
             return None
     
-    def get_integrated_session_data(self, planned_session: PlannedSession) -> IntegratedSessionData:
+    def get_integrated_session_data(self, planned_session: PlannedSession, class_section: ClassSection = None) -> IntegratedSessionData:
         """
-        Get combined data from PlannedSession and its linked CurriculumSession.
-        ENHANCED: Handles grouped sessions and provides comprehensive error handling.
+        Get combined data from PlannedSession and its linked CurriculumSession dynamically.
         """
         try:
-            # Get or create the mapping
-            mapping = self._get_or_create_mapping(planned_session)
+            language = self._get_class_language(class_section) if class_section else 'english'
+            curriculum_session = self._find_curriculum_session(planned_session.day_number, language)
             
-            # Load curriculum content if available
+            content_source = 'admin_managed' if curriculum_session else 'static_fallback'
+            
             curriculum_content = ''
             has_admin_content = False
             
-            if mapping.curriculum_session and mapping.content_source == 'admin_managed':
-                curriculum_content = self._load_curriculum_content(mapping.curriculum_session)
+            if curriculum_session and content_source == 'admin_managed':
+                curriculum_content = self._load_curriculum_content(curriculum_session)
                 has_admin_content = True
                 
                 self.logger.info(
                     f"[OK] Loaded admin-managed curriculum content for day {planned_session.day_number}, "
-                    f"class {planned_session.class_section.id}, "
-                    f"grouped_session_id={planned_session.grouped_session_id or 'None'}"
+                    f"class {class_section.id if class_section else 'None'}"
                 )
             else:
                 # Log fallback
                 self.logger.info(
                     f"[INFO] Using static fallback for day {planned_session.day_number}, "
-                    f"class {planned_session.class_section.id}, "
-                    f"grouped_session_id={planned_session.grouped_session_id or 'None'}, "
-                    f"reason={'No curriculum session found' if not mapping.curriculum_session else 'Content source is not admin_managed'}"
+                    f"class {class_section.id if class_section else 'None'}, "
+                    f"reason={'No curriculum session found' if not curriculum_session else 'Content source is not admin_managed'}"
                 )
             
             return IntegratedSessionData(
                 planned_session=planned_session,
-                curriculum_session=mapping.curriculum_session,
-                content_source=mapping.content_source,
-                last_sync=mapping.last_sync,
-                sync_status=mapping.sync_status,
+                curriculum_session=curriculum_session,
+                content_source=content_source,
+                last_sync=timezone.now(),
+                sync_status='synced',
                 curriculum_content=curriculum_content,
                 has_admin_content=has_admin_content
             )
@@ -140,7 +138,7 @@ class SessionIntegrationService:
         except Exception as e:
             self.logger.error(
                 f"[ERROR] Error getting integrated data for planned_session {planned_session.id}, "
-                f"day {planned_session.day_number}, class {planned_session.class_section.id}: {str(e)}", 
+                f"day {planned_session.day_number}, class {class_section.id if class_section else 'None'}: {str(e)}", 
                 exc_info=True
             )
             return IntegratedSessionData(
@@ -308,21 +306,22 @@ class SessionIntegrationService:
             self.logger.error(f"Error in bulk linking for class {class_section.id}: {str(e)}")
             return {'total_sessions': 0, 'linked_to_admin': 0, 'linked_to_static': 0, 'errors': 1}
     
-    def log_curriculum_access(self, planned_session: PlannedSession, facilitator, request=None):
+    def log_curriculum_access(self, planned_session: PlannedSession, class_section: ClassSection, facilitator, request=None):
         """
         Log when a facilitator accesses curriculum content through a planned session.
         """
         try:
-            mapping = self._get_or_create_mapping(planned_session)
+            language = self._get_class_language(class_section) if class_section else 'english'
+            curriculum_session = self._find_curriculum_session(planned_session.day_number, language)
             
-            if mapping.curriculum_session:
+            if curriculum_session:
                 # Create usage log
                 usage_log = CurriculumUsageLog.objects.create(
-                    curriculum_session=mapping.curriculum_session,
+                    curriculum_session=curriculum_session,
                     facilitator=facilitator,
-                    class_section=planned_session.class_section,
+                    class_section=class_section,
                     planned_session=planned_session,
-                    content_source=mapping.content_source,
+                    content_source='admin_managed',
                     user_agent=request.META.get('HTTP_USER_AGENT', '') if request else '',
                     ip_address=self._get_client_ip(request) if request else None
                 )

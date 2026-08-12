@@ -141,25 +141,6 @@ def save_step_status(request):
             # [GROUP SYNC] If this class is part of a group today, sync status to others
             from .session_management import get_grouped_classes_for_session
             
-            group_members = get_grouped_classes_for_session(class_section, timezone.datetime.strptime(session_date, '%Y-%m-%d').date())
-            
-            if len(group_members) > 1:
-                # Sync to other classes in the group
-                for other_cls in group_members:
-                    if other_cls != class_section:
-                        SessionStepStatus.objects.update_or_create(
-                            planned_session=planned_session,
-                            class_section=other_cls,
-                            session_date=session_date,
-                            step_number=step_number,
-                            defaults={
-                                'is_completed': is_completed,
-                                'step_content': step_content,
-                                'facilitator': request.user,
-                                'completed_at': step_status.completed_at,
-                            }
-                        )
-                logger.info(f"Step {step_number} synced to {len(group_members) - 1} other sessions in group")
         
         # Find the actual session for this planned session today to return the ID for live UI updates
         actual_session = ActualSession.objects.filter(
