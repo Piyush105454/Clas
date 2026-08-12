@@ -7170,6 +7170,7 @@ def api_get_available_classes(request):
         for cls in classes:
             classes_data.append({
                 'id': str(cls.id),
+                'school_id': str(cls.school_id),
                 'school_name': cls.school.name,
                 'display_name': cls.display_name,
                 'student_count': student_counts_map.get(str(cls.id), 0)
@@ -7202,6 +7203,10 @@ def api_get_grouped_sessions(request):
         show_all = request.GET.get('all') == 'true'
         
         query = Q(class_sections__school_id__in=facilitator_schools)
+        
+        # Filter to ONLY show groups created by this specific facilitator
+        # We track creator_id in the description field to avoid DB migrations
+        query &= Q(description__contains=f"creator_id:{request.user.id}")
         
         if not show_all:
             # DEFAULT: Only show groups created today
@@ -7337,6 +7342,11 @@ def api_create_grouping(request):
         
         if classes.count() < 2:
             return JsonResponse({"success": False, "error": "Invalid classes selected"}, status=400)
+            
+        # Verify all classes belong to the same school
+        school_ids = set(cls.school_id for cls in classes)
+        if len(school_ids) > 1:
+            return JsonResponse({"success": False, "error": "Cannot group classes from different schools"}, status=400)
         
         # Verify facilitator has access to all classes
         facilitator_schools = FacilitatorSchool.objects.filter(
@@ -7366,7 +7376,7 @@ def api_create_grouping(request):
                 grouped_session_id=new_grouped_id,
                 defaults={
                     'name': f"Grouped: {', '.join([c.display_name for c in classes[:3]])}",
-                    'description': f"Group created on {today}"
+                    'description': f"creator_id:{request.user.id} - Group created on {today}"
                 }
             )
             grouped_record.class_sections.set(classes)

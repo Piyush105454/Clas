@@ -612,14 +612,32 @@
                 loading.style.display = 'none';
                 classesContainer.style.display = 'block';
                 if (data.success && data.classes && data.classes.length > 0) {
-                    container.innerHTML = data.classes.map(cls => `
-                    <div class="form-check mb-2">
-                        <input class="form-check-input class-checkbox" type="checkbox" value="${cls.id}" id="class_${cls.id}">
-                        <label class="form-check-label" for="class_${cls.id}">
-                            <strong>${cls.school_name}</strong> — ${cls.display_name}
-                            <small class="text-muted d-block">${cls.student_count} students</small>
-                        </label>
-                    </div>`).join('');
+                    // Group classes by school
+                    const classesBySchool = {};
+                    data.classes.forEach(cls => {
+                        if (!classesBySchool[cls.school_name]) {
+                            classesBySchool[cls.school_name] = [];
+                        }
+                        classesBySchool[cls.school_name].push(cls);
+                    });
+
+                    // Generate HTML grouped by school
+                    let html = '';
+                    for (const [schoolName, schoolClasses] of Object.entries(classesBySchool)) {
+                        html += `<div class="mb-3">
+                                    <h6 class="border-bottom pb-1 mb-2 text-primary">${schoolName}</h6>`;
+                        schoolClasses.forEach(cls => {
+                            html += `<div class="form-check mb-2 ms-2">
+                                        <input class="form-check-input class-checkbox" type="checkbox" value="${cls.id}" id="class_${cls.id}" data-school-id="${cls.school_id}" onchange="handleClassCheckboxChange(this)">
+                                        <label class="form-check-label" for="class_${cls.id}">
+                                            <strong>${cls.display_name}</strong>
+                                            <span class="text-muted ms-1 small">(${cls.student_count} students)</span>
+                                        </label>
+                                    </div>`;
+                        });
+                        html += `</div>`;
+                    }
+                    container.innerHTML = html;
                 } else {
                     container.innerHTML = '<p class="text-muted small">No classes available</p>';
                 }
@@ -629,6 +647,30 @@
                 classesContainer.style.display = 'block';
                 container.innerHTML = `<p class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Error: ${err.message}</p>`;
             });
+    }
+
+    function handleClassCheckboxChange(changedCheckbox) {
+        const checkboxes = document.querySelectorAll('.class-checkbox');
+        
+        // Find if ANY checkbox is currently checked and get its school ID
+        let activeSchoolId = null;
+        for (const cb of checkboxes) {
+            if (cb.checked) {
+                activeSchoolId = cb.getAttribute('data-school-id');
+                break;
+            }
+        }
+        
+        // Disable checkboxes from other schools
+        checkboxes.forEach(cb => {
+            if (activeSchoolId && cb.getAttribute('data-school-id') !== activeSchoolId) {
+                cb.disabled = true;
+                cb.parentElement.classList.add('opacity-50');
+            } else {
+                cb.disabled = false;
+                cb.parentElement.classList.remove('opacity-50');
+            }
+        });
     }
 
     function loadGroupedSessions() {
