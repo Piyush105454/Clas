@@ -6275,7 +6275,8 @@ def api_class_sessions_lazy(request, class_section_id):
                 'delete_url': f'/admin/planned-session/{session.id}/delete/'
             })
         
-        total_count = PlannedSession.objects.filter(class_section=class_section).count()
+        # PlannedSession is global — count all active sessions (not per-class)
+        total_count = PlannedSession.objects.filter(is_active=True).count()
         
         response_data = {
             'sessions': sessions_data,
@@ -7226,23 +7227,14 @@ def api_get_grouped_sessions(request):
             
         grouped_sessions = GroupedSession.objects.filter(query).distinct().prefetch_related('class_sections').order_by('-created_at')
         
-        # Get counts for all groups at once to avoid slow full-table scans
-        # We only care about the count of sessions in the group
-        group_ids = [group.grouped_session_id for group in grouped_sessions]
-        counts_map = {}
-        if group_ids:
-            counts = PlannedSession.objects.filter(
-                grouped_session_id__in=group_ids,
-                class_section__school_id__in=facilitator_schools
-            ).values('grouped_session_id').annotate(
-                count=Count('day_number', distinct=True)
-            )
-            counts_map = {str(c['grouped_session_id']): c['count'] for c in counts}
-        
+        # PlannedSession is a global 150-day curriculum template with no grouped_session_id
+        # or class_section fields — every group always covers all 150 sessions.
+        SESSION_TOTAL = PlannedSession.objects.filter(is_active=True, day_number__lte=150).count() or 150
+
         sessions_data = []
         for group in grouped_sessions:
             classes = group.class_sections.all()
-            session_count = counts_map.get(str(group.grouped_session_id), 0)
+            session_count = SESSION_TOTAL
             
             # Show created_at in LOCAL time for clarity
             local_created_at = timezone.localtime(group.created_at)
@@ -7507,9 +7499,8 @@ def api_get_group_details(request, group_id):
         if not has_access:
             return JsonResponse({"success": False, "error": "Access denied"}, status=403)
         
-        session_count = PlannedSession.objects.filter(
-            grouped_session_id=group.grouped_session_id
-        ).values('day_number').distinct().count()
+        # PlannedSession is a global template with no grouped_session_id field.
+        session_count = PlannedSession.objects.filter(is_active=True, day_number__lte=150).count() or 150
         
         return JsonResponse({
             "success": True,
@@ -7669,18 +7660,14 @@ def facilitator_fill_past_attendance(request, class_section_id, date_str):
     if group_info:
         classes_to_process = list(group_info.class_sections.all())
         
-    # 1. Get or Create PlannedSession (Day 999)
-    for cls in classes_to_process:
-        if not PlannedSession.objects.filter(class_section=cls, day_number=day_number).exists():
-            PlannedSession.objects.create(
-                class_section=cls,
-                day_number=day_number,
-                title=title,
-                is_active=False,
-                grouped_session_id=grouped_session_id
-            )
-            
-    planned_session = PlannedSession.objects.get(class_section=class_section, day_number=day_number)
+    # 1. Get or Create PlannedSession for this special day_number (global template — no class_section)
+    planned_session, _ = PlannedSession.objects.get_or_create(
+        day_number=day_number,
+        defaults={
+            'title': title,
+            'is_active': False,
+        }
+    )
     
     # 2. Get or Create ActualSession for the TARGET DATE
     actual_session = ActualSession.objects.filter(
