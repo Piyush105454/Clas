@@ -7376,10 +7376,11 @@ def api_create_grouping(request):
         # Create grouped session with CLEANUP of existing groups
         from .signals_optimization import silence_signals
         with transaction.atomic(), silence_signals():
-            # 1. CLEANUP: Find and remove ANY existing GroupedSession records that contain these classes
+            # 1. CLEANUP: Find and remove ANY existing GroupedSession records that contain these classes.
+            # PlannedSession is a global template with no grouped_session_id field — only delete
+            # the GroupedSession record itself; the M2M class_sections link is removed automatically.
             existing_groups = GroupedSession.objects.filter(class_sections__in=classes).distinct()
             for group in existing_groups:
-                PlannedSession.objects.filter(grouped_session_id=group.grouped_session_id).update(grouped_session_id=None)
                 group.delete()
             
             # 2. GENERATE: New grouped_session_id
@@ -7395,13 +7396,10 @@ def api_create_grouping(request):
             )
             grouped_record.class_sections.set(classes)
             
-            # 4. BULK ENFORCEMENT: Link all sessions for all selected classes to this group
-            # This is the "FAST" way - no row-by-row history migration.
-            # We simply assign the group ID to ALL 150 planned sessions for these classes.
-            PlannedSession.objects.filter(
-                class_section__in=classes,
-                day_number__lte=150
-            ).update(grouped_session_id=new_grouped_id, is_active=True)
+            # 4. (SKIPPED) PlannedSession is a GLOBAL curriculum template shared by all classes.
+            # It has no class_section or grouped_session_id fields.
+            # The GroupedSession.class_sections M2M (set above) is the sole record of which
+            # classes are grouped together — no PlannedSession update is needed.
 
             # 5. CALENDAR SYNC: Create CalendarDate for today
             from .models import CalendarDate, DateType, SupervisorCalendar
@@ -7428,10 +7426,11 @@ def api_create_grouping(request):
             # constraint on ActualSession. Keying by (planned_session, date) leaves stale
             # sessions with existing Attendance rows, causing duplicate-key violations.
             for cls in classes:
-                # Get the planned session for this class and this day
+                # Get the global planned session for this day number.
+                # PlannedSession is a shared template — filter by day_number only.
                 cls_target_ps = PlannedSession.objects.filter(
-                    class_section=cls,
-                    day_number=target_day
+                    day_number=target_day,
+                    is_active=True
                 ).first()
                 
                 if cls_target_ps:
