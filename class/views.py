@@ -1244,13 +1244,11 @@ def today_session(request, class_section_id):
         today = timezone.localdate()
         if is_grouped:
             lesson_plan_uploads = LessonPlanUpload.objects.filter(
-                planned_session=planned_session,
                 class_section__in=grouped_classes,
                 upload_date=today
             ).order_by('-upload_date')
         else:
             lesson_plan_uploads = LessonPlanUpload.objects.filter(
-                planned_session=planned_session,
                 class_section=class_section,
                 upload_date=today
             ).order_by('-upload_date')
@@ -5032,13 +5030,11 @@ def get_lesson_plan_uploads(request):
         is_grouped = len(grouped_classes) > 1
         if is_grouped:
             uploads = LessonPlanUpload.objects.filter(
-                planned_session=planned_session,
                 class_section__in=grouped_classes,
                 upload_date=today
             ).order_by('-upload_date')
         else:
             uploads = LessonPlanUpload.objects.filter(
-                planned_session=planned_session,
                 class_section=class_section,
                 upload_date=today
             ).order_by('-upload_date')

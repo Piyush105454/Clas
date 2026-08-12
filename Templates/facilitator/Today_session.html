@@ -1043,7 +1043,7 @@
               }
 
               // ✅ FIXED: Use the actual session date from database instead of client clock
-              const sessionDate = '{{ actual_session.date|date:"Y-m-d"|default:"" }}' || new Date().toISOString().split('T')[0];
+              const sessionDate = '{{ actual_session.date|date:"Y-m-d"|default:"" }}' || '{{ today_date|date:"Y-m-d" }}';
               
               console.log(`markStepCompleted(${step}):`, {
                 found: !!stepBtn,
