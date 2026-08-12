@@ -71,6 +71,7 @@ old_*.py
 old_*.html
 *.bak
 *.backup
+*.dump
 
 # SQL debug files
 *.sql
